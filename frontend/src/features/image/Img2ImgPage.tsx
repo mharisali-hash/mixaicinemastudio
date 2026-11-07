@@ -42,7 +42,7 @@ interface I2iRun {
 export function Img2ImgPage() {
   const uid = useId()
   const navigate = useNavigate()
-  const [params] = useSearchParams()
+  const [params, setParams] = useSearchParams()
   const wanted = normalizeModelId(params.get('model'))
   const [form, setForm] = useState<Img2ImgForm>({ ...DEFAULT_I2I_FORM, sourceId: params.get('source') })
   const [modelId, setModelId] = useState<string | undefined>(wanted ?? undefined)
@@ -93,7 +93,11 @@ export function Img2ImgPage() {
         setBatch((made ?? []).map((m) => m.id))
         record({ prompt: r.body.prompt, summary: r.summary, settings: r, items: made ?? [], jobs, label: plural(made?.length ?? r.form.count, 'variation') })
         announce(`Making ${plural(made?.length ?? r.form.count, 'variation')}. They appear below as they finish.`)
-        if (fromDock) setForm((f) => ({ ...f, prompt: '' }))
+        if (fromDock) {
+          // a fresh start once it's queued: no words and no picture; ?source= goes too, so a reload stays empty
+          setForm((f) => ({ ...f, prompt: '', sourceId: null }))
+          if (params.has('source')) setParams((p) => (p.delete('source'), p), { replace: true })
+        }
       },
     })
 

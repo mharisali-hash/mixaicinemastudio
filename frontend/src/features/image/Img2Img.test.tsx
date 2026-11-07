@@ -79,6 +79,9 @@ describe('Image to Image page', () => {
       body: { source_id: 's1', prompt: 'Watercolour, soft evening light', strength: 0.8, model: 'zimage_turbo', aspect: 'source', count: 1 },
     })
     expect(await within(screen.getByRole('region', { name: 'Results' })).findByRole('listitem', { name: 'Request: Watercolour, soft evening light' })).toBeInTheDocument()
+    // queued: a fresh start, with no words and no picture
+    expect(screen.getByRole('textbox', { name: 'Describe the result' })).toHaveValue('')
+    expect(await screen.findByRole('button', { name: 'Add your picture (required)' })).toBeInTheDocument()
   })
 
   it('needs a picture before it can run', async () => {

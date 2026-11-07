@@ -113,12 +113,14 @@ describe('Edit Image with a tool', () => {
     await user.click(screen.getByRole('radio', { name: 'Edit model (Qwen-Image-Edit)' }))
     expect(screen.getByText('Runs on the edit model, from your instruction.')).toBeInTheDocument()
     expect(screen.queryByLabelText(/Mask:/)).not.toBeInTheDocument()
-    // the first edit emptied the box once it was queued
+    // the first edit was a fresh start once queued: no words and no picture
     expect(box).toHaveValue('')
+    await addPhoto(user)
     await user.type(screen.getByRole('textbox', { name: 'What should change?' }), 'Remove the bin from image 1.')
     await user.click(screen.getByRole('button', { name: /^Edit · 2 results/ }))
     expect(calls.filter((c) => c.method === 'POST' && c.path === '/images/edit')[1].body).toMatchObject({ engine: 'edit' })
-  }, 15_000)
+    // adding the picture again after the reset makes this the longest run in the file
+  }, 30_000)
 
   it('falls back to the edit model when the tool is switched off', async () => {
     api([])

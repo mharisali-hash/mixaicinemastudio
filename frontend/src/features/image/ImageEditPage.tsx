@@ -50,7 +50,7 @@ interface EditRun {
 export function ImageEditPage() {
   const uid = useId()
   const navigate = useNavigate()
-  const [params] = useSearchParams()
+  const [params, setParams] = useSearchParams()
   const location = useLocation()
   const state = location.state as { sources?: string[]; template?: TemplatePrefill } | null
   const fromState = state?.sources ?? []
@@ -156,7 +156,14 @@ export function ImageEditPage() {
       onSuccess: ({ items, jobs, tool_fallback }) => {
         record({ prompt: r.body.instruction, summary: r.summary, settings: r, items: items ?? [], jobs, label: plural(items?.length ?? r.count, 'edit') })
         announce(`Editing. ${plural(items?.length ?? r.count, 'result')} on the way.${tool_fallback ? ` Ran on the edit model: ${tool_fallback}.` : ''}`)
-        if (fromDock) setInstruction('')
+        if (fromDock) {
+          // a fresh start once it's queued: no words, no pictures, no mask; ?sources= goes too, so a reload stays empty
+          setInstruction('')
+          setIds([])
+          setPainted(null)
+          setNotice(null)
+          if (params.has('sources')) setParams((p) => (p.delete('sources'), p), { replace: true })
+        }
       },
     })
 

@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { addSources, editPayload, imagePayload, DEFAULT_IMAGE_FORM, placeholdersIn, splitPlaceholders } from '@/lib/images'
@@ -118,6 +118,10 @@ describe('Edit Image page', () => {
     expect(screen.getByText('Source images (3/3)')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Add/ })).not.toBeInTheDocument()
 
+    await user.click(await within(chosen).findByRole('button', { name: 'Remove Image c' }))
+    expect(within(chosen).getAllByRole('listitem')).toHaveLength(2)
+    expect(screen.getByRole('button', { name: 'Add another source' })).toBeEnabled()
+
     await user.type(screen.getByRole('textbox', { name: 'What should change?' }), 'Put them on a boat')
     await user.click(within(await openChip(user, 'Count')).getByRole('radio', { name: '2 images' }))
     await closeChip(user)
@@ -125,18 +129,27 @@ describe('Edit Image page', () => {
     expect(calls.find((c) => c.method === 'POST')).toMatchObject({
       path: '/images/edit',
       // prompt correction is on Auto unless changed, and an edit always says which
-      body: { source_ids: ['a', 'b', 'c'], instruction: 'Put them on a boat', count: 2, magic_prompt: 'auto' },
+      body: { source_ids: ['a', 'b'], instruction: 'Put them on a boat', count: 2, magic_prompt: 'auto' },
     })
-    // queued: the box empties; turning correction off is sent with the next edit
+    // queued: a fresh start, with no words and no pictures, and the URL no longer brings them back
     expect(screen.getByRole('textbox', { name: 'What should change?' })).toHaveValue('')
+    expect(screen.queryByRole('list', { name: 'Chosen sources' })).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.getByTestId('location')).not.toHaveTextContent('sources='))
+  })
+
+  it('sends prompt correction off when it is turned off', async () => {
+    const calls = mockApi((method, path) => {
+      const id = path.match(/^\/media\/(\w+)$/)?.[1]
+      if (id) return { ...media(id), versions: [] }
+      if (path === '/media') return { items: [] }
+      if (method === 'POST' && path === '/images/edit') return { items: [media('e1', { media_url: null })], jobs: [] }
+    })
+    renderAt('/image/edit?sources=a', [{ path: '/image/edit', element: <ImageEditPage /> }])
+    const user = userEvent.setup()
     await user.selectOptions(screen.getByRole('combobox', { name: 'Prompt correction' }), 'Off: use my prompt exactly')
     await user.type(screen.getByRole('textbox', { name: 'What should change?' }), 'Make it night')
     await user.click(screen.getByRole('button', { name: /^Edit/ }))
-    expect(calls.filter((c) => c.method === 'POST' && c.path === '/images/edit')[1].body).toMatchObject({ instruction: 'Make it night', magic_prompt: 'off' })
-
-    await user.click(await within(chosen).findByRole('button', { name: 'Remove Image b' }))
-    expect(within(chosen).getAllByRole('listitem')).toHaveLength(2)
-    expect(screen.getByRole('button', { name: 'Add another source' })).toBeEnabled()
+    expect(calls.find((c) => c.method === 'POST' && c.path === '/images/edit')?.body).toMatchObject({ instruction: 'Make it night', magic_prompt: 'off' })
   })
 
   it('needs a source before it can edit', async () => {
