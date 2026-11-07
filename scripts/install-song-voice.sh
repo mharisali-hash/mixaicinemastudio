@@ -64,11 +64,31 @@ if [[ -z ${AUDIO_HF_HOME:-} && -f $env_file ]]; then
   AUDIO_HF_HOME=$(grep -E '^AUDIO_HF_HOME=' "$env_file" | tail -n1 | cut -d= -f2- | tr -d '"'"'" || true)
 fi
 if [[ -n ${AUDIO_HF_HOME:-} ]]; then export HF_HOME=$AUDIO_HF_HOME; fi
-# on the CPU: ComfyUI usually holds most of the card, and a 3-second test doesn't need it
-(cd "$SRC" && CUDA_VISIBLE_DEVICES="" "$DIR/bin/python" inference.py --source "$tmp/src.wav" --target "$tmp/ref.wav" \
-  --output "$tmp/out" --diffusion-steps 4 --f0-condition True --auto-f0-adjust False --semi-tone-shift 0 --fp16 False) \
-  2>&1 | tail -n 3
-ls "$tmp/out"/*.wav >/dev/null 2>&1 && echo "    OK: Seed-VC converts" || { echo "!! no output from Seed-VC"; exit 1; }
+# on the GPU, the way the worker runs it: ComfyUI usually holds most of the card, so ask it to let go first
+# (what venv_runner.ensure_vram does). The CPU path crashes in Seed-VC's vocoder, so it's no test.
+comfy=""
+if [[ -f $env_file ]]; then
+  comfy=$(grep -E '^COMFY_(IMAGE_)?URLS=' "$env_file" | head -n1 | cut -d= -f2- | tr -d '"'"'" | cut -d, -f1 || true)
+fi
+if [[ -n $comfy ]]; then
+  curl -s -m 20 -X POST "$comfy/free" -H 'Content-Type: application/json' \
+    -d '{"unload_models": true, "free_memory": true}' >/dev/null && echo "    asked ComfyUI ($comfy) to free the GPU"
+  sleep 3
+fi
+set +e
+(cd "$SRC" && CUDA_VISIBLE_DEVICES="${GPU:-0}" "$DIR/bin/python" inference.py --source "$tmp/src.wav" \
+  --target "$tmp/ref.wav" --output "$tmp/out" --diffusion-steps 4 --f0-condition True --auto-f0-adjust False \
+  --semi-tone-shift 0 --fp16 True) > "$tmp/log" 2>&1
+rc=$?
+set -e
+# some builds crash on the way out after the file is written; the file is what counts
+if ls "$tmp/out"/*.wav >/dev/null 2>&1; then
+  if (( rc )); then echo "    OK: Seed-VC converts (it exited with $rc after writing)"; else echo "    OK: Seed-VC converts"; fi
+else
+  tail -n 15 "$tmp/log"
+  echo "!! no output from Seed-VC (exit $rc)"
+  exit 1
+fi
 
 echo
 echo "Done. Add SONG_VOICE_ENGINE=seed-vc to .env, then: sudo systemctl restart 'mixai-worker@*'"

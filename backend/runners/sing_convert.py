@@ -27,11 +27,10 @@ def run(job: dict) -> dict:
                "--semi-tone-shift", str(job.get("shift") or 0), "--fp16", "True"]
         # its chatter goes to our stderr, which the worker keeps for the error message
         done = subprocess.run(cmd, cwd=repo, stdout=sys.stderr, stderr=sys.stderr)
-        if done.returncode != 0:
-            raise RuntimeError(f"Seed-VC stopped with exit code {done.returncode}")
         made = sorted(glob.glob(os.path.join(tmp, "*.wav")), key=os.path.getmtime)
+        # it has been seen to crash on the way out after writing; the file is what counts
         if not made:
-            raise RuntimeError("Seed-VC wrote no audio")
+            raise RuntimeError(f"Seed-VC wrote no audio (exit code {done.returncode})")
         os.makedirs(os.path.dirname(job["out"]) or ".", exist_ok=True)
         shutil.move(made[-1], job["out"])
         rio.progress(1.0, "Sung")
