@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 
 import runner_io as rio
 
@@ -28,8 +29,22 @@ def run(job: dict) -> dict:
                "--inference-cfg-rate", "0.7", "--f0-condition", "True", "--auto-f0-adjust", "False",
                "--semi-tone-shift", str(job.get("shift") or 0), "--fp16", "True"]
         env = {**os.environ, "TORIO_USE_FFMPEG": "0"}
-        # its chatter goes to our stderr, which the worker keeps for the error message
-        done = subprocess.run(cmd, cwd=repo, stdout=sys.stderr, stderr=sys.stderr, env=env)
+        # a long song takes Seed-VC minutes with nothing to say; without a word every so often the job's heartbeat
+        # goes stale and another worker takes it as orphaned and runs it a second time (7 Nov)
+        stop = threading.Event()
+
+        def tick():
+            while not stop.wait(15):
+                rio.progress(0.5, "Singing it in the new voice")
+
+        ticker = threading.Thread(target=tick, daemon=True)
+        ticker.start()
+        try:
+            # its chatter goes to our stderr, which the worker keeps for the error message
+            done = subprocess.run(cmd, cwd=repo, stdout=sys.stderr, stderr=sys.stderr, env=env)
+        finally:
+            stop.set()
+            ticker.join(timeout=2)
         made = sorted(glob.glob(os.path.join(tmp, "*.wav")), key=os.path.getmtime)
         if not made:
             raise RuntimeError(f"Seed-VC wrote no audio (exit code {done.returncode})")

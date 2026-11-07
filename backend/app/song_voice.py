@@ -11,6 +11,7 @@ import hashlib
 import json
 import logging
 import shutil
+import tempfile
 from pathlib import Path
 
 from fastapi import HTTPException
@@ -125,11 +126,18 @@ def convert(src: Path, ref: Path, out: Path, progress, lane: str | None = None, 
     s = get_settings()
     job = {"source": str(src), "target": str(ref), "out": str(out), "repo": s.song_voice_repo,
            "steps": s.song_voice_steps}
+    # a 4-minute song at 30 steps can pass the runners' usual 15 minutes
     (run or venv_runner.run)(RUNNER, s.song_voice_venv, job, lane=lane, need_gb=s.song_voice_vram_gb,
-                             progress=progress)
+                             progress=progress, timeout=max(s.audio_runner_timeout_s, 3600.0))
     if not out.is_file():
         raise RuntimeError("The voice change wrote nothing")
     return out
+
+
+def _workdir(path: Path) -> Path:
+    """A fresh folder for this run alone. A shared one let a second run of the same job (re-queued by another
+    worker) wipe the first run's tracks mid-song (7 Nov)."""
+    return Path(tempfile.mkdtemp(prefix=f".{path.stem}.sing-", dir=path.parent))
 
 
 def mix_graph(targets: list[dict]) -> str:
@@ -240,9 +248,7 @@ def apply(ctx, gen, path: Path, driver) -> None:
         return
     if sing.get("vocal") == "lead_group":
         s = get_settings()
-        work = path.parent / f".{path.stem}.sing"
-        shutil.rmtree(work, ignore_errors=True)
-        work.mkdir(parents=True)
+        work = _workdir(path)
         try:
             ctx.progress(0.8, "Separating the vocals")
             res = driver.separate(path, work / "split", s.dub_separation_model,
@@ -253,9 +259,7 @@ def apply(ctx, gen, path: Path, driver) -> None:
         gen.params = {**(gen.params or {}), "sung_as": name}
         return
     s = get_settings()
-    work = path.parent / f".{path.stem}.sing"
-    shutil.rmtree(work, ignore_errors=True)
-    work.mkdir(parents=True)
+    work = _workdir(path)
     name = sing.get("name") or "the chosen voice"
     lane = getattr(driver, "lane", None)
     try:
