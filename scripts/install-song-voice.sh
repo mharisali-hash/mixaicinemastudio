@@ -31,33 +31,22 @@ if [[ ! -x $DIR/bin/python ]]; then
   # the checkout already lives in $DIR/src, so the folder exists; keep it
   uv venv --python 3.10 --allow-existing "$DIR"
 fi
-echo "==> PyTorch (the same build as the other audio engines, so it fits this GPU)"
-# Seed-VC's requirements.txt mixes nightly and torch 2.4 lines; 2.4 doesn't know the newest cards, so we use
-# whatever already runs in audio-utils (or TORCH_SPEC / TORCH_INDEX to choose by hand)
-ref_py="$VENVS/audio-utils/bin/python"
-if [[ -z ${TORCH_SPEC:-} && -x $ref_py ]]; then
-  ver=$("$ref_py" -c 'import torch; print(torch.__version__)' 2>/dev/null || true)
-  ta=$("$ref_py" -c 'import torchaudio; print(torchaudio.__version__)' 2>/dev/null || true)
-  if [[ $ver == *+cu* ]]; then
-    TORCH_SPEC="torch==${ver%%+*}"
-    TORCH_INDEX="https://download.pytorch.org/whl/${ver##*+}"
-    [[ -n $ta ]] && AUDIO_SPEC="torchaudio==${ta%%+*}"
-  fi
-fi
-TORCH_SPEC="${TORCH_SPEC:-torch}"
-AUDIO_SPEC="${AUDIO_SPEC:-torchaudio}"
+echo "==> PyTorch"
+# Seed-VC's requirements.txt mixes nightly lines with torch 2.4, which doesn't know the newest cards.
+# Its own venv gets one matched pair instead: 2.7.1 is the first with Blackwell (sm_120) kernels and still
+# has a torchaudio to go with it, and CUDA 12.8 runs on any newer driver. TORCH_VERSION / TORCH_INDEX override.
+TORCH_VERSION="${TORCH_VERSION:-2.7.1}"
 TORCH_INDEX="${TORCH_INDEX:-https://download.pytorch.org/whl/cu128}"
-echo "    $TORCH_SPEC $AUDIO_SPEC from $TORCH_INDEX"
-uv pip install --python "$DIR/bin/python" -q "$TORCH_SPEC" "$AUDIO_SPEC" --index-url "$TORCH_INDEX" \
-  --extra-index-url https://pypi.org/simple --index-strategy unsafe-best-match
+echo "    torch $TORCH_VERSION + torchaudio $TORCH_VERSION from $TORCH_INDEX"
+uv pip install --python "$DIR/bin/python" -q "torch==$TORCH_VERSION" "torchaudio==$TORCH_VERSION" \
+  --index-url "$TORCH_INDEX" --extra-index-url https://pypi.org/simple --index-strategy unsafe-best-match
 
 echo "==> requirements"
 # everything else it lists, minus its own torch lines and the desktop GUI pieces inference.py never imports
 grep -vE '^(torch|torchvision|torchaudio)([ =<>]|$)|^(gradio|FreeSimpleGUI|sounddevice)([ =<>]|$)' \
   "$SRC/requirements.txt" > "$DIR/requirements.server.txt"
-# and nothing in that list may swap the torch we just chose
-"$DIR/bin/python" -c 'import torch, torchaudio; print(f"torch=={torch.__version__}\ntorchaudio=={torchaudio.__version__}")' \
-  > "$DIR/constraints.txt"
+# nothing in that list may swap the pair above (plain versions: a +cu tag here can't be matched)
+printf 'torch==%s\ntorchaudio==%s\n' "$TORCH_VERSION" "$TORCH_VERSION" > "$DIR/constraints.txt"
 uv pip install --python "$DIR/bin/python" -q -r "$DIR/requirements.server.txt" -c "$DIR/constraints.txt" \
   --extra-index-url "$TORCH_INDEX" --index-strategy unsafe-best-match
 "$DIR/bin/python" -c 'import torch; print("    torch", torch.__version__, "cuda", torch.cuda.is_available())'
