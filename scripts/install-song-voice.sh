@@ -58,9 +58,16 @@ ff=$(command -v ffmpeg || true)
 if [[ -z $ff ]]; then echo "ffmpeg is missing"; exit 1; fi
 "$ff" -loglevel error -f lavfi -i "sine=frequency=330:duration=3" -ar 44100 "$tmp/src.wav"
 "$ff" -loglevel error -f lavfi -i "sine=frequency=220:duration=3" -ar 44100 "$tmp/ref.wav"
+# the same model cache the workers use (AUDIO_HF_HOME in .env), so the first real song doesn't download again
+env_file="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.env"
+if [[ -z ${AUDIO_HF_HOME:-} && -f $env_file ]]; then
+  AUDIO_HF_HOME=$(grep -E '^AUDIO_HF_HOME=' "$env_file" | tail -n1 | cut -d= -f2- | tr -d '"'"'" || true)
+fi
 if [[ -n ${AUDIO_HF_HOME:-} ]]; then export HF_HOME=$AUDIO_HF_HOME; fi
-(cd "$SRC" && "$DIR/bin/python" inference.py --source "$tmp/src.wav" --target "$tmp/ref.wav" --output "$tmp/out" \
-  --diffusion-steps 4 --f0-condition True --auto-f0-adjust False --semi-tone-shift 0 --fp16 True) | tail -n 3
+# on the CPU: ComfyUI usually holds most of the card, and a 3-second test doesn't need it
+(cd "$SRC" && CUDA_VISIBLE_DEVICES="" "$DIR/bin/python" inference.py --source "$tmp/src.wav" --target "$tmp/ref.wav" \
+  --output "$tmp/out" --diffusion-steps 4 --f0-condition True --auto-f0-adjust False --semi-tone-shift 0 --fp16 False) \
+  2>&1 | tail -n 3
 ls "$tmp/out"/*.wav >/dev/null 2>&1 && echo "    OK: Seed-VC converts" || { echo "!! no output from Seed-VC"; exit 1; }
 
 echo
