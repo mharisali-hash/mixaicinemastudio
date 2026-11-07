@@ -177,6 +177,14 @@ class Settings(BaseSettings):
     # renderer auto | ass | pillow
     subtitle_fonts_dir: str = "/usr/share/fonts/truetype/noto"
     subtitle_renderer: str = "auto"
+    # animated captions, titles and lower thirds (app.overlays): auto uses HyperFrames when it's installed
+    # (tools/hyperframes, scripts/install-server.sh) and falls back to the burned subtitles; classic never uses it
+    overlays_engine: str = "auto"
+    hyperframes_dir: str = ""
+    node_bin: str = "node"
+    hyperframes_workers: int = 2
+    # chrome-headless-shell; empty lets HyperFrames use the one `hyperframes browser ensure` downloaded
+    hyperframes_browser_path: str = ""
 
     @field_validator("cors_origins", "comfy_urls", "comfy_image_urls", "comfy_video_urls", "ads_llm_models",
                      mode="before")

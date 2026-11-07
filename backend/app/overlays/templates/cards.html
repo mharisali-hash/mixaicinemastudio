@@ -1,0 +1,143 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<script src="gsap.min.js"></script>
+<style>
+  @font-face { font-family: "Head"; src: url("fonts/head.ttf"); }
+  @font-face { font-family: "Body"; src: url("fonts/body.ttf"); }
+  html, body { margin: 0; overflow: hidden; background: transparent; }
+  #root { position: relative; overflow: hidden; background: transparent; }
+  /* the extra room below keeps descenders (y, g, and Urdu's long tails) out of the clip */
+  .mask { display: inline-block; overflow: hidden; vertical-align: bottom; padding: 0 0.04em 0.22em; margin-bottom: -0.22em; }
+  .mask > span { display: inline-block; }
+
+  /* title: words rise out of a mask, a thin rule draws under them */
+  .title { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 0 8%; }
+  .title .kicker { font-family: "Body", sans-serif; letter-spacing: 0.18em; color: var(--accent); margin-bottom: 0.6em; }
+  .title .head { font-family: "Head", serif; font-weight: 700; color: var(--text); text-shadow: 0 0.03em 0.2em rgba(0,0,0,.55); }
+  .title .rule { height: 3px; background: var(--accent); margin-top: 0.7em; transform: scaleX(0); }
+
+  /* lower third: an accent bar wipes in, then the name and the role */
+  .lt { position: absolute; display: flex; align-items: stretch; gap: 0.5em; }
+  .lt .bar { width: 0.18em; background: var(--accent); transform: scaleY(0); transform-origin: 50% 100%; }
+  .lt .panel { background: var(--panel); padding: 0.35em 0.8em 0.4em; clip-path: inset(0 100% 0 0); }
+  .lt.rtl .panel { clip-path: inset(0 0 0 100%); }
+  .lt .name { font-family: "Head", sans-serif; font-weight: 700; color: var(--text); }
+  .lt .role { font-family: "Body", sans-serif; color: var(--accent); font-size: 0.55em; margin-top: 0.15em; }
+
+  /* logo sting: the logo settles in with a soft glow, the name follows */
+  .logo { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5em; }
+  .logo img { max-width: 34%; max-height: 34%; object-fit: contain; filter: drop-shadow(0 0 0.4em rgba(0,0,0,.35)); opacity: 0; }
+  .logo .name { font-family: "Head", sans-serif; font-weight: 700; color: var(--text); opacity: 0; letter-spacing: 0.06em; }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="cards" data-start="0" data-duration="__DURATION__" data-fps="__FPS__"
+     data-width="__WIDTH__" data-height="__HEIGHT__" style="width:__WIDTH__px;height:__HEIGHT__px"></div>
+<script>
+  var D = /*DATA*/null;
+  var root = document.getElementById("root");
+  root.style.setProperty("--text", D.colors.text);
+  root.style.setProperty("--accent", D.colors.accent);
+  root.style.setProperty("--panel", D.colors.panel);
+  var rtl = D.dir === "rtl";
+  var short = Math.min(D.width, D.height);
+  var tl = gsap.timeline({ paused: true });
+  var out = Math.max(0.6, D.duration - 0.5);
+
+  function masked(parent, text) {
+    // per word, never per letter: Urdu and Arabic letters join and must stay whole
+    return String(text || "").split(/\s+/).filter(Boolean).map(function (w) {
+      var m = document.createElement("span");
+      m.className = "mask";
+      var s = document.createElement("span");
+      s.textContent = w;
+      m.appendChild(s);
+      parent.appendChild(m);
+      parent.appendChild(document.createTextNode(" "));
+      return s;
+    });
+  }
+
+  if (D.kind === "title") {
+    var box = document.createElement("div");
+    box.className = "title";
+    box.dir = rtl ? "rtl" : "ltr";
+    var head = document.createElement("div");
+    head.className = "head";
+    head.style.fontSize = Math.round(short * (D.tall ? 0.075 : 0.09)) + "px";
+    head.style.lineHeight = D.tall ? "2" : "1.15";
+    if (D.kicker) {
+      var k = document.createElement("div");
+      k.className = "kicker";
+      k.style.fontSize = Math.round(short * 0.03) + "px";
+      k.textContent = D.kicker;
+      box.appendChild(k);
+      tl.fromTo(k, { opacity: 0 }, { opacity: 1, duration: 0.4 }, 0.1);
+    }
+    box.appendChild(head);
+    var rule = document.createElement("div");
+    rule.className = "rule";
+    rule.style.width = Math.round(short * 0.18) + "px";
+    box.appendChild(rule);
+    root.appendChild(box);
+    masked(head, D.headline).forEach(function (s, i) {
+      tl.fromTo(s, { yPercent: 110 }, { yPercent: 0, duration: 0.55, ease: "power3.out" }, 0.25 + i * 0.09);
+    });
+    tl.to(rule, { scaleX: 1, duration: 0.5, ease: "power2.out" }, 0.55);
+    tl.to(box, { opacity: 0, duration: 0.45, ease: "power1.in" }, out - 0.45);
+  } else if (D.kind === "lowerthird") {
+    var lt = document.createElement("div");
+    lt.className = "lt" + (rtl ? " rtl" : "");
+    lt.dir = rtl ? "rtl" : "ltr";
+    lt.style.fontSize = Math.round(short * 0.05) + "px";
+    lt.style.bottom = Math.round(D.height * (D.height > D.width ? 0.3 : 0.14)) + "px";
+    lt.style[rtl ? "right" : "left"] = Math.round(D.width * 0.06) + "px";
+    var bar = document.createElement("div");
+    bar.className = "bar";
+    var panel = document.createElement("div");
+    panel.className = "panel";
+    var nm = document.createElement("div");
+    nm.className = "name";
+    nm.textContent = D.name || "";
+    panel.appendChild(nm);
+    if (D.role) {
+      var rl = document.createElement("div");
+      rl.className = "role";
+      rl.textContent = D.role;
+      panel.appendChild(rl);
+    }
+    lt.appendChild(bar);
+    lt.appendChild(panel);
+    root.appendChild(lt);
+    tl.to(bar, { scaleY: 1, duration: 0.3, ease: "power2.out" }, 0.1);
+    tl.to(panel, { clipPath: "inset(0 0% 0 0%)", duration: 0.5, ease: "power3.out" }, 0.3);
+    tl.to(lt, { opacity: 0, x: rtl ? 30 : -30, duration: 0.4, ease: "power1.in" }, out - 0.4);
+  } else {
+    var lg = document.createElement("div");
+    lg.className = "logo";
+    if (D.logo) {
+      var img = document.createElement("img");
+      img.src = D.logo;
+      lg.appendChild(img);
+      tl.fromTo(img, { opacity: 0, scale: 0.86 }, { opacity: 1, scale: 1, duration: 0.7, ease: "back.out(1.6)" }, 0.15);
+    }
+    if (D.name) {
+      var n2 = document.createElement("div");
+      n2.className = "name";
+      n2.style.fontSize = Math.round(short * 0.045) + "px";
+      n2.textContent = D.name;
+      lg.appendChild(n2);
+      tl.fromTo(n2, { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0.55);
+    }
+    root.appendChild(lg);
+    tl.to(lg, { opacity: 0, duration: 0.35 }, out - 0.35);
+  }
+
+  tl.set({}, {}, D.duration);
+  window.__timelines = window.__timelines || {};
+  window.__timelines["cards"] = tl;
+</script>
+</body>
+</html>

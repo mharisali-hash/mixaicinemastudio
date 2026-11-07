@@ -60,7 +60,7 @@ SET_PRESETS = {
                                      "a hand-woven rug, a carved wooden jharokha, brass lamps and warm light, "
                                      "microphones on low stands"),
 }
-DEFAULT_SETTINGS = {"aspect": "16:9", "style": "realistic studio", "subtitles": "burn", "set_preset": "modern_studio",
+DEFAULT_SETTINGS = {"aspect": "16:9", "style": "realistic studio", "subtitles": "burn", "caption_style": "classic", "set_preset": "modern_studio",
                     "set_prompt": "", "cover_intro": False, "cover_outro": False, "cover_media_id": None}
 ANGLE_LABELS = {"close": "Close-up", "three_quarter": "3/4 close-up", "listen": "Listening", "wide": "Wide",
                 "medium": "Two-shot"}

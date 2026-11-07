@@ -36,7 +36,8 @@ SONG_MODEL = "ace15_turbo"
 
 DEFAULTS = {"topic": "", "mood": "", "style": "", "vocal": "female", "length_s": 60.0, "character_id": None,
             "character": "", "setting": "", "aspect": "9:16", "quality": "draft", "image_model": "krea2_turbo",
-            "title_card": False, "review": True, "whisper": True}
+            "title_card": False, "review": True, "whisper": True,
+            "caption_style": "classic"}
 
 _MARKER = re.compile(r"^\s*\[\s*([A-Za-z][A-Za-z -]*?)\s*\d*\s*\]\s*$")
 

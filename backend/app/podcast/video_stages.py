@@ -665,8 +665,10 @@ def handle_assemble(ctx) -> dict:
         if mode == "burn" and cues:
             ctx.progress(0.7, "Burning in the subtitles")
             try:
-                res = subs.burn(joined, work / "burned.mp4", cues, language=ep.language, width=w, height=h,
-                                timeout=7200)
+                from app import overlays
+
+                res = overlays.burn_captions(joined, work / "burned.mp4", cues, style=st.get("caption_style") or "classic",
+                                             language=ep.language, width=w, height=h, timeout=7200)
                 picture, renderer, missing, subs_done = work / "burned.mp4", res.get("renderer"), \
                     list(res.get("fonts_missing") or []), "burn"
             except RuntimeError as e:

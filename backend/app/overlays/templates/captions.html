@@ -1,0 +1,127 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<script src="gsap.min.js"></script>
+<style>
+  @font-face { font-family: "Caption"; src: url("fonts/caption.ttf"); }
+  html, body { margin: 0; overflow: hidden; background: transparent; }
+  #root { position: relative; overflow: hidden; background: transparent; }
+  .stage { position: absolute; left: 6%; right: 6%; display: flex; justify-content: center; }
+  .group { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; opacity: 0; }
+  .line { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; font-family: "Caption", sans-serif; font-weight: 700; }
+  .word { position: relative; display: inline-block; white-space: nowrap; }
+  .word .t { position: relative; z-index: 1; }
+
+  /* pill: a soft box; words light up as they are sung */
+  .pill .line { background: var(--box); border-radius: 0.32em; padding: 0.12em 0.6em; box-shadow: 0 0.05em 0.2em rgba(0,0,0,.25); }
+  .pill .word { color: var(--dim); }
+
+  /* highlight: a coloured block grows behind the word being said */
+  .highlight .word { color: var(--text); text-shadow: 0 0.04em 0.12em rgba(0,0,0,.7); padding: 0 0.12em; }
+  .highlight .word .bg { position: absolute; inset: 0.08em -0.02em; border-radius: 0.14em; background: var(--active); transform: scaleX(0); }
+
+  /* clean: plain white words that rise in one at a time */
+  .clean .word { color: var(--text); opacity: 0; text-shadow: 0 0.04em 0.14em rgba(0,0,0,.8), 0 0 0.02em rgba(0,0,0,.9); }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="captions" data-start="0" data-duration="__DURATION__" data-fps="__FPS__"
+     data-width="__WIDTH__" data-height="__HEIGHT__" style="width:__WIDTH__px;height:__HEIGHT__px"></div>
+<script>
+  var D = /*DATA*/null;
+  var root = document.getElementById("root");
+  root.style.setProperty("--text", D.colors.text);
+  root.style.setProperty("--dim", D.colors.dim);
+  root.style.setProperty("--active", D.colors.active);
+  root.style.setProperty("--box", D.colors.box);
+
+  var rtl = D.dir === "rtl";
+  var portrait = D.height > D.width;
+  var size = Math.round(Math.min(D.width, D.height) * (portrait ? 0.08 : 0.058) * (D.scale || 1));
+  // Nastaliq climbs and drops a long way; it needs the room or the dots get clipped
+  var lineHeight = D.tall ? 2.1 : 1.25;
+  var perGroup = portrait ? 3 : 4;
+
+  var stage = document.createElement("div");
+  stage.className = "stage " + D.style;
+  stage.style.bottom = Math.round(D.height * (portrait ? 0.16 : 0.08)) + "px";
+  stage.style.height = Math.round(size * lineHeight * 2.4) + "px";
+  root.appendChild(stage);
+
+  function groups(words) {
+    var out = [], cur = [];
+    words.forEach(function (w, i) {
+      cur.push(w);
+      var next = words[i + 1];
+      var stop = /[.!?،۔؟,;:]$/.test(w.text);
+      var pause = next ? next.start - w.end > 0.35 : true;
+      if (cur.length >= perGroup || stop || pause || (next && next.cue !== w.cue)) {
+        out.push(cur);
+        cur = [];
+      }
+    });
+    if (cur.length) out.push(cur);
+    return out;
+  }
+
+  var G = groups(D.words);
+  var tl = gsap.timeline({ paused: true });
+
+  G.forEach(function (g, gi) {
+    var el = document.createElement("div");
+    el.className = "group";
+    var line = document.createElement("div");
+    line.className = "line";
+    line.dir = rtl ? "rtl" : "ltr";
+    line.style.fontSize = size + "px";
+    line.style.lineHeight = String(lineHeight);
+    line.style.gap = "0 " + (size * 0.28) + "px";
+    var spans = g.map(function (w) {
+      var s = document.createElement("span");
+      s.className = "word";
+      if (D.style === "highlight") {
+        var bg = document.createElement("span");
+        bg.className = "bg";
+        bg.style.transformOrigin = rtl ? "100% 50%" : "0% 50%";
+        s.appendChild(bg);
+      }
+      var t = document.createElement("span");
+      t.className = "t";
+      t.textContent = w.text;
+      s.appendChild(t);
+      line.appendChild(s);
+      return s;
+    });
+    el.appendChild(line);
+    stage.appendChild(el);
+
+    var next = G[gi + 1];
+    var start = Math.max(0, g[0].start - 0.08);
+    var end = next ? Math.min(next[0].start - 0.02, g[g.length - 1].end + 0.6) : Math.min(D.duration, g[g.length - 1].end + 0.8);
+    end = Math.max(start + 0.2, end);
+    tl.fromTo(el, { opacity: 0, y: size * 0.12 }, { opacity: 1, y: 0, duration: 0.14, ease: "power2.out" }, start);
+    tl.to(el, { opacity: 0, duration: 0.12, ease: "power1.in" }, Math.max(start + 0.15, end - 0.12));
+
+    g.forEach(function (w, wi) {
+      var s = spans[wi];
+      var at = Math.max(start, w.start);
+      var len = Math.max(0.08, w.end - w.start);
+      if (D.style === "pill") {
+        tl.to(s, { color: D.colors.active, duration: Math.min(0.12, len), ease: "none" }, at);
+      } else if (D.style === "highlight") {
+        tl.to(s.querySelector(".bg"), { scaleX: 1, duration: 0.1, ease: "power2.out" }, at);
+        tl.to(s.querySelector(".bg"), { opacity: 0, duration: 0.08 }, at + len);
+      } else {
+        tl.fromTo(s, { opacity: 0, y: size * 0.18 }, { opacity: 1, y: 0, duration: 0.16, ease: "power2.out" }, at);
+      }
+    });
+  });
+
+  // the timeline has to run the full length, so the last frames exist
+  tl.set({}, {}, D.duration);
+  window.__timelines = window.__timelines || {};
+  window.__timelines["captions"] = tl;
+</script>
+</body>
+</html>

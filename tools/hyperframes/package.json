@@ -1,0 +1,12 @@
+{
+  "name": "jafat-overlays",
+  "private": true,
+  "description": "Pinned HyperFrames CLI (Apache-2.0) for animated captions and titles; see backend/app/overlays",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "gsap": "3.14.2",
+    "hyperframes": "0.9.20"
+  }
+}

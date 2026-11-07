@@ -265,3 +265,17 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* caption style previews (components/generate/CaptionStylePicker) */
+.caption-demo { animation-duration: 1.8s; animation-iteration-count: infinite; animation-timing-function: steps(1, end); }
+.caption-demo-pill { animation-name: caption-demo-pill; }
+.caption-demo-highlight { color: #fff; padding: 0 2px; border-radius: 2px; animation-name: caption-demo-highlight; }
+.caption-demo-clean { color: #fff; animation-name: caption-demo-clean; animation-timing-function: ease-out; }
+@keyframes caption-demo-pill { 0%, 100% { color: #8f8576; } 1%, 30% { color: #1c1710; } }
+@keyframes caption-demo-highlight { 0%, 100% { background: transparent; } 1%, 25% { background: #c8962e; } }
+@keyframes caption-demo-clean { 0% { opacity: 0; transform: translateY(4px); } 15%, 85% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .caption-demo { animation: none; }
+  .caption-demo-pill:first-child { color: #1c1710; }
+  .caption-demo-highlight:first-child { background: #c8962e; }
+}

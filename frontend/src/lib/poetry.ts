@@ -1,3 +1,4 @@
+import type { CaptionStyle } from '@/components/generate/CaptionStylePicker'
 import { request } from './api'
 import type { Generation, Job } from './types'
 
@@ -22,6 +23,8 @@ export interface PoetrySettings {
   quality: 'draft' | 'final'
   image_model: string
   title_card: boolean
+  // how the verses appear in the video
+  caption_style?: CaptionStyle
   review: boolean
   whisper: boolean
 }

@@ -47,6 +47,8 @@ class CreateIn(BaseModel):
     quality: Literal["draft", "final"] = "draft"
     image_model: str = Field("krea2_turbo", max_length=60)
     title_card: bool = False
+    # how the verses appear: classic burned subtitles, or animated (app.overlays)
+    caption_style: Literal["classic", "pill", "highlight", "clean"] = "classic"
     review: bool = Field(True, description="Stop for an OK after the poem, song, timing and scenes")
     whisper: bool = True
 

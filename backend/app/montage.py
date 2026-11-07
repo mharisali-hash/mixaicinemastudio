@@ -135,7 +135,7 @@ def join(clips: list[Path], durs: list[float], audio: Path, plan: dict, dst: Pat
 
 def finish(joined: Path, work: Path, dst: Path, *, aspect: str, language: str | None, cues: list, title: str,
            chapters: list[dict], srt: Path | None = None, srt_cues: list | None = None, preview: Path | None = None,
-           fade: float = 0.0, progress=None) -> dict | None:
+           fade: float = 0.0, progress=None, caption_style: str = "classic") -> dict | None:
     """Captions burned into the joined cut, chapters muxed, `dst` written, then the .srt and the preview.
     Returns what subtitles.burn said (None when there were no captions to burn)."""
     say = progress or (lambda f, m: None)
@@ -144,8 +144,12 @@ def finish(joined: Path, work: Path, dst: Path, *, aspect: str, language: str | 
     if cues:
         say(0.85, "Burning in the captions")
         scale, chars = CAPTIONS[aspect]
-        burned = st.burn(joined, work / "captioned.mp4", cues, language=language, width=w, height=h,
-                         timeout=4 * 3600, encode=[*VENC, "-crf", "20"], scale=scale, chars=chars, fade=fade)
+        from app import overlays
+
+        # an animated style falls back to these same burned captions if it can't be drawn
+        burned = overlays.burn_captions(joined, work / "captioned.mp4", cues, style=caption_style, language=language,
+                                        width=w, height=h, timeout=4 * 3600, encode=[*VENC, "-crf", "20"],
+                                        scale=scale, chars=chars, fade=fade)
         joined = work / "captioned.mp4"
     say(0.96, "Adding the chapters")
     meta = work / "chapters.txt"

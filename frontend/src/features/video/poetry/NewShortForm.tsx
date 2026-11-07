@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { SwitchRow } from '@/components/studio/switch-row'
+import { CaptionStylePicker, type CaptionStyle } from '@/components/generate/CaptionStylePicker'
 import { AerabButton } from '@/components/text/AerabButton'
 import { useStudioCharacters } from '@/hooks/useCharacterStudio'
 import { useCreatePoetry } from '@/hooks/usePoetry'
@@ -40,6 +41,7 @@ export function NewShortForm() {
     quality: 'draft' as 'draft' | 'final',
     image_model: 'krea2_turbo',
     title_card: false,
+    caption_style: 'classic' as CaptionStyle,
     review: true,
   })
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((o) => ({ ...o, [k]: v }))
@@ -186,6 +188,7 @@ export function NewShortForm() {
           </select>
         </div>
       </div>
+      <CaptionStylePicker legend="How the verses appear" value={f.caption_style} onChange={(v) => set('caption_style', v)} />
       <SwitchRow id={id('tc')} checked={f.title_card} onChange={(v) => set('title_card', v)} title="Title card" hint="A few seconds of the title over the first scene before the song." />
       <SwitchRow
         id={id('rv')}

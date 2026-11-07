@@ -43,6 +43,8 @@ class HostChoice(BaseModel):
 class SettingsIn(BaseModel):
     aspect: Aspect | None = None
     subtitles: Literal["none", "soft", "burn"] | None = None
+    # burned subtitles only: classic, or an animated style (app.overlays)
+    caption_style: Literal["classic", "pill", "highlight", "clean"] | None = None
     set_preset: Literal["modern_studio", "cosy_room", "news_desk", "rooftop", "desi_baithak"] | None = None
     set_prompt: str | None = Field(None, max_length=PROMPT_MAX)
     cover_intro: bool | None = None

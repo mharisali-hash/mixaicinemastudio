@@ -119,7 +119,7 @@ def handle_render(ctx) -> dict:
         mt.join(clips, durs, song, plan, joined, "16", tick=lambda: ctx.progress(0.75, "Laying the song underneath"))
         burned = mt.finish(joined, work, work / "short.mp4", aspect=aspect, language=ps.language, cues=plan["cues"],
                            title=ps.title, chapters=plan["chapters"], srt=srt, preview=preview, fade=svc.FADE_S,
-                           progress=ctx.progress)
+                           progress=ctx.progress, caption_style=svc.settings_of(ps).get("caption_style") or "classic")
         (work / "short.mp4").replace(dst)
     finally:
         shutil.rmtree(work, ignore_errors=True)

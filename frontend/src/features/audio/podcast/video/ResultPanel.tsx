@@ -1,6 +1,7 @@
 import { useId, useState } from 'react'
 import { Link } from 'react-router'
 import { Download, Film, Library, Scissors } from 'lucide-react'
+import { CaptionStylePicker, type CaptionStyle } from '@/components/generate/CaptionStylePicker'
 import { EmptyState } from '@/components/studio/states'
 import { Button } from '@/components/ui/button'
 import { jobRunning, useAssembleAiVideo, usePatchAiVideo } from '@/hooks/useVideoPodcast'
@@ -22,12 +23,13 @@ export function ResultPanel({ vp, onRender }: { vp: VideoPodcast; onRender: () =
   const [quality, setQuality] = useState<VPQuality>(final ? 'final' : 'draft')
   const out = vp.outputs[quality] ?? final ?? draft
   const [subs, setSubs] = useState<VPSubtitles>(vp.settings.subtitles)
+  const [captions, setCaptions] = useState<CaptionStyle>(vp.settings.caption_style ?? 'classic')
   const [intro, setIntro] = useState(vp.settings.cover_intro)
   const [outro, setOutro] = useState(vp.settings.cover_outro)
   const patch = usePatchAiVideo(vp.id)
   const assemble = useAssembleAiVideo(vp.id)
   const locked = jobRunning(vp)
-  const changed = subs !== vp.settings.subtitles || intro !== vp.settings.cover_intro || outro !== vp.settings.cover_outro
+  const changed = subs !== vp.settings.subtitles || captions !== (vp.settings.caption_style ?? 'classic') || intro !== vp.settings.cover_intro || outro !== vp.settings.cover_outro
 
   if (!out)
     return (
@@ -46,7 +48,7 @@ export function ResultPanel({ vp, onRender }: { vp: VideoPodcast; onRender: () =
 
   const recut = () => {
     if (locked) return
-    const settings = { subtitles: subs, cover_intro: intro, cover_outro: outro }
+    const settings = { subtitles: subs, caption_style: captions, cover_intro: intro, cover_outro: outro }
     const cut = () => assemble.mutate(out.quality, { onSuccess: () => announce(`Cutting the ${out.quality} again.`) })
     if (changed) patch.mutate({ settings }, { onSuccess: cut })
     else cut()
@@ -116,6 +118,7 @@ export function ResultPanel({ vp, onRender }: { vp: VideoPodcast; onRender: () =
             </label>
           ))}
         </fieldset>
+        {subs === 'burn' && <CaptionStylePicker value={captions} onChange={setCaptions} />}
         <div className="flex flex-wrap gap-4 text-small">
           <label className="flex items-center gap-1.5">
             <input type="checkbox" checked={intro} onChange={(e) => setIntro(e.target.checked)} className="accent-studio-accent" />

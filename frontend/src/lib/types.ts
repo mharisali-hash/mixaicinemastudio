@@ -1,3 +1,4 @@
+import type { CaptionStyle } from '@/components/generate/CaptionStylePicker'
 // Mirrors docs/api/contract-v0.md. Keep snake_case so payloads pass through untouched.
 import type { BrandPlacement } from './brand'
 import type { CameraSetting } from './camera'
@@ -1804,6 +1805,8 @@ export interface VPSettings {
   aspect: VPAspect
   style: string
   subtitles: VPSubtitles
+  // burned subtitles: classic or animated
+  caption_style?: CaptionStyle
   set_preset: VPSetPreset
   set_prompt: string
   cover_intro: boolean

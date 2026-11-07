@@ -220,10 +220,11 @@ describe('new Poetry Short', () => {
     expect(await screen.findByText('Say what the poem is about first.')).toBeInTheDocument()
     await userEvent.type(screen.getByLabelText('What is the poem about?'), 'dust in the wind')
     await userEvent.click(screen.getByRole('switch', { name: /Let me check each step/ }))
+    await userEvent.click(screen.getByRole('radio', { name: /Highlight/ }))
     await userEvent.click(screen.getByRole('button', { name: /Make the Short/ }))
     await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/poetry')).toBeTruthy())
     const body = calls.find((c) => c.method === 'POST' && c.path === '/poetry')!.body as Record<string, unknown>
-    expect(body).toMatchObject({ topic: 'dust in the wind', language: 'ur', aspect: '9:16', review: false, poem: '' })
+    expect(body).toMatchObject({ topic: 'dust in the wind', language: 'ur', aspect: '9:16', review: false, poem: '', caption_style: 'highlight' })
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/video/poetry/p1'))
   })
 })

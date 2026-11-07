@@ -439,10 +439,13 @@ describe('AI video podcast', { timeout: 20_000 }, () => {
     expect(screen.getByRole('link', { name: 'Open in Library' })).toHaveAttribute('href', '/video/library?open=mv')
     expect(screen.getByRole('link', { name: 'Download MP4' })).toHaveAttribute('href', '/m/draft.mp4')
     expect(screen.getByText(/lacks fonts for Noto Nastaliq Urdu/)).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Caption style' })).not.toBeInTheDocument()
     await user.click(screen.getByRole('radio', { name: 'Burned in' }))
+    // burned subtitles can be animated
+    await user.click(within(screen.getByRole('group', { name: 'Caption style' })).getByRole('radio', { name: /Karaoke/ }))
     await user.click(screen.getByRole('button', { name: 'Cut the draft again' }))
     await waitFor(() => expect(sent(calls, 'POST', '/podcast/ai-video/v1/assemble')).toEqual([{ quality: 'draft' }]))
-    expect(sent(calls, 'PATCH', '/podcast/ai-video/v1')).toEqual([{ settings: { subtitles: 'burn', cover_intro: false, cover_outro: false } }])
+    expect(sent(calls, 'PATCH', '/podcast/ai-video/v1')).toEqual([{ settings: { subtitles: 'burn', caption_style: 'pill', cover_intro: false, cover_outro: false } }])
   })
 })
 

@@ -100,6 +100,26 @@ say "Installing backend (Python 3.12 venv via uv)"
 say "Building frontend"
 (cd "$APP_DIR/frontend" && npm ci --no-audit --no-fund && npm run build)
 
+# --- animated captions and titles (app.overlays) --------------------------------
+# HyperFrames (Apache-2.0) draws them in a headless Chrome. It needs Node 22+; without it the app keeps the
+# plain burned subtitles. Its telemetry and update checks are switched off here and in the worker.
+say "Animated captions (HyperFrames)"
+export HYPERFRAMES_NO_TELEMETRY=1 DO_NOT_TRACK=1 HYPERFRAMES_NO_UPDATE_CHECK=1 HYPERFRAMES_NO_AUTO_INSTALL=1 \
+  HYPERFRAMES_SKIP_SKILLS=1 HYPERFRAMES_NO_OPTIONAL_INSTALL=1
+if (( node_major >= 22 )); then
+  if (cd "$APP_DIR/tools/hyperframes" && npm ci --no-audit --no-fund >/dev/null \
+      && node node_modules/hyperframes/bin/hyperframes.mjs browser ensure >/dev/null); then
+    echo "    renderer ok"
+    if [[ "$(uname -s)" == Linux ]]; then
+      (cd "$APP_DIR/tools/hyperframes" && node node_modules/hyperframes/bin/hyperframes.mjs doctor 2>&1 | tail -n 12) || true
+    fi
+  else
+    warn "couldn't set up HyperFrames; videos keep the classic burned subtitles"
+  fi
+else
+  warn "Node $node_major found; animated captions need Node 22+ (videos keep the classic subtitles)"
+fi
+
 # --- .env ----------------------------------------------------------------------
 ENV_FILE="$APP_DIR/.env"
 set_kv() {  # replace the active KEY= line, or append it
