@@ -28,7 +28,8 @@ echo "    Seed-VC at $(git -C "$SRC" rev-parse --short HEAD)  (set SEED_VC_REF t
 
 if [[ ! -x $DIR/bin/python ]]; then
   echo "==> venv (Python 3.10, what Seed-VC is tested on)"
-  uv venv --python 3.10 "$DIR"
+  # the checkout already lives in $DIR/src, so the folder exists; keep it
+  uv venv --python 3.10 --allow-existing "$DIR"
 fi
 echo "==> requirements"
 uv pip install --python "$DIR/bin/python" -q -r "$SRC/requirements.txt"
