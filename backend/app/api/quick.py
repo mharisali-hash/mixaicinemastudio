@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.limits import PROMPT_MAX
 from app import visibility as vis
 from app import autopilot, brand, models_catalog, prompt_enhance
 from app import cast as film_cast
@@ -34,7 +35,7 @@ class UpscaleIn(BaseModel):
 
 
 class QuickIn(BaseModel):
-    prompt: str = Field(min_length=3, max_length=4000)
+    prompt: str = Field(min_length=3, max_length=PROMPT_MAX)
     duration_s: float = 30
     aspect_ratio: Literal["16:9", "9:16", "1:1"] = "16:9"
     style: Literal["cinematic", "documentary", "animated", "commercial"] = "cinematic"

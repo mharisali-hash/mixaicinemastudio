@@ -326,7 +326,7 @@ function SceneCard({ ps, sc }: { ps: PoetryShort; sc: PoetryScene }) {
       <Label htmlFor={`${uid}-p`} className="text-small">
         Picture prompt
       </Label>
-      <Textarea id={`${uid}-p`} rows={4} maxLength={1500} value={prompt} onChange={(e) => setPrompt(e.target.value)} className="text-small" />
+      <Textarea id={`${uid}-p`} rows={4} value={prompt} onChange={(e) => setPrompt(e.target.value)} className="text-small" />
       <div className="flex flex-wrap gap-1.5">
         <Button
           type="button"

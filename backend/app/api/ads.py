@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.limits import PROMPT_MAX
 from app import brand as br
 from app import models_catalog as mc
 from app import visibility as vis
@@ -58,8 +59,8 @@ class CreateIn(BaseModel):
     title: str = Field("", max_length=200)
     brand_kit_id: str | None = Field(None, max_length=64, description="None: no brand")
     subject: str = Field(min_length=1, max_length=200, description="The service or product")
-    description: str = Field("", max_length=600)
-    brief: str = Field("", max_length=2000, description="Free text; empty lets the creative director decide")
+    description: str = Field("", max_length=PROMPT_MAX)
+    brief: str = Field("", max_length=PROMPT_MAX, description="Free text; empty lets the creative director decide")
     occasion: str = Field("", max_length=120)
     market: str = Field("", max_length=120, description="Country or region")
     language: str = Field("en", min_length=2, max_length=12, pattern=r"^[a-z]{2,3}(-[a-z]{2,4})?$")
@@ -100,7 +101,7 @@ class ConceptPatch(BaseModel):
     cta: str | None = Field(None, max_length=60)
     offers: list[str] | None = Field(None, max_length=3)
     layout: Style | None = None
-    photo_prompt: str | None = Field(None, min_length=1, max_length=2000)
+    photo_prompt: str | None = Field(None, min_length=1, max_length=PROMPT_MAX)
     key_word: str | None = Field(None, max_length=60)
     quote: int | None = Field(None, ge=1, le=6)
 

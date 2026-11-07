@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.limits import PROMPT_MAX
 from app import brand as br
 from app import models_catalog as mc
 from app import visibility as vis
@@ -69,8 +70,8 @@ class CreateIn(BaseModel):
     business_type: str = Field("", max_length=160, description='e.g. "livs / mini market"')
     lines: LinesIn
     language: str = Field("en", min_length=2, max_length=12, pattern=r"^[a-z]{2,3}(-[a-z]{2,4})?$")
-    style: str = Field("", max_length=300, description="A style hint, e.g. fresh and bright, bold clean lettering")
-    brief: str = Field("", max_length=2000)
+    style: str = Field("", max_length=PROMPT_MAX, description="A style hint, e.g. fresh and bright, bold clean lettering")
+    brief: str = Field("", max_length=PROMPT_MAX)
     brand_kit_id: str | None = Field(None, max_length=64)
     product_media_ids: list[str] = Field([], max_length=3, description="Product photos the picture is built round")
     photo_media_ids: list[str] = Field([], max_length=6, description="The owner's own photos, used as they are")

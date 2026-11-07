@@ -96,7 +96,7 @@ function SaveForm({ draft, onDone }: { draft: TemplateDraft; onDone: () => void 
             Make selection a [slot]
           </Button>
         </div>
-        <Textarea id={`${uid}-prompt`} ref={field} value={prompt} maxLength={4000} rows={5} onChange={(e) => setPrompt(e.target.value)} aria-describedby={`${uid}-slots`} />
+        <Textarea id={`${uid}-prompt`} ref={field} value={prompt} rows={5} onChange={(e) => setPrompt(e.target.value)} aria-describedby={`${uid}-slots`} />
         <p id={`${uid}-slots`} className="text-small text-studio-muted">
           {slots.length
             ? `Filled in each time: ${slots.join(', ')}.`

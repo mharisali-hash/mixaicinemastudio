@@ -77,7 +77,8 @@ export function RestoreTab({ photoId, routeId, title, history }: Props) {
     qc.invalidateQueries({ queryKey: photoKeys.history(routeId) })
     qc.invalidateQueries({ queryKey: ['jobs'] })
   }
-  const run = async (tag: string, fn: () => Promise<Job>, label: string) => {
+  // true once the job is queued, so a prompted tool can empty its box
+  const run = async (tag: string, fn: () => Promise<Job>, label: string): Promise<boolean> => {
     setRunning(tag)
     setFailure(null)
     try {
@@ -85,8 +86,10 @@ export function RestoreTab({ photoId, routeId, title, history }: Props) {
       trackJobs([job], `${label} · ${title}`, link)
       announce(`${label} started. The result appears in the filmstrip as a new version.`)
       refresh()
+      return true
     } catch (e) {
       setFailure(e)
+      return false
     } finally {
       setRunning(null)
     }
@@ -271,7 +274,7 @@ interface RowProps {
   open: boolean
   onToggle: () => void
   busy: boolean
-  onApply: (opts: { variant?: string | null; strength?: number; prompt?: string }) => void
+  onApply: (opts: { variant?: string | null; strength?: number; prompt?: string }) => Promise<boolean> | void
 }
 
 function ToolRow({ tool, open, onToggle, busy, onApply }: RowProps) {
@@ -316,7 +319,6 @@ function ToolRow({ tool, open, onToggle, busy, onApply }: RowProps) {
               aria-label={tool.prompt === 'required' ? `${tool.label}: what to change` : `${tool.label}: anything else (optional)`}
               placeholder={tool.prompt === 'required' ? 'e.g. remove the stain on his collar' : 'Anything else to fix (optional)'}
               rows={2}
-              maxLength={600}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
             />
@@ -326,7 +328,10 @@ function ToolRow({ tool, open, onToggle, busy, onApply }: RowProps) {
             size="sm"
             loading={busy}
             disabled={!tool.available || needsText}
-            onClick={() => onApply({ variant, strength: tool.strength ? strength / 100 : undefined, prompt: prompt.trim() || undefined })}
+            onClick={async () => {
+              const ok = await onApply({ variant, strength: tool.strength ? strength / 100 : undefined, prompt: prompt.trim() || undefined })
+              if (ok) setPrompt('')
+            }}
           >
             Apply {tool.label.toLowerCase()}
           </Button>

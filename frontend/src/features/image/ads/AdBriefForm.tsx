@@ -162,7 +162,7 @@ export function AdBriefForm() {
         </div>
         <div className="flex flex-col gap-1 sm:col-span-2">
           <Label htmlFor={id('desc')}>A line about it (optional)</Label>
-          <Input id={id('desc')} dir="auto" maxLength={600} value={f.description} onChange={(e) => set('description', e.target.value)} />
+          <Input id={id('desc')} dir="auto" value={f.description} onChange={(e) => set('description', e.target.value)} />
         </div>
       </div>
 
@@ -194,7 +194,7 @@ export function AdBriefForm() {
 
       <div className="flex flex-col gap-1">
         <Label htmlFor={id('brief')}>Brief (optional)</Label>
-        <Textarea id={id('brief')} dir="auto" rows={3} maxLength={2000} value={f.brief} onChange={(e) => set('brief', e.target.value)} placeholder="Leave it empty and the creative director finds the ideas." />
+        <Textarea id={id('brief')} dir="auto" rows={3} value={f.brief} onChange={(e) => set('brief', e.target.value)} placeholder="Leave it empty and the creative director finds the ideas." />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">

@@ -3,6 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.limits import PROMPT_MAX
 from app.dialogue_schemas import Counts
 from app.schemas import JobOut, LangCode, Utc
 
@@ -14,7 +15,7 @@ class Host(BaseModel):
     id: str | None = Field(None, max_length=40)
     name: str = Field(min_length=1, max_length=80)
     role: Role = "host"
-    persona: str = Field("", max_length=400)
+    persona: str = Field("", max_length=PROMPT_MAX)
     voice_id: str | None = Field(None, max_length=120)
     me: bool = False
 
@@ -131,7 +132,7 @@ class Notes(BaseModel):
 
 
 class SourcesPatch(BaseModel):
-    topic: str | None = Field(None, max_length=2000)
+    topic: str | None = Field(None, max_length=PROMPT_MAX)
     text: str | None = Field(None, max_length=200_000)
 
 
@@ -226,7 +227,7 @@ class EpisodeIn(BaseModel):
     language: LangCode | None = None
     target_minutes: float = Field(5.0, ge=0.5, le=120)
     hosts: list[Host] | None = Field(None, max_length=4)
-    topic: str = Field("", max_length=2000)
+    topic: str = Field("", max_length=PROMPT_MAX)
 
 
 class EpisodePatch(BaseModel):
@@ -252,7 +253,7 @@ class EditIn(BaseModel):
     op: Literal["rewrite_chapter", "shorter", "livelier"]
     line_ids: list[str] | None = Field(None, max_length=400)
     chapter_id: str | None = None
-    note: str = Field("", max_length=500)
+    note: str = Field("", max_length=PROMPT_MAX)
 
 
 class RecordIn(BaseModel):

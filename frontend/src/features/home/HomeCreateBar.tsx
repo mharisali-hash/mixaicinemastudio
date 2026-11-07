@@ -62,7 +62,6 @@ function ImageQuickForm() {
       <Textarea
         id={`${uid}-prompt`}
         rows={3}
-        maxLength={4000}
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
         placeholder="Describe your image… e.g. A brass telescope on a chart table, warm window light"

@@ -22,7 +22,6 @@ import {
   KEYSCALES,
   KIND_NOUN,
   modelFits,
-  PROMPT_MAX,
   SFX_PRESETS,
   SONG_LANGUAGES,
   songLanguageOf,
@@ -155,7 +154,6 @@ export function AudioDock({ form, setForm, modelPicked, onRun, pending, error }:
       promptLabel={copy.promptLabel}
       prompt={form.prompt}
       onPrompt={(v) => set('prompt', v)}
-      maxLength={PROMPT_MAX}
       mentions={false}
       placeholder={copy.placeholder}
       belowPrompt={belowPrompt}

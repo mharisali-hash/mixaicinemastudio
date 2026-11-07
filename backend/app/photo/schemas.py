@@ -3,6 +3,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.limits import PROMPT_MAX
 from app.schemas import Utc
 
 
@@ -379,7 +380,7 @@ class RestoreIn(_Loose):
     tool: str = Field(min_length=1, max_length=40)
     variant: str | None = Field(None, max_length=40)
     strength: float = Field(1.0, ge=0.05, le=1.0)
-    prompt: str | None = Field(None, max_length=600)
+    prompt: str | None = Field(None, max_length=PROMPT_MAX)
     # select (SAM 3): words and/or clicks, 0..1 of the picture
     words: str | None = Field(None, max_length=200)
     include: list[Point] = Field(default_factory=list, max_length=24)

@@ -131,6 +131,8 @@ describe('Speak', () => {
     await user.click(screen.getByRole('switch', { name: /Aerab before speaking/ }))
     await user.keyboard('{Control>}{Enter}{/Control}')
     await waitFor(() => expect(posts(calls, '/audio/speak')[0]).toMatchObject({ aerab: false, language: 'ur' }))
+    // queued: the script box empties for the next line
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Script' })).toHaveValue(''))
   })
 
   it('disables an engine that does not speak the language, and says why', async () => {

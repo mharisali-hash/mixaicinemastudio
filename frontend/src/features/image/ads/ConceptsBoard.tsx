@@ -245,7 +245,7 @@ function ConceptCard({ camp, concept, busy }: { camp: AdCampaign; concept: AdCon
         <label htmlFor={id('photo')} className="sr-only">
           Photo prompt
         </label>
-        <Textarea id={id('photo')} rows={3} maxLength={2000} value={d.photo_prompt} onChange={(e) => set('photo_prompt', e.target.value)} className="mt-1" />
+        <Textarea id={id('photo')} rows={3} value={d.photo_prompt} onChange={(e) => set('photo_prompt', e.target.value)} className="mt-1" />
       </details>
       <div className="flex flex-wrap gap-2">
         <Button type="button" size="sm" variant="primary" disabled={!dirty || busy || !d.headline.trim()} loading={patch.isPending} onClick={save}>

@@ -174,7 +174,7 @@ function Editor({ ep, script, locked }: { ep: Episode; script: Script; locked: b
         <span className="text-[12px] text-studio-muted" aria-live="polite">
           {selected.length ? `${selected.length} selected` : 'Tick lines to edit them with the writer'}
         </span>
-        <Input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="Note for the writer (optional)" aria-label="Note for the writer" className="h-7 w-56" />
+        <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note for the writer (optional)" aria-label="Note for the writer" className="h-7 w-56" />
         <div className="ml-auto flex flex-wrap gap-1.5">
           <AerabButton text={joinLines(lines.map((l) => l.text))} onText={setAllTexts} language={ep.language} label="Add aerab to all lines" showNote={false} disabled={locked} />
           <Button type="button" size="sm" disabled={locked || !oneChapter} title={oneChapter ? undefined : 'Tick lines in one chapter'} onClick={() => run('rewrite_chapter', { chapter_id: chapterOfPick! })}>

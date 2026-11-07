@@ -2,15 +2,14 @@ import { useId } from 'react'
 import { Check, Sparkles, Undo2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { ApiError } from '@/lib/api'
 import type { MagicMode } from '@/lib/types'
 import type { MagicPrompt } from './useMagicPrompt'
 
 const MODES: { value: MagicMode; label: string; hint: string }[] = [
-  { value: 'auto', label: 'Auto', hint: 'Enhances short prompts, leaves detailed ones alone' },
-  { value: 'on', label: 'On', hint: 'Always enrich the prompt before running' },
-  { value: 'off', label: 'Off', hint: 'Send exactly what you wrote' },
+  { value: 'auto', label: 'Auto prompt correction', hint: 'Improves short prompts, leaves detailed ones as written' },
+  { value: 'on', label: 'Always correct', hint: 'Always improves the prompt before running' },
+  { value: 'off', label: 'Off: use my prompt exactly', hint: 'Sends exactly what you wrote' },
 ]
 
 function errorText(e: unknown) {
@@ -24,17 +23,26 @@ export function MagicPromptBar({ magic, canPreview }: { magic: MagicPrompt; canP
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        <span id={`${uid}-l`} className="flex items-center gap-1 text-small text-studio-muted">
+        <label htmlFor={`${uid}-m`} className="flex items-center gap-1 text-small text-studio-muted">
           <Sparkles aria-hidden className="size-3.5 text-studio-accent-hover" />
-          Magic prompt
-        </span>
-        <ToggleGroup type="single" aria-labelledby={`${uid}-l`} value={magic.mode} onValueChange={(v) => v && magic.setMode(v as MagicMode)} className="h-8">
+          Prompt correction
+        </label>
+        <select
+          id={`${uid}-m`}
+          value={magic.mode}
+          onChange={(e) => magic.setMode(e.target.value as MagicMode)}
+          aria-describedby={`${uid}-h`}
+          className="h-8 rounded-[6px] border border-studio-border-strong bg-studio-raised px-2 text-small focus-visible:outline-2 focus-visible:outline-studio-accent"
+        >
           {MODES.map((m) => (
-            <ToggleGroupItem key={m.value} value={m.value} title={m.hint} aria-label={`${m.label}: ${m.hint}`} className="h-6 px-2.5 text-small">
+            <option key={m.value} value={m.value}>
               {m.label}
-            </ToggleGroupItem>
+            </option>
           ))}
-        </ToggleGroup>
+        </select>
+        <span id={`${uid}-h`} className="text-small text-studio-muted max-md:sr-only">
+          {MODES.find((m) => m.value === magic.mode)?.hint}
+        </span>
         {magic.mode !== 'off' && (
           <Button type="button" size="sm" variant="ghost" disabled={!canPreview} loading={magic.previewing} onClick={magic.preview}>
             Preview enhancement
@@ -68,7 +76,7 @@ export function MagicPromptBar({ magic, canPreview }: { magic: MagicPrompt; canP
           {draft.notes && <p className="text-small text-studio-muted">{draft.notes}</p>}
           {stale ? (
             <p className="text-small text-studio-warning" role="status">
-              You changed the prompt after this preview. Preview again, or it runs with Magic prompt {magic.mode === 'on' ? 'on' : 'on auto'}.
+              You changed the prompt after this preview. Preview again, or it runs with {magic.mode === 'on' ? 'Always correct' : 'Auto prompt correction'}.
             </p>
           ) : (
             <div className="flex flex-wrap items-center gap-2">

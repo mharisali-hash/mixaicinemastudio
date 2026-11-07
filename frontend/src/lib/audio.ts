@@ -5,7 +5,6 @@ import type { AudioCategory, AudioGenerateRequest, AudioKind, AudioVocal, MediaB
 
 // contract-v14
 export const LYRICS_MAX = 6000
-export const PROMPT_MAX = 2000
 export const BPM_MIN = 40
 export const BPM_MAX = 220
 export const MAX_TAKES = 4
@@ -195,7 +194,7 @@ export const KEYSCALES = [...NOTES.map((n) => `${n} major`), ...NOTES.map((n) =>
 export function audioPayload(f: AudioForm, m: ModelInfo): AudioGenerateRequest {
   const body: AudioGenerateRequest = {
     kind: f.kind,
-    prompt: f.prompt.trim().slice(0, PROMPT_MAX),
+    prompt: f.prompt.trim(),
     model: m.id,
     duration_s: clampAudioDuration(f.durationS, f.kind, m),
     count: Math.min(MAX_TAKES, Math.max(1, Math.round(f.count))),

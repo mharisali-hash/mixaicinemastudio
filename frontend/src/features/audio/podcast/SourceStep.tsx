@@ -119,7 +119,7 @@ export function SourceStep({ ep, onNext, onScript }: { ep: Episode; onNext: () =
 
       <label className="flex flex-col gap-1 text-small">
         <span className="section-label">Topic</span>
-        <Textarea value={topic} onChange={(e) => setTopic(e.target.value)} onBlur={saveTopic} rows={2} maxLength={2000} dir="auto" placeholder="What is this episode about?" />
+        <Textarea value={topic} onChange={(e) => setTopic(e.target.value)} onBlur={saveTopic} rows={2} dir="auto" placeholder="What is this episode about?" />
       </label>
 
       {mode === 'paste' && (

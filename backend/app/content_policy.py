@@ -77,7 +77,7 @@ def _ask_writer(text: str, tick=None) -> _Verdict | None:
     msgs = [{"role": "system", "content": "You review prompts for an image and video generator in Pakistan. "
                                           "Answer only with JSON."},
             {"role": "user", "content":
-                "Prompt:\n<<<\n" + text[:4000] + "\n>>>\n"
+                "Prompt:\n<<<\n" + text[:12000] + "\n>>>\n"
                 "depicts_revered_figure: true when the picture would SHOW any Prophet (including Prophet "
                 "Muhammad ﷺ, Isa/Jesus, Musa/Moses, Ibrahim), any of the Sahaba or the Ahl-e-Bayt, an angel, "
                 "God, or another revered religious figure or saint, even veiled, as a silhouette, from behind or "

@@ -197,7 +197,7 @@ function NewEpisodeForm({ shows, showId, onDone }: { shows: Show[]; showId: stri
       </DialogHeader>
       <label className="flex flex-col gap-1 text-small">
         <span className="section-label">Topic</span>
-        <Textarea value={topic} onChange={(e) => setTopic(e.target.value)} rows={2} maxLength={2000} placeholder="Why Lahore's old city is getting its gates back" dir="auto" />
+        <Textarea value={topic} onChange={(e) => setTopic(e.target.value)} rows={2} placeholder="Why Lahore's old city is getting its gates back" dir="auto" />
       </label>
       <label className="flex flex-col gap-1 text-small">
         <span className="section-label">Title (optional)</span>

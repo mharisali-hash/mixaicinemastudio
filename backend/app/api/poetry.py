@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
+from app.limits import PROMPT_MAX
 from app import visibility as vis
 from app import models_catalog as mc
 from app.db import get_db
@@ -30,16 +31,16 @@ class CreateIn(BaseModel):
         "setting": "an old Mughal city, golden hour into lantern-lit night", "aspect": "9:16"}]})
 
     title: str = Field("", max_length=200)
-    topic: str = Field("", max_length=500, description="What the poem is about; or give your own poem")
+    topic: str = Field("", max_length=PROMPT_MAX, description="What the poem is about; or give your own poem")
     poem: str = Field("", max_length=4000, description="Your own poem; [verse] / [chorus] markers are optional")
     language: str = Lang
-    mood: str = Field("", max_length=200)
-    style: str = Field("", max_length=300, description="Music style tags for the singer")
+    mood: str = Field("", max_length=PROMPT_MAX)
+    style: str = Field("", max_length=PROMPT_MAX, description="Music style tags for the singer")
     vocal: Literal["female", "male"] = "female"
     length_s: float = Field(60, ge=30, le=90)
     character_id: str | None = Field(None, max_length=64, description="A Character Studio character")
-    character: str = Field("", max_length=500, description="Or a short description of the person")
-    setting: str = Field("", max_length=600)
+    character: str = Field("", max_length=PROMPT_MAX, description="Or a short description of the person")
+    setting: str = Field("", max_length=PROMPT_MAX)
     aspect: Literal["9:16", "16:9", "1:1"] = "9:16"
     quality: Literal["draft", "final"] = "draft"
     image_model: str = Field("krea2_turbo", max_length=60)
@@ -70,8 +71,8 @@ class TimingsPatch(BaseModel):
 
 class ScenePatch(BaseModel):
     id: str = Field(min_length=1, max_length=64)
-    image_prompt: str | None = Field(None, min_length=1, max_length=1500)
-    motion_prompt: str | None = Field(None, min_length=1, max_length=600)
+    image_prompt: str | None = Field(None, min_length=1, max_length=PROMPT_MAX)
+    motion_prompt: str | None = Field(None, min_length=1, max_length=PROMPT_MAX)
 
 
 class ScenesPatch(BaseModel):
@@ -80,8 +81,8 @@ class ScenesPatch(BaseModel):
 
 class RegenerateIn(BaseModel):
     what: Literal["keyframe", "clip"] = "keyframe"
-    image_prompt: str | None = Field(None, min_length=1, max_length=1500)
-    motion_prompt: str | None = Field(None, min_length=1, max_length=600)
+    image_prompt: str | None = Field(None, min_length=1, max_length=PROMPT_MAX)
+    motion_prompt: str | None = Field(None, min_length=1, max_length=PROMPT_MAX)
 
 
 def _short(db: Session, cur: CurrentUser, short_id: str) -> PoetryShort:

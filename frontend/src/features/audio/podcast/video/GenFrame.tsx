@@ -87,7 +87,7 @@ export function GenActions({
           <label htmlFor={`${uid}-text`} className="text-[11px] text-studio-muted">
             What should change? For example: remove the man in the foreground, only one person in the picture.
           </label>
-          <Textarea id={`${uid}-text`} rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} autoFocus />
+          <Textarea id={`${uid}-text`} rows={2} value={note} onChange={(e) => setNote(e.target.value)} autoFocus />
           <Button type="submit" size="sm" variant="primary" className="self-start" disabled={disabled || !note.trim()} loading={regenerating}>
             <RefreshCw aria-hidden />
             Regenerate with this change

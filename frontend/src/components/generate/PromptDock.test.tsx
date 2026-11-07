@@ -124,7 +124,10 @@ describe('magic prompt', () => {
     const prompt = screen.getByRole('textbox', { name: 'Describe the image' })
     await user.click(prompt)
     await user.paste('a fox')
-    await user.click(screen.getByRole('radio', { name: /^On:/ }))
+    // the dropdown starts on Auto prompt correction
+    const correction = screen.getByRole('combobox', { name: 'Prompt correction' })
+    expect(correction).toHaveValue('auto')
+    await user.selectOptions(correction, 'Always correct')
     await user.click(screen.getByRole('button', { name: 'Preview enhancement' }))
     await user.click(await screen.findByRole('button', { name: 'Use enhanced prompt' }))
     await user.type(prompt, ' at dawn')
@@ -136,7 +139,9 @@ describe('magic prompt', () => {
     calls.length = 0
     const next = screen.getByRole('textbox', { name: 'Describe the image' })
     expect(next).toHaveValue('')
-    await user.click(screen.getByRole('radio', { name: /^Off:/ }))
+    // clearing the prompt keeps the person's choice
+    expect(screen.getByRole('combobox', { name: 'Prompt correction' })).toHaveValue('on')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Prompt correction' }), 'Off: use my prompt exactly')
     expect(screen.queryByRole('button', { name: 'Preview enhancement' })).not.toBeInTheDocument()
     await user.click(next)
     await user.paste('a fox at dawn')

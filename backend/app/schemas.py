@@ -5,6 +5,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, PlainSerializer, model_validator
 
+from app.limits import PROMPT_MAX
 from app.camera import Camera
 
 
@@ -466,7 +467,7 @@ AssistAction = Literal["draft_from_idea", "expand", "tighten", "rewrite_tone", "
 
 class AssistIn(BaseModel):
     action: AssistAction
-    idea: str | None = Field(None, max_length=2000)
+    idea: str | None = Field(None, max_length=PROMPT_MAX)
     tone: str | None = Field(None, max_length=100)
 
 
@@ -574,7 +575,7 @@ class ShotOut(Out):
 class Beat(BaseModel):
     t_start: float = Field(ge=0)
     t_end: float = Field(ge=0)
-    prompt: str = Field(max_length=4000)
+    prompt: str = Field(max_length=PROMPT_MAX)
     source: Literal["ai", "user", "ai_edited"] = "user"
     locked: bool = False
 
@@ -655,7 +656,7 @@ class ShotSplitIn(BaseModel):
 
 class ShotExtendIn(BaseModel):
     duration_s: TakeSeconds | None = None
-    prompt: str | None = Field(None, max_length=2000)
+    prompt: str | None = Field(None, max_length=PROMPT_MAX)
 
 
 class ShotExtendOut(BaseModel):
@@ -700,7 +701,7 @@ class TakesIn(BaseModel):
 
 
 class ChunkRegenerateIn(BaseModel):
-    prompt: str | None = Field(None, max_length=4000)
+    prompt: str | None = Field(None, max_length=PROMPT_MAX)
     seed: int | None = Field(None, ge=0)
 
 
@@ -845,7 +846,7 @@ class UpscaleIn(BaseModel):
     variant: Literal["3b", "7b"] | None = Field(None, description="SeedVR2 size, video engine best only; 7b is "
                                                                   "about twice as slow")
     denoise: float | None = Field(None, ge=0.15, le=0.5, description="Image redraw only: how much may be repainted")
-    prompt: str | None = Field(None, max_length=4000, description="Image redraw only: replaces the source's prompt")
+    prompt: str | None = Field(None, max_length=PROMPT_MAX, description="Image redraw only: replaces the source's prompt")
 
 
 # Media library, Image studio, Templates, Dashboard (contract v5)
@@ -959,9 +960,9 @@ class ImageGenerateIn(BaseModel):
     model_config = ConfigDict(json_schema_extra={"examples": [{
         "prompt": "A lighthouse on a cliff at dusk, storm clouds, warm window light", "aspect": "16:9", "count": 2}]})
 
-    prompt: str = Field(min_length=1, max_length=4000, description="What to draw. @mentions of Library pictures "
+    prompt: str = Field(min_length=1, max_length=PROMPT_MAX, description="What to draw. @mentions of Library pictures "
                                                                    "turn it into a reference-guided composition")
-    negative: str | None = Field(None, max_length=2000, description="Things to keep out of the picture")
+    negative: str | None = Field(None, max_length=PROMPT_MAX, description="Things to keep out of the picture")
     aspect: ImageAspect = Field("1:1", description="Output shape, about 1 megapixel")
     count: int = Field(1, ge=1, le=4, description="Pictures to make; one job each")
     style: str | None = Field(None, description="A style id from GET /api/images/options")
@@ -988,7 +989,7 @@ class ImageEditIn(BaseModel):
     source_ids: list[str] = Field(min_length=1, max_length=8, description="Library item or generation ids of "
                                                                          "finished images; the first is edited")
     # may be empty when an image tool does the work (depth map, edge map, LaMa with a mask)
-    instruction: str = Field("", max_length=4000, description="What to change")
+    instruction: str = Field("", max_length=PROMPT_MAX, description="What to change")
     aspect: ImageAspect | None = Field(None, description="Empty keeps the first picture's shape")
     count: int = Field(1, ge=1, le=4)
     seed: int | None = Field(None, ge=0, le=2**31 - 1, description=_SEED)
@@ -1018,7 +1019,7 @@ class VideoGenerateIn(BaseModel):
     model_config = ConfigDict(json_schema_extra={"examples": [{
         "prompt": "Waves crash against the lighthouse, slow push in", "duration_s": 5, "aspect": "16:9"}]})
 
-    prompt: str = Field(min_length=1, max_length=4000, description="The scene and its motion")
+    prompt: str = Field(min_length=1, max_length=PROMPT_MAX, description="The scene and its motion")
     model: str | None = Field(None, max_length=60, description=_MODEL)
     duration_s: float = Field(5.0, ge=1, description="Seconds. Past one model pass it renders as a long take in "
                                                      "chunks, up to the server's LONGTAKE_MAX_S")
@@ -1029,7 +1030,7 @@ class VideoGenerateIn(BaseModel):
     end_image_id: str | None = Field(None, description="Last frame; needs image_id")
     seed: int | None = Field(None, ge=0, le=2**31 - 1, description=_SEED)
     smooth_motion: bool = Field(False, description="Interpolate to a higher frame rate after rendering")
-    negative: str | None = Field(None, max_length=2000)
+    negative: str | None = Field(None, max_length=PROMPT_MAX)
     title: str | None = Field(None, max_length=300)
     brand_kit_id: str | None = None  # contract v7
     magic_prompt: MagicMode | None = Field(None, description=_MAGIC)
@@ -1047,7 +1048,7 @@ class Img2ImgIn(BaseModel):
         "strength": 0.5}]})
 
     source_id: str = Field(description="A Library item (uploads too) or a finished image generation id")
-    prompt: str = Field("", max_length=4000, description="The picture you want; may be empty when a style is set")
+    prompt: str = Field("", max_length=PROMPT_MAX, description="The picture you want; may be empty when a style is set")
     style: str | None = Field(None, max_length=40, description="A style id from GET /api/images/options (v31)")
     strength: float = Field(0.45, ge=0.1, le=0.9, description="How far it may move from the source: low keeps the "
                                                               "layout, high keeps little more than the colours. Left "
@@ -1057,7 +1058,7 @@ class Img2ImgIn(BaseModel):
     count: int = Field(1, ge=1, le=4)
     aspect: Literal["source", "1:1", "16:9", "9:16", "4:3", "3:4", "2:3", "3:2"] = "source"
     seed: int | None = Field(None, ge=0, le=2**31 - 1)
-    negative: str | None = Field(None, max_length=2000)
+    negative: str | None = Field(None, max_length=PROMPT_MAX)
     title: str | None = Field(None, max_length=300)
     brand_kit_id: str | None = None
     magic_prompt: MagicMode | None = None
@@ -1077,13 +1078,13 @@ class ImageControlIn(BaseModel):
         description="What the picture steers: depth, canny (edges), pose, hed (soft edges, non-commercial) or "
                     "scribble (sketch)")
     use_as_is: bool = Field(False, description="The picture already is the map or sketch; skip extracting one")
-    prompt: str = Field(min_length=1, max_length=4000, description="What to draw")
+    prompt: str = Field(min_length=1, max_length=PROMPT_MAX, description="What to draw")
     style: str | None = Field(None, max_length=40, description="A style id from GET /api/images/options")
     strength: float = Field(0.8, ge=0.65, le=1.0, description="How closely to follow the map")
     aspect: Literal["source", "1:1", "16:9", "9:16", "4:3", "3:4", "2:3", "3:2"] = "source"
     count: int = Field(1, ge=1, le=4)
     seed: int | None = Field(None, ge=0, le=2**31 - 1, description=_SEED)
-    negative: str | None = Field(None, max_length=2000)
+    negative: str | None = Field(None, max_length=PROMPT_MAX)
     title: str | None = Field(None, max_length=300)
     engine: Literal["auto", "controlnet", "edit"] = Field("auto", description="auto: the ControlNet when installed, "
                                                                               "else Qwen-Image-Edit (looser); "
@@ -1113,8 +1114,8 @@ class BrandImageIn(BaseModel):
     product_id: str | None = Field(None, description="Cards that take a product: one of the kit's product media ids")
     surface: Literal["light", "dark"] | None = Field(None, description="What the logo lands on; dark picks the "
                                                                        "light logo, or asks for light letters")
-    instruction: str | None = Field(None, max_length=4000, description="The logo edit; empty uses the card's")
-    scene_prompt: str | None = Field(None, max_length=4000, description="scene mode: empty uses the card's")
+    instruction: str | None = Field(None, max_length=PROMPT_MAX, description="The logo edit; empty uses the card's")
+    scene_prompt: str | None = Field(None, max_length=PROMPT_MAX, description="scene mode: empty uses the card's")
     aspect: ImageAspect | None = None
     count: int = Field(1, ge=1, le=4)
     seed: int | None = Field(None, ge=0, le=2**31 - 1, description=_SEED)
@@ -1145,7 +1146,7 @@ class AudioGenerateIn(BaseModel):
         {"kind": "sfx", "prompt": "a heavy wooden door creaks open", "duration_s": 4}]})
 
     kind: AudioKind = Field(description="song (with lyrics), music (instrumental) or sfx")
-    prompt: str = Field(min_length=1, max_length=2000, description="Genre, mood, instruments; for sfx the sound")
+    prompt: str = Field(min_length=1, max_length=PROMPT_MAX, description="Genre, mood, instruments; for sfx the sound")
     lyrics: str = Field("", max_length=6000, description="Songs: [verse] / [chorus] sections. "
                                                          "POST /api/audio/lyrics can write them")
     # ISO 639-1, plus "ur-latn" for Roman Urdu; ACE-Step reads anything it doesn't know as "unknown"
@@ -1364,8 +1365,8 @@ class UserTemplateIn(BaseModel):
     title: str = Field(min_length=1, max_length=120)
     description: str = Field("", max_length=500)
     target: Literal["generate", "edit"] = "generate"
-    prompt: str = Field(min_length=1, max_length=4000, description="The prompt, or the instruction for an edit")
-    negative: str = Field("", max_length=2000)
+    prompt: str = Field(min_length=1, max_length=PROMPT_MAX, description="The prompt, or the instruction for an edit")
+    negative: str = Field("", max_length=PROMPT_MAX)
     style: str | None = Field(None, max_length=40)
     model: str | None = Field(None, max_length=60)
     aspect: ImageAspect | None = None
@@ -1380,7 +1381,7 @@ class UserTemplateIn(BaseModel):
 class UserTemplatePatch(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=120)
     description: str | None = Field(None, max_length=500)
-    prompt: str | None = Field(None, min_length=1, max_length=4000)
+    prompt: str | None = Field(None, min_length=1, max_length=PROMPT_MAX)
 
 
 class DashboardOut(BaseModel):
@@ -1490,7 +1491,7 @@ class ConsentIn(BaseModel):
 
 
 class VoiceDesignIn(BaseModel):
-    description: str = Field(min_length=1, max_length=500)
+    description: str = Field(min_length=1, max_length=PROMPT_MAX)
     seed: int | None = Field(None, ge=0, le=2**31 - 1)
     engine: str | None = Field(None, max_length=20)
 
@@ -1558,7 +1559,7 @@ class VoiceOut(BaseModel):
 
 
 class SpeakDesignIn(BaseModel):
-    description: str = Field(min_length=1, max_length=500)
+    description: str = Field(min_length=1, max_length=PROMPT_MAX)
     seed: int | None = Field(None, ge=0, le=2**31 - 1)
 
 
@@ -1588,7 +1589,7 @@ class SpeakIn(BaseModel):
 
 
 class DesignPreviewIn(BaseModel):
-    description: str = Field(min_length=1, max_length=500)
+    description: str = Field(min_length=1, max_length=PROMPT_MAX)
     seed: int | None = Field(None, ge=0, le=2**31 - 1)
     engine: str = Field("auto", max_length=20)
     language: LangCode = "en"
@@ -1671,7 +1672,7 @@ class Model3DIn(BaseModel):
 
     # exactly one of these five says where the model starts from
     source_id: str | None = Field(None, description="A finished picture: a Library media id or a generation id")
-    prompt: str | None = Field(None, max_length=2000, description="Describe one object; a picture of it is made "
+    prompt: str | None = Field(None, max_length=PROMPT_MAX, description="Describe one object; a picture of it is made "
                                                                   "first, then the model")
     character_id: str | None = Field(None, description="A character: its turnaround panels as views, else its "
                                                        "full-body picture or portrait")

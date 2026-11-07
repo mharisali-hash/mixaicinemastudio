@@ -44,7 +44,8 @@ function Speak() {
   // the response is a snapshot; the list copy follows the job to ready
   const live = (m: MediaItem) => listed.find((x) => x.id === m.id) ?? m
 
-  const run = async (r: SpeakRun) => {
+  // a run from the dock empties the text once every take is queued; Retry leaves the dock alone
+  const run = async (r: SpeakRun, fromDock = false) => {
     let res: SpeakResponse[]
     try {
       res = await Promise.all(r.bodies.map((b) => speak.mutateAsync(b)))
@@ -52,6 +53,7 @@ function Speak() {
       // the dock shows speak.error
       return
     }
+    if (fromDock) setForm((f) => ({ ...f, text: '' }))
     const items = res.flatMap((x) => x.items ?? [])
     record({ prompt: r.form.text, summary: r.summary, settings: r, items, jobs: res.flatMap((x) => x.jobs ?? []), label: items.length > 1 ? 'Your takes' : 'Your take' })
     const [a, b] = res.map((x) => x.items?.[0])
@@ -70,7 +72,7 @@ function Speak() {
 
   return (
     <GeneratorPage label="Speak" targets={[]}>
-      <SpeakDock form={form} setForm={setForm} voices={voices} engines={engines} onRun={run} pending={speak.isPending} error={speak.error} />
+      <SpeakDock form={form} setForm={setForm} voices={voices} engines={engines} onRun={(r) => run(r, true)} pending={speak.isPending} error={speak.error} />
       {pair && (
         <CompareBoard
           pair={{ ...pair, a: { ...pair.a, item: live(pair.a.item) }, b: { ...pair.b, item: live(pair.b.item) } }}

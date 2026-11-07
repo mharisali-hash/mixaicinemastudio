@@ -140,13 +140,13 @@ export function BrandKitEditor({ kit }: { kit: BrandKit }) {
             <label htmlFor={`${uid}-style`} className="text-small font-medium">
               Style & look
             </label>
-            <Textarea id={`${uid}-style`} dir="auto" rows={3} maxLength={2000} value={draft.style_text} onChange={(e) => set('style_text', e.target.value)} placeholder="e.g. minimal, premium, soft daylight, lots of negative space" />
+            <Textarea id={`${uid}-style`} dir="auto" rows={3} value={draft.style_text} onChange={(e) => set('style_text', e.target.value)} placeholder="e.g. minimal, premium, soft daylight, lots of negative space" />
           </div>
           <div className="flex flex-col gap-1">
             <label htmlFor={`${uid}-voice`} className="text-small font-medium">
               Tone of voice
             </label>
-            <Textarea id={`${uid}-voice`} dir="auto" rows={3} maxLength={2000} value={draft.voice_text} onChange={(e) => set('voice_text', e.target.value)} placeholder="e.g. warm, confident, never shouty; short sentences" />
+            <Textarea id={`${uid}-voice`} dir="auto" rows={3} value={draft.voice_text} onChange={(e) => set('voice_text', e.target.value)} placeholder="e.g. warm, confident, never shouty; short sentences" />
           </div>
         </div>
       </EditorSection>

@@ -89,7 +89,6 @@ export function DesignPage() {
         promptLabel="Describe the voice"
         prompt={form.description}
         onPrompt={(v) => set('description', v)}
-        maxLength={500}
         mentions={false}
         placeholder="e.g. male, elderly, low pitch, indian accent, slow"
         belowPrompt={

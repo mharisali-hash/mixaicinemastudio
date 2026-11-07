@@ -86,12 +86,14 @@ export function Img2ImgPage() {
       ? 'Describe the result or pick a style first.'
       : null
 
-  const go = (r: I2iRun) =>
+  // a run from the dock empties the prompt once it's queued; a tile's Retry leaves the dock alone
+  const go = (r: I2iRun, fromDock = false) =>
     run.mutate(r.body, {
       onSuccess: ({ items: made, jobs }) => {
         setBatch((made ?? []).map((m) => m.id))
         record({ prompt: r.body.prompt, summary: r.summary, settings: r, items: made ?? [], jobs, label: plural(made?.length ?? r.form.count, 'variation') })
         announce(`Making ${plural(made?.length ?? r.form.count, 'variation')}. They appear below as they finish.`)
+        if (fromDock) setForm((f) => ({ ...f, prompt: '' }))
       },
     })
 
@@ -101,7 +103,7 @@ export function Img2ImgPage() {
     const summary = [model?.label, style?.label, `${strengthLabel(form.strength)} ${form.strength.toFixed(2)}`, form.aspect === 'source' ? 'source shape' : form.aspect, plural(form.count, 'image')]
       .filter(Boolean)
       .join(' · ')
-    go({ form, model: model?.id, speed: speed?.id, body, summary })
+    go({ form, model: model?.id, speed: speed?.id, body, summary }, true)
   }
 
   const refill = (r: Partial<I2iRun> & { prompt?: string }) => {

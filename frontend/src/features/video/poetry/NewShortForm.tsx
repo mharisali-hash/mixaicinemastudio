@@ -91,7 +91,7 @@ export function NewShortForm() {
       ) : (
         <div className="flex flex-col gap-1">
           <Label htmlFor={id('topic')}>What is the poem about?</Label>
-          <Input id={id('topic')} dir="auto" maxLength={500} value={f.topic} onChange={(e) => set('topic', e.target.value)} placeholder="Coming apart slowly, like dust in the wind" />
+          <Input id={id('topic')} dir="auto" value={f.topic} onChange={(e) => set('topic', e.target.value)} placeholder="Coming apart slowly, like dust in the wind" />
         </div>
       )}
       <div className="grid gap-3 sm:grid-cols-2">
@@ -111,11 +111,11 @@ export function NewShortForm() {
         </div>
         <div className="flex flex-col gap-1">
           <Label htmlFor={id('mood')}>Mood</Label>
-          <Input id={id('mood')} maxLength={200} value={f.mood} onChange={(e) => set('mood', e.target.value)} placeholder="melancholy, longing" />
+          <Input id={id('mood')} value={f.mood} onChange={(e) => set('mood', e.target.value)} placeholder="melancholy, longing" />
         </div>
         <div className="flex flex-col gap-1">
           <Label htmlFor={id('style')}>Music style</Label>
-          <Input id={id('style')} maxLength={300} value={f.style} onChange={(e) => set('style', e.target.value)} placeholder="slow ghazal, harmonium, tabla" />
+          <Input id={id('style')} value={f.style} onChange={(e) => set('style', e.target.value)} placeholder="slow ghazal, harmonium, tabla" />
         </div>
         <div className="flex flex-col gap-1">
           <Label htmlFor={id('vocal')}>Voice</Label>
@@ -141,11 +141,11 @@ export function NewShortForm() {
         </div>
         <div className="flex flex-col gap-1">
           <Label htmlFor={id('who')}>{f.character_id ? 'Anything to add about them' : 'Who we see'}</Label>
-          <Input id={id('who')} maxLength={500} value={f.character} onChange={(e) => set('character', e.target.value)} placeholder="a woman in a hooded robe, seen from behind" />
+          <Input id={id('who')} value={f.character} onChange={(e) => set('character', e.target.value)} placeholder="a woman in a hooded robe, seen from behind" />
         </div>
         <div className="flex flex-col gap-1 sm:col-span-2">
           <Label htmlFor={id('set')}>Setting</Label>
-          <Input id={id('set')} maxLength={600} value={f.setting} onChange={(e) => set('setting', e.target.value)} placeholder="an old Mughal city, golden hour into lantern-lit night" />
+          <Input id={id('set')} value={f.setting} onChange={(e) => set('setting', e.target.value)} placeholder="an old Mughal city, golden hour into lantern-lit night" />
         </div>
         <div className="flex flex-col gap-1">
           <Label htmlFor={id('aspect')}>Shape</Label>

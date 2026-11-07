@@ -55,7 +55,7 @@ export function PromptDock({
   prompt,
   onPrompt,
   placeholder,
-  maxLength = 4000,
+  maxLength,
   promptRef,
   promptHint,
   belowPrompt,

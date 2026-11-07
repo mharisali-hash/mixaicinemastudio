@@ -32,7 +32,6 @@ export function AiDraftForm({ sceneId, onCancel }: { sceneId: string; onCancel: 
         onChange={(e) => setIdea(e.target.value)}
         onKeyDown={(e) => e.key === 'Escape' && !draft.working && onCancel()}
         placeholder="The keeper climbs the stairs one last time"
-        maxLength={2000}
         dir="auto"
       />
       {hasArabicScript(idea) && <AerabOnNote />}

@@ -102,6 +102,8 @@ export function Studio3DPage() {
         setSteps(first)
         setPicked(null)
         announce(first ? `Making ${first.what} first, then your 3D model.` : 'Making your 3D model. It appears below when it finishes.')
+        // the picture, views or logo stay; only typed words are cleared once queued
+        if (form.from === 'text') setForm((f) => ({ ...f, prompt: '' }))
       },
     })
   }
@@ -171,7 +173,6 @@ export function Studio3DPage() {
                 id={`${uid}-p`}
                 dir="auto"
                 rows={3}
-                maxLength={2000}
                 value={form.prompt}
                 onChange={(e) => set('prompt', e.target.value)}
                 placeholder="A brass oil lamp with a glass chimney"

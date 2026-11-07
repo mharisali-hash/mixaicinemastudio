@@ -261,7 +261,7 @@ function GeneratePopover({ slot, onMade }: { slot: Slot; onMade: (id: string) =>
       <PopoverContent aria-label={`Generate the ${info.label.toLowerCase()}`} className="flex w-80 flex-col gap-2">
         <label className="flex flex-col gap-1 text-small">
           <span className="section-label">Describe it</span>
-          <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={3} maxLength={1000} />
+          <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={3} />
         </label>
         <NumberField label="Length (s)" value={seconds} min={5} max={240} step={1} onCommit={setSeconds} />
         {gen.isError && (

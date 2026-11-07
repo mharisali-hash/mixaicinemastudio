@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.limits import PROMPT_MAX
 from app.ai_jobs import rewrite_prompt_from_note
 from app.db import get_db
 from app.models import PodcastEpisode, Project, VideoPodcast
@@ -43,7 +44,7 @@ class SettingsIn(BaseModel):
     aspect: Aspect | None = None
     subtitles: Literal["none", "soft", "burn"] | None = None
     set_preset: Literal["modern_studio", "cosy_room", "news_desk", "rooftop", "desi_baithak"] | None = None
-    set_prompt: str | None = Field(None, max_length=600)
+    set_prompt: str | None = Field(None, max_length=PROMPT_MAX)
     cover_intro: bool | None = None
     cover_outro: bool | None = None
     cover_media_id: str | None = None
@@ -65,7 +66,7 @@ class PatchIn(BaseModel):
 class RegenerateIn(BaseModel):
     what: Literal["portrait", "set", "angle"]
     key: str | None = None
-    note: str | None = Field(None, max_length=1000)
+    note: str | None = Field(None, max_length=PROMPT_MAX)
 
 
 class SwitchIn(BaseModel):

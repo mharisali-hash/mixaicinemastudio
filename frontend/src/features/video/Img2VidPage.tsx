@@ -57,12 +57,14 @@ export function Img2VidPage() {
 
   const why = !form.startId ? 'Add a start picture first.' : !send || blocked(send) ? 'Pick a model that can animate a picture.' : plainPrompt(form.prompt).trim().length < 3 ? 'Describe the motion first.' : null
 
-  const run = (r: I2vRun) =>
+  // a run from the dock empties the prompt once it's queued; a tile's Retry leaves the dock alone
+  const run = (r: I2vRun, fromDock = false) =>
     generate.mutate(r.body, {
       onSuccess: (res) => {
         const { items, jobs } = videoResult(res)
         record({ prompt: r.body.prompt, summary: r.summary, settings: r, items, jobs, label: 'Your clip' })
         announce('Animating your picture. The clip appears below when it finishes.')
+        if (fromDock) setForm((f) => ({ ...f, prompt: '' }))
       },
     })
 
@@ -72,7 +74,7 @@ export function Img2VidPage() {
     const summary = [model?.label, formatDuration(duration), form.endId ? 'start → end' : 'from a picture', cameraSummary(form.camera) || null, body.smooth_motion ? 'smooth ×2' : null]
       .filter(Boolean)
       .join(' · ')
-    run({ form: { ...form, model: model?.id, durationS: duration }, body, summary })
+    run({ form: { ...form, model: model?.id, durationS: duration }, body, summary }, true)
   }
 
   const refill = (f: Partial<I2vForm>) => {

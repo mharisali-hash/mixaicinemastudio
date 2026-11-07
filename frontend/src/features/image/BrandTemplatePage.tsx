@@ -277,7 +277,6 @@ export function BrandTemplatePage() {
                   value={instruction}
                   onChange={(e) => setInstruction(e.target.value)}
                   rows={4}
-                  maxLength={4000}
                   className={cn(fieldClass, 'mt-1.5 h-auto py-1.5 text-small')}
                 />
               </details>
@@ -288,7 +287,6 @@ export function BrandTemplatePage() {
           </div>
         }
         mentions={false}
-        maxLength={4000}
         placeholder={sceneMode ? 'The scene, with a plain surface where the logo will go' : 'Where and how the logo goes on your photo'}
         chips={
           <>

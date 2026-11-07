@@ -19,9 +19,22 @@ export interface MagicContext {
   brandKitId?: string
 }
 
-/** Magic prompt: Auto · On · Off, plus an on-demand preview the user can edit and accept. */
+const KEY = 'jafat.promptCorrection'
+const MODES: MagicMode[] = ['auto', 'on', 'off']
+
+// the choice is the person's, so it outlives a cleared prompt (which remounts the form) and a reload
+function remembered(): MagicMode {
+  try {
+    const v = localStorage.getItem(KEY) as MagicMode | null
+    return v && MODES.includes(v) ? v : 'auto'
+  } catch {
+    return 'auto'
+  }
+}
+
+/** Prompt correction (Magic prompt): Auto · Always · Off, plus an on-demand preview the user can edit and accept. */
 export function useMagicPrompt(prompt: string, ctx: MagicContext) {
-  const [mode, setModeState] = useState<MagicMode>('auto')
+  const [mode, setModeState] = useState<MagicMode>(remembered)
   const [draft, setDraft] = useState<Draft | null>(null)
   const enhance = usePromptEnhance()
   const current = prompt.trim()
@@ -45,6 +58,11 @@ export function useMagicPrompt(prompt: string, ctx: MagicContext) {
 
   const setMode = (m: MagicMode) => {
     setModeState(m)
+    try {
+      localStorage.setItem(KEY, m)
+    } catch {
+      // private windows may refuse; the choice still holds for this page
+    }
     if (m === 'off') setDraft(null)
   }
 

@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from app.limits import PROMPT_MAX
 from app import file_links, thumbs
 from app import character_sheet as cs
 from app import library as lib
@@ -180,10 +181,10 @@ PART_OF = ("What this is a piece of, e.g. story:<id>. It stays out of the studio
 @tool("generate", title="Generate images")
 def generate_image(
     ctx: Context,
-    prompt: Annotated[str, Field(min_length=1, max_length=4000, description="What to draw")],
+    prompt: Annotated[str, Field(min_length=1, max_length=PROMPT_MAX, description="What to draw")],
     aspect: Annotated[ImageAspect, Field(description="Output shape, about 1 megapixel")] = "1:1",
     count: Annotated[int, Field(ge=1, le=4, description="Pictures to make; one job each")] = 1,
-    negative: Annotated[str | None, Field(max_length=2000, description="Things to keep out")] = None,
+    negative: Annotated[str | None, Field(max_length=PROMPT_MAX, description="Things to keep out")] = None,
     style: Annotated[str | None, Field(description="A style id, e.g. cinematic, anime, watercolor")] = None,
     seed: Annotated[int | None, Field(ge=0, le=2**31 - 1)] = None,
     model: Annotated[str | None, Field(max_length=60, description="A model id, or empty for the default")] = None,
@@ -204,7 +205,7 @@ def edit_image(
                                                                                    "or generation_id); the first "
                                                                                    "is the one edited, the rest are "
                                                                                    "references")],
-    instruction: Annotated[str, Field(min_length=1, max_length=4000, description="What to change")],
+    instruction: Annotated[str, Field(min_length=1, max_length=PROMPT_MAX, description="What to change")],
     aspect: Annotated[ImageAspect | None, Field(description="Empty keeps the first picture's shape")] = None,
     count: Annotated[int, Field(ge=1, le=4)] = 1,
     seed: Annotated[int | None, Field(ge=0, le=2**31 - 1)] = None,
@@ -238,7 +239,7 @@ def make_3d_model(
     ctx: Context,
     image_id: Annotated[str | None, Field(description="Start from a finished picture: media_id or generation_id. "
                                                       "One object, whole in frame, works best")] = None,
-    prompt: Annotated[str | None, Field(max_length=2000, description="Or describe one object: a picture of it is "
+    prompt: Annotated[str | None, Field(max_length=PROMPT_MAX, description="Or describe one object: a picture of it is "
                                                                      "made first, then the model")] = None,
     character_id: Annotated[str | None, Field(description="Or a character: its turnaround panels as views, else "
                                                           "its full-body picture or portrait")] = None,
@@ -303,7 +304,7 @@ def make_3d_model(
 @tool("generate", title="Generate a video")
 def generate_video(
     ctx: Context,
-    prompt: Annotated[str, Field(min_length=1, max_length=4000, description="The scene and its motion")],
+    prompt: Annotated[str, Field(min_length=1, max_length=PROMPT_MAX, description="The scene and its motion")],
     duration_s: Annotated[float, Field(ge=1, le=300, description="Seconds; long ones render in chunks")] = 5.0,
     aspect: Annotated[VideoAspect | None, Field(description="Empty: the start image's shape, else 16:9")] = None,
     image_id: Annotated[str | None, Field(description="Start frame: a finished image's media_id or "
@@ -330,7 +331,7 @@ def _audio(ctx: Context, body: AudioGenerateIn) -> dict:
 @tool("generate", title="Make a song")
 def make_song(
     ctx: Context,
-    prompt: Annotated[str, Field(min_length=1, max_length=2000, description="Genre, mood, instruments, voice")],
+    prompt: Annotated[str, Field(min_length=1, max_length=PROMPT_MAX, description="Genre, mood, instruments, voice")],
     lyrics: Annotated[str, Field(max_length=6000, description="With [verse] / [chorus] section markers")] = "",
     language: Annotated[str, Field(pattern=r"^[a-z]{2,3}(-[a-z]{2,4})?$", description="ISO 639-1 of the "
                                                                                       "lyrics")] = "en",
@@ -347,7 +348,7 @@ def make_song(
 @tool("generate", title="Make music")
 def make_music(
     ctx: Context,
-    prompt: Annotated[str, Field(min_length=1, max_length=2000, description="Genre, mood, instruments, tempo")],
+    prompt: Annotated[str, Field(min_length=1, max_length=PROMPT_MAX, description="Genre, mood, instruments, tempo")],
     duration_s: Annotated[float, Field(ge=1, le=380)] = 30.0,
     bpm: Annotated[int | None, Field(ge=40, le=220)] = None,
     count: Annotated[int, Field(ge=1, le=4)] = 1,
@@ -359,7 +360,7 @@ def make_music(
 @tool("generate", title="Make a sound effect")
 def make_sfx(
     ctx: Context,
-    prompt: Annotated[str, Field(min_length=1, max_length=2000, description="The sound, e.g. 'a heavy wooden "
+    prompt: Annotated[str, Field(min_length=1, max_length=PROMPT_MAX, description="The sound, e.g. 'a heavy wooden "
                                                                            "door creaks open'")],
     duration_s: Annotated[float, Field(ge=1, le=60)] = 4.0,
     count: Annotated[int, Field(ge=1, le=4)] = 1,
@@ -374,7 +375,7 @@ def speak(
     text: Annotated[str, Field(min_length=1, max_length=5000, description="What to say")],
     voice_id: Annotated[str | None, Field(description="From list_voices (a library id or gallery:<id>). Give this "
                                                       "or voice_description")] = None,
-    voice_description: Annotated[str | None, Field(max_length=500, description="Describe a new voice instead, e.g. "
+    voice_description: Annotated[str | None, Field(max_length=PROMPT_MAX, description="Describe a new voice instead, e.g. "
                                                                                "'warm older man, British accent'")]
     = None,
     language: Annotated[str | None, Field(pattern=r"^[a-z]{2,3}(-[a-z]{2,4})?$", description="ISO 639-1; empty "
@@ -422,7 +423,7 @@ def separate_stems(
 def create_character(
     ctx: Context,
     name: Annotated[str, Field(min_length=1, max_length=200)],
-    description: Annotated[str, Field(max_length=4000, description="Looks, clothes, manner. The portrait and "
+    description: Annotated[str, Field(max_length=PROMPT_MAX, description="Looks, clothes, manner. The portrait and "
                                                                    "sheet start from this")] = "",
     profile: Annotated[dict[str, str] | None, Field(description="Identity fields: age, gender, role, nationality, "
                                                                 "height, languages, accent...")] = None,
@@ -479,7 +480,7 @@ def set_character_voice(
 @tool("generate", title="Write a podcast episode")
 def write_podcast_episode(
     ctx: Context,
-    topic: Annotated[str, Field(min_length=1, max_length=2000, description="What the episode is about")],
+    topic: Annotated[str, Field(min_length=1, max_length=PROMPT_MAX, description="What the episode is about")],
     hosts: Annotated[list[Host], Field(min_length=1, max_length=4, description="Who speaks; voice_id from "
                                                                                "list_voices")],
     title: Annotated[str, Field(min_length=1, max_length=200)] = "New episode",
@@ -527,7 +528,7 @@ def list_projects(ctx: Context) -> dict:
 @tool("generate", title="Make a film from an idea")
 def create_project_from_idea(
     ctx: Context,
-    idea: Annotated[str, Field(min_length=3, max_length=4000, description="The film in a few sentences")],
+    idea: Annotated[str, Field(min_length=3, max_length=PROMPT_MAX, description="The film in a few sentences")],
     duration_s: Annotated[float, Field(ge=5, description="Target runtime in seconds")] = 30,
     aspect_ratio: Literal["16:9", "9:16", "1:1"] = "16:9",
     style: Literal["cinematic", "documentary", "animated", "commercial"] = "cinematic",
@@ -575,7 +576,7 @@ def make_ad_campaign(
     = "en",
     offers: Annotated[list[str], Field(max_length=6, description="The only prices, discounts or promises the "
                                                                  "copy may use, word for word")] = [],
-    brief: Annotated[str, Field(max_length=2000)] = "",
+    brief: Annotated[str, Field(max_length=PROMPT_MAX)] = "",
     occasion: Annotated[str, Field(max_length=120)] = "",
     market: Annotated[str, Field(max_length=120)] = "",
     tone: Annotated[str, Field(max_length=120)] = "",

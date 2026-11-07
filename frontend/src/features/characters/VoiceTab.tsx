@@ -168,7 +168,6 @@ function DesignVoice({ character }: { character: Character }) {
         <Label htmlFor={`${uid}-extra`}>Anything to add (optional)</Label>
         <Input
           id={`${uid}-extra`}
-          maxLength={200}
           value={extra}
           placeholder="deep, slow"
           aria-describedby={`${uid}-from`}

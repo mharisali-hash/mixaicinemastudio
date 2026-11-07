@@ -85,11 +85,13 @@ export function ControlPage() {
         ? 'Describe the picture you want.'
         : null
 
-  const go = (r: ControlRun) =>
+  // a run from the dock empties the prompt once it's queued; a tile's Retry leaves the dock alone
+  const go = (r: ControlRun, fromDock = false) =>
     run.mutate(r.body, {
       onSuccess: ({ items, jobs, tool_fallback }) => {
         record({ prompt: r.body.prompt, summary: r.summary, settings: r, items: items ?? [], jobs, label: plural(items?.length ?? r.body.count, 'image') })
         announce(`Making ${plural(items?.length ?? r.body.count, 'image')}.${tool_fallback ? ' The ControlNet is unavailable, so the edit model is following your picture.' : ''}`)
+        if (fromDock) setPrompt('')
       },
     })
 
@@ -101,7 +103,7 @@ export function ControlPage() {
     if (Number.isFinite(n) && n >= 0) body.seed = n
     if (tpl?.templateId) body.template_id = tpl.templateId
     const summary = [`${kind.label} to image`, asIs ? 'used as is' : 'from a photo', `${strengthWord(strength)} ${strength.toFixed(2)}`, plural(count, 'image')].join(' · ')
-    go({ body, summary })
+    go({ body, summary }, true)
   }
 
   const refill = (r: Partial<ControlRun> & { prompt?: string }) => {

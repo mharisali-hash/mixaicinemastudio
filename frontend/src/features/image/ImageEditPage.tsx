@@ -147,11 +147,13 @@ export function ImageEditPage() {
               ? 'Say what should change.'
               : null
 
-  const run = (r: EditRun) =>
+  // a run from the dock empties the prompt once it's queued; a tile's Retry leaves the dock alone
+  const run = (r: EditRun, fromDock = false) =>
     edit.mutate(r.body, {
       onSuccess: ({ items, jobs, tool_fallback }) => {
         record({ prompt: r.body.instruction, summary: r.summary, settings: r, items: items ?? [], jobs, label: plural(items?.length ?? r.count, 'edit') })
         announce(`Editing. ${plural(items?.length ?? r.count, 'result')} on the way.${tool_fallback ? ` Ran on the edit model: ${tool_fallback}.` : ''}`)
+        if (fromDock) setInstruction('')
       },
     })
 
@@ -168,7 +170,7 @@ export function ImageEditPage() {
       if (toolOn && tool.id === 'relight') body.tool_options = { light }
     }
     const summary = [model?.label, plural(sources.length, 'source'), aspect ?? 'source shape', plural(count, 'result')].filter(Boolean).join(' · ')
-    run({ ids: sources, instruction, count, aspect, model: model?.id, seed, body, summary })
+    run({ ids: sources, instruction, count, aspect, model: model?.id, seed, body, summary }, true)
   }
 
   const refill = (r: Partial<EditRun>) => {
@@ -229,7 +231,6 @@ export function ImageEditPage() {
           )
         }
         mentions={{ refBudget: max, refsUsed: sources.length }}
-        maxLength={2000}
         placeholder={sources.length > 1 ? 'e.g. Put the woman from image 1 in the jacket from image 2, on the street from image 3' : 'What should change? e.g. Make it night, with rain on the window'}
         chips={
           <>

@@ -50,12 +50,14 @@ function AudioGenerator({ kind }: { kind: AudioKind }) {
   const record = useRecordRun<AudioRun>(page)
   const noun = KIND_NOUN[kind]
 
-  const run = (r: AudioRun) =>
+  // a run from the dock empties the style prompt once it's queued (a song keeps its lyrics); Retry leaves it
+  const run = (r: AudioRun, fromDock = false) =>
     generate.mutate(r.body, {
       onSuccess: (res) => {
         const { items, jobs } = audioResult(res)
         record({ prompt: r.body.prompt, summary: r.summary, settings: r, items, jobs, label: items.length > 1 ? `Your ${noun.many}` : `Your ${noun.one}` })
         announce(`Making your ${items.length > 1 ? noun.many : noun.one}. ${items.length > 1 ? 'They appear' : 'It appears'} below when ready.`)
+        if (fromDock) setForm((f) => ({ ...f, prompt: '' }))
       },
     })
   const refill = (next: AudioForm) => {
@@ -83,7 +85,7 @@ function AudioGenerator({ kind }: { kind: AudioKind }) {
           <span className="text-studio-faint">· made at the clip’s length, {form.durationS} s</span>
         </Link>
       )}
-      <AudioDock form={form} setForm={setForm} modelPicked={!!model && form.model === model} onRun={run} pending={generate.isPending} error={generate.error} />
+      <AudioDock form={form} setForm={setForm} modelPicked={!!model && form.model === model} onRun={(r) => run(r, true)} pending={generate.isPending} error={generate.error} />
       <ResultsHeading>Your {noun.many}</ResultsHeading>
       <SessionResults<AudioRun>
         page={page}

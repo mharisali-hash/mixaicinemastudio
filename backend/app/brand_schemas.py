@@ -8,6 +8,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.limits import PROMPT_MAX
 from app.schemas import JobOut, MediaItemOut, Utc
 
 HEX = re.compile(r"^#?([0-9a-fA-F]{6})$")
@@ -284,8 +285,8 @@ class BrandKitIn(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     is_default: bool = False
     palette: list[PaletteColour] = Field([], max_length=8)
-    style_text: str = Field("", max_length=2000)
-    voice_text: str = Field("", max_length=2000)
+    style_text: str = Field("", max_length=PROMPT_MAX)
+    voice_text: str = Field("", max_length=PROMPT_MAX)
     tagline: str = Field("", max_length=300)
     logos: Logos = Logos()
     products: list[Product] = Field([], max_length=12)
@@ -315,8 +316,8 @@ class BrandKitIn(BaseModel):
 class BrandKitPatch(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=200)
     palette: list[PaletteColour] | None = Field(None, max_length=8)
-    style_text: str | None = Field(None, max_length=2000)
-    voice_text: str | None = Field(None, max_length=2000)
+    style_text: str | None = Field(None, max_length=PROMPT_MAX)
+    voice_text: str | None = Field(None, max_length=PROMPT_MAX)
     tagline: str | None = Field(None, max_length=300)
     logos: Logos | None = None
     products: list[Product] | None = Field(None, max_length=12)

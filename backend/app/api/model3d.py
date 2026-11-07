@@ -187,7 +187,7 @@ def make_3d(body: Model3DIn, db: Session = Depends(get_db), cur: CurrentUser = D
     db.add(item)
     db.flush()
     g = enqueue_generation(db, workspace_id=ws, project_id=None, target_type="media",
-                           target_id=item.id, kind=m3.GEN_KIND, prompt=prompt[:4000], params=params,
+                           target_id=item.id, kind=m3.GEN_KIND, prompt=prompt, params=params,
                            seed=body.seed, parent_id=None)
     item.generation_id = g.id
     job = db.get(Job, g.job_id)

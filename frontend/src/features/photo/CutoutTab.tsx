@@ -170,10 +170,10 @@ export function CutoutTab({ photoId, routeId, title, version, points, onPoints, 
 
       <section aria-labelledby="paint-h" className={cn('flex flex-col gap-2', !hasMask && 'opacity-60')}>
         <h3 id="paint-h" className="section-label">Paint a new scene</h3>
-        <Textarea aria-label="Describe the new background" rows={2} maxLength={600} disabled={!hasMask} placeholder="e.g. a marble kitchen counter in soft morning light"
+        <Textarea aria-label="Describe the new background" rows={2} disabled={!hasMask} placeholder="e.g. a marble kitchen counter in soft morning light"
           value={prompt} onChange={(e) => setPrompt(e.target.value)} />
         <Button size="sm" variant="primary" disabled={!hasMask || !prompt.trim() || !!unavailable('background')} loading={busy === 'paint'}
-          onClick={() => run('paint', () => api.photo.restore(photoId, { tool: 'background', prompt: prompt.trim(), edge }), 'Paint background')}>
+          onClick={() => run('paint', () => api.photo.restore(photoId, { tool: 'background', prompt: prompt.trim(), edge }), 'Paint background').then((ok) => ok && setPrompt(''))}>
           <Paintbrush aria-hidden /> Paint background
         </Button>
         <p className="text-[12px] text-studio-muted">The subject keeps its original pixels; only the scene behind it is painted.</p>

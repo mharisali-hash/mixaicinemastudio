@@ -195,11 +195,11 @@ export function PrintBriefForm() {
         </div>
         <div className="flex min-w-0 flex-col gap-1 sm:col-span-2">
           <Label htmlFor={id('style')}>Style</Label>
-          <Input id={id('style')} dir="auto" maxLength={300} value={style} onChange={(e) => setStyle(e.target.value)} placeholder="Fresh and bright: greens, warm yellows, bold clean lettering" />
+          <Input id={id('style')} dir="auto" value={style} onChange={(e) => setStyle(e.target.value)} placeholder="Fresh and bright: greens, warm yellows, bold clean lettering" />
         </div>
         <div className="flex min-w-0 flex-col gap-1 sm:col-span-2">
           <Label htmlFor={id('brief')}>Anything else (optional)</Label>
-          <Textarea id={id('brief')} dir="auto" rows={2} maxLength={2000} value={brief} onChange={(e) => setBrief(e.target.value)} />
+          <Textarea id={id('brief')} dir="auto" rows={2} value={brief} onChange={(e) => setBrief(e.target.value)} />
         </div>
         <div className="flex min-w-0 flex-col gap-1">
           <Label htmlFor={id('kit')}>Brand kit</Label>

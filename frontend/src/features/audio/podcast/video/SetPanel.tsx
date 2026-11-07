@@ -47,7 +47,7 @@ export function SetPanel({ vp }: { vp: VideoPodcast }) {
         </div>
         <label className="flex flex-col gap-1 text-small">
           <span className="section-label">Anything to add (optional)</span>
-          <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={2} maxLength={600} dir="auto" placeholder="Warm lamps, bookshelves behind, a city window" />
+          <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={2} dir="auto" placeholder="Warm lamps, bookshelves behind, a city window" />
         </label>
         <Button
           type="button"

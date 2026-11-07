@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.limits import PROMPT_MAX
 from app import brand
 from app import library as lib
 from app import prompt_enhance
@@ -15,7 +16,7 @@ router = APIRouter(prefix="/prompts", tags=["prompts"])
 
 
 class EnhanceIn(BaseModel):
-    prompt: str = Field(min_length=1, max_length=4000)
+    prompt: str = Field(min_length=1, max_length=PROMPT_MAX)
     kind: Literal["image", "video", "quick"] = "image"
     model: str | None = Field(None, max_length=60)
     style: str | None = Field(None, max_length=40)

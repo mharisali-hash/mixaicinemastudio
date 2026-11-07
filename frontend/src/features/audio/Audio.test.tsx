@@ -236,6 +236,10 @@ describe('Audio Studio', () => {
     await user.type(screen.getByRole('textbox', { name: 'BPM' }), '70')
     await user.click(screen.getByRole('button', { name: /^Compose/ }))
     expect(posted(calls)).toEqual({ kind: 'music', prompt: 'tense score, low strings', model: 'sa3_medium', duration_s: 360, count: 1, category: 'loop', bpm: 70 })
+    // queued: the box is ready for the next idea, and it takes as much as anyone writes
+    const box = screen.getByRole('textbox', { name: 'Describe the music' })
+    await waitFor(() => expect(box).toHaveValue(''))
+    expect(box).not.toHaveAttribute('maxlength')
   })
 
   it('SFX: a preset fills the prompt; length and takes go with it', async () => {
@@ -250,6 +254,7 @@ describe('Audio Studio', () => {
     await closeChip(user)
     await user.click(screen.getByRole('button', { name: /^Generate/ }))
     expect(posted(calls)).toEqual({ kind: 'sfx', prompt: 'Thunder', model: 'sa3_small_sfx', duration_s: 20, count: 3 })
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Describe the sound' })).toHaveValue(''))
   })
 
   it('a tile plays and pauses from the keyboard, one shared player at a time', async () => {
