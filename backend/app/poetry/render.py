@@ -32,7 +32,7 @@ def _open(path) -> Image.Image:
         return ImageOps.exif_transpose(im).convert("RGB")
 
 
-def plan_for(ps: PoetryShort, duration: float, title_s: float) -> dict:
+def plan_for(ps: PoetryShort, duration: float, title_s: float, tail_s: float = 0.0) -> dict:
     """What montage.xfade_graph needs, plus the cues and chapters on the video's clock."""
     cues = [{"start": round(title_s + float(ln["start"]), 3), "end": round(title_s + float(ln["end"]), 3),
              "text": ln["text"]} for ln in ps.lines if ln.get("start") is not None and ln.get("end") is not None]
@@ -46,12 +46,33 @@ def plan_for(ps: PoetryShort, duration: float, title_s: float) -> dict:
         name = SECTION_NAMES.get(sec, sec.replace("-", " ").capitalize())
         at = 0.0 if not marks else title_s + float(ln.get("start") or 0.0)
         marks.append((part, f"{name} {seen[sec]}" if sec != "chorus" else name, at))
-    total = title_s + duration
+    # the outro holds after the song; the audio is padded with silence to the end
+    total = title_s + duration + tail_s
     chapters = [{"title": t, "start": round(a, 3), "end": round(marks[k + 1][2] if k + 1 < len(marks) else total, 3)}
                 for k, (_, t, a) in enumerate(marks)]
     # the song fades out over its last moment instead of stopping dead on the last frame
     return {"audio_len": round(duration, 3), "title_s": title_s, "trimmed": True, "total": round(total, 3),
             "cues": cues, "chapters": chapters}
+
+
+def _bookend(db, ps: PoetryShort, media_id: str | None, which: str):
+    """(file, picture|video, seconds) for the intro or outro, or None. One deleted since it was picked is
+    simply left out rather than failing the whole cut."""
+    if not media_id:
+        return None
+    try:
+        g, kind = svc.bookend_source(db, ps.workspace_id, media_id, which)
+    except Exception:  # noqa: BLE001
+        log.warning("%s %s of poetry %s is gone; cutting without it", which, media_id, ps.id)
+        return None
+    path = generation_file(g)
+    if path is None or not path.is_file():
+        return None
+    if kind == "video":
+        secs = min(svc.BOOKEND_MAX_S, max(1.0, aa.stream_info(path).duration or svc.BOOKEND_S))
+    else:
+        secs = svc.BOOKEND_S
+    return path, kind, float(secs)
 
 
 def handle_render(ctx) -> dict:
@@ -75,8 +96,15 @@ def handle_render(ctx) -> dict:
     duration = aa.stream_info(song).duration
     wins = svc.scene_windows(ps, duration)
     title_s = svc.TITLE_S if st.get("title_card") and ps.title else 0.0
-    plan = plan_for(ps, duration, title_s)
-    parts = ([("title", title_s, None)] if title_s else []) + [("scene", b - a, sc) for (a, b), sc in zip(wins, ps.scenes)]
+    ends = {k: _bookend(db, ps, st.get(f"{k}_media_id"), k) for k in ("intro", "outro")}
+    intro_s = ends["intro"][2] if ends["intro"] else 0.0
+    outro_s = ends["outro"][2] if ends["outro"] else 0.0
+    # the intro and the title card both come before the song, so they push it (and the captions) later
+    plan = plan_for(ps, duration, intro_s + title_s, outro_s)
+    parts = ([("intro", intro_s, ends["intro"])] if intro_s else []) + \
+        ([("title", title_s, None)] if title_s else []) + \
+        [("scene", b - a, sc) for (a, b), sc in zip(wins, ps.scenes)] + \
+        ([("outro", outro_s, ends["outro"])] if outro_s else [])
     out_dir, _ = svc.files_dir(ps)
     out_dir.mkdir(parents=True, exist_ok=True)
     folder, rel_folder = lib.media_dir(gen.workspace_id)
@@ -98,6 +126,16 @@ def handle_render(ctx) -> dict:
             c = work / f"c{i:04d}.mp4"
             clips.append(c)
             durs.append(frames / mt.FPS)
+            if kind in ("intro", "outro"):
+                path, media_kind, _ = sc
+                if media_kind == "video":
+                    mt.video_clip(path, c, frames, aspect, tick=tick)
+                else:
+                    still = work / f"s{i:04d}.png"
+                    stories.picture_frame(_open(path), aspect).save(still)
+                    mt.clip(still, c, frames, aspect, zoom=False, tick=tick)
+                    still.unlink(missing_ok=True)
+                continue
             first = ps.scenes[0] if kind == "title" else sc
             kf = generation_file(db.get(Generation, first.get("keyframe") or "")) if first.get("keyframe") else None
             clip = generation_file(db.get(Generation, sc.get("clip") or "")) if sc and sc.get("clip") else None

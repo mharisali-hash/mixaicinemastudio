@@ -29,7 +29,10 @@ IMAGE_MODELS = ("krea2_turbo", "qwen_image_2512", "zimage_turbo")
 LIVE = ("queued", "generating")
 FINISHED = ("ready", "approved")
 ATTEMPTS = 2  # first try plus one re-roll, for the song, keyframes and clips alike
-MIN_SCENES, MAX_SCENES, SCENE_S = 4, 8, 9.0
+# a 4-minute Episode gets ~26 scenes; a 60 s Short still gets 7
+MIN_SCENES, MAX_SCENES, SCENE_S = 4, 28, 9.0
+# an intro or outro picture holds this long; a clip plays up to BOOKEND_MAX_S of itself
+BOOKEND_S, BOOKEND_MAX_S = 4.0, 10.0
 TITLE_S = 3.0
 FADE_S = 0.45
 SONG_MODEL = "ace15_turbo"
@@ -37,7 +40,7 @@ SONG_MODEL = "ace15_turbo"
 DEFAULTS = {"topic": "", "mood": "", "style": "", "vocal": "female", "length_s": 60.0, "character_id": None,
             "character": "", "setting": "", "aspect": "9:16", "quality": "draft", "image_model": "krea2_turbo",
             "title_card": False, "review": True, "whisper": True,
-            "caption_style": "classic"}
+            "caption_style": "classic", "sing_voice_id": None, "intro_media_id": None, "outro_media_id": None}
 
 _MARKER = re.compile(r"^\s*\[\s*([A-Za-z][A-Za-z -]*?)\s*\d*\s*\]\s*$")
 
@@ -125,8 +128,25 @@ def song_duration(ps: PoetryShort) -> float | None:
 
 # ---------------------------------------------------------------- scenes
 
+def bookend_source(db, workspace_id: str, media_id: str, which: str = "intro"):
+    """The Library picture or clip shown before (intro) or after (outro) the song: (generation, kind)."""
+    from fastapi import HTTPException
+
+    from app.models import MediaItem
+
+    item = db.get(MediaItem, media_id or "")
+    if item is None or item.workspace_id != workspace_id:
+        raise HTTPException(422, f"The {which} isn't in this workspace's Library")
+    if item.kind not in ("image", "video"):
+        raise HTTPException(422, f"The {which} has to be a picture or a video clip")
+    g = db.get(Generation, item.generation_id or "")
+    if g is None or g.status not in FINISHED or not g.file_path:
+        raise HTTPException(422, f"The {which} isn't finished yet")
+    return g, item.kind
+
+
 def group_scenes(starts: list[float], duration: float) -> list[int]:
-    """The first line of each scene: 4 to 8 scenes of about SCENE_S, cut where a line starts."""
+    """The first line of each scene: 4 to 28 scenes of about SCENE_S, cut where a line starts."""
     n = len(starts)
     if n == 0:
         return []

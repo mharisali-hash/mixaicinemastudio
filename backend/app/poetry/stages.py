@@ -50,12 +50,17 @@ def sections_for(length_s: float) -> list[str]:
     # sung poetry is slow: a 60 s ghazal holds about eight lines, not twelve (twelve got cut off mid-poem)
     if length_s <= 75:
         return ["verse", "chorus"]
-    return ["verse", "chorus", "verse"]
+    if length_s <= 130:
+        return ["verse", "chorus", "verse"]
+    if length_s <= 190:
+        return ["verse", "chorus", "verse", "chorus", "bridge", "chorus"]
+    return ["verse", "chorus", "verse", "chorus", "verse", "bridge", "chorus"]
 
 
 SLOW_STYLES = ("ghazal", "sufi", "nazm", "kalam", "qawwali", "naat", "slow", "ballad", "lullaby", "ney", "classical")
 SONG_INTRO_S, SONG_OUTRO_S, LINE_GAP_S = 8.0, 6.0, 1.0
-SONG_MAX_S = 150.0
+# ACE-Step's own limit; a 4-minute nasheed Episode is the longest
+SONG_MAX_S = 240.0
 
 
 def song_seconds(texts: list[str], style: str, asked: float, cap: float | None = None) -> float:
@@ -246,7 +251,8 @@ class Run:
         tags = (ps.poem or {}).get("tags") or ""
         sing = None
         if st["vocal"] in song_voice.VOCALS:
-            sing = song_voice.plan(self.db, ps.workspace_id, st["vocal"], None, (ps.poem or {}).get("lyrics") or "x")
+            sing = song_voice.plan(self.db, ps.workspace_id, st["vocal"], st.get("sing_voice_id"),
+                                   (ps.poem or {}).get("lyrics") or "x")
         vocal = sing["base"] if sing else st["vocal"]
         prompt = ", ".join(x for x in (tags, st.get("mood"), f"{vocal} vocal") if x)
         m, chosen = mc.choose(svc.SONG_MODEL, "audio", prompt, kind="song")

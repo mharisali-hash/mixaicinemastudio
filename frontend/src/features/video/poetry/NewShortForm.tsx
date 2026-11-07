@@ -11,12 +11,16 @@ import { AerabButton } from '@/components/text/AerabButton'
 import { useStudioCharacters } from '@/hooks/useCharacterStudio'
 import { useCreatePoetry } from '@/hooks/usePoetry'
 import { useSongVoices } from '@/hooks/useStems'
+import { useVoiceChoices } from '@/hooks/useGallery'
 import { CHILD_VOCALS, IMAGE_MODELS, POETRY_LANGUAGES, type PoetryAspect, type PoetryCreate, type PoetryVocal } from '@/lib/poetry'
 import { announce } from '@/stores/ui'
 
 const SELECT = 'h-8 w-full rounded-[6px] border border-studio-border-strong bg-studio-raised px-2 text-body focus-visible:outline-2 focus-visible:outline-studio-accent'
 
 /** Everything a Short needs up front; only a topic or a poem is required. */
+// past 90 s it reads better in minutes: a 4-minute Episode, not 240 s
+const lengthLabel = (s: number) => (s <= 90 ? `${s} s` : `${Math.floor(s / 60)} min${s % 60 ? ` ${s % 60} s` : ''}`)
+
 export function NewShortForm() {
   const uid = useId()
   const id = (s: string) => `${uid}-${s}`
@@ -25,6 +29,7 @@ export function NewShortForm() {
   const chars = useStudioCharacters()
   const [own, setOwn] = useState(false)
   const sung = useSongVoices().data?.available === true
+  const voices = useVoiceChoices()
   const [f, setF] = useState({
     title: '',
     topic: '',
@@ -33,6 +38,7 @@ export function NewShortForm() {
     mood: '',
     style: '',
     vocal: 'female' as PoetryVocal,
+    sing_voice_id: '',
     length_s: 60,
     character_id: '',
     character: '',
@@ -45,12 +51,13 @@ export function NewShortForm() {
     review: true,
   })
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((o) => ({ ...o, [k]: v }))
-  const missing = own ? !f.poem.trim() : !f.topic.trim()
+  const noVoice = f.vocal === 'voice' && !f.sing_voice_id
+  const missing = (own ? !f.poem.trim() : !f.topic.trim()) || noVoice
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     if (missing) return
-    const body: PoetryCreate = { ...f, character_id: f.character_id || null, topic: own ? '' : f.topic, poem: own ? f.poem : '' }
+    const body: PoetryCreate = { ...f, sing_voice_id: f.vocal === 'voice' ? f.sing_voice_id || null : null, character_id: f.character_id || null, topic: own ? '' : f.topic, poem: own ? f.poem : '' }
     create.mutate(body, {
       onSuccess: (ps) => {
         announce('Poetry Short started.')
@@ -134,9 +141,22 @@ export function NewShortForm() {
               ))}
           </select>
         </div>
+        {f.vocal === 'voice' && (
+          <div className="flex flex-col gap-1">
+            <Label htmlFor={id('singer')}>Sung in the voice of</Label>
+            <select id={id('singer')} className={SELECT} value={f.sing_voice_id} onChange={(e) => set('sing_voice_id', e.target.value)}>
+              <option value="">Choose a voice…</option>
+              {voices.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="flex flex-col gap-1">
-          <Label htmlFor={id('len')}>Length: {f.length_s} s</Label>
-          <input id={id('len')} type="range" min={30} max={90} step={5} value={f.length_s} onChange={(e) => set('length_s', Number(e.target.value))} className="h-8 accent-studio-accent" />
+          <Label htmlFor={id('len')}>Length: {lengthLabel(f.length_s)}</Label>
+          <input id={id('len')} type="range" min={30} max={240} step={5} value={f.length_s} onChange={(e) => set('length_s', Number(e.target.value))} className="h-8 accent-studio-accent" />
         </div>
         <div className="flex flex-col gap-1">
           <Label htmlFor={id('char')}>Character</Label>
@@ -203,7 +223,7 @@ export function NewShortForm() {
           Make the Short
         </Button>
         <span id={id('why')} aria-live="polite" className="text-small text-studio-muted">
-          {missing ? (own ? 'Paste your poem first.' : 'Say what the poem is about first.') : ''}
+          {(own ? !f.poem.trim() : !f.topic.trim()) ? (own ? 'Paste your poem first.' : 'Say what the poem is about first.') : noVoice ? 'Pick the voice to sing in.' : ''}
         </span>
       </div>
       {create.isError && (

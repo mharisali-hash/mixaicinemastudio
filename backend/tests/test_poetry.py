@@ -219,7 +219,7 @@ def test_character_refs_and_regenerating_one_scene(client, llm):
 
 def test_validation_and_edits(client, llm):
     assert client.post("/api/poetry", json={"language": "ur"}).status_code == 422
-    assert client.post("/api/poetry", json={"topic": "x", "length_s": 200}).status_code == 422
+    assert client.post("/api/poetry", json={"topic": "x", "length_s": 300}).status_code == 422
     assert client.post("/api/poetry", json={"topic": "x", "character_id": "nope"}).status_code == 422
     assert client.post("/api/poetry", json={"topic": "x", "image_model": "ltx23_distilled"}).status_code == 422
     ps = make(client)

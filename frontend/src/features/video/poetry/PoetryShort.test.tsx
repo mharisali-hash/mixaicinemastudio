@@ -1,4 +1,4 @@
-import { cleanup, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { blockingStep, initialStep, nudge, stepStates, tap, timingProblem, type PoetryShort, type PoetryStageKey, type PoetryStageStatus } from '@/lib/poetry'
@@ -206,6 +206,31 @@ describe('Poetry Short page', () => {
     expect(screen.getByRole('link', { name: 'Subtitles (.srt)' })).toHaveAttribute('href', '/api/media/v.srt')
     expect(screen.getByLabelText(/preview/)).toHaveAttribute('src', '/api/media/v_preview.mp4')
     expect(screen.getByRole('button', { name: 'Cut it again' })).toBeEnabled()
+  })
+})
+
+describe('new Poetry Short: a voice of mine, up to 4 minutes', () => {
+  it('needs the voice picked, then sends it with the longer length', async () => {
+    const calls = mockApi((method, path) => {
+      if (path === '/audio/song-voices') return { available: true, vocals: ['boy', 'girl', 'choir', 'voice'] }
+      if (path === '/voices') return [{ id: 'v9', name: 'Hamza', kind: 'design', language: 'ur' }]
+      if (path === '/gallery') return { items: [], total: 0 }
+      if (method === 'POST' && path === '/poetry') return short({ poem: 'running' })
+      if (path === '/poetry/p1') return short({ poem: 'running' })
+      return []
+    })
+    renderAt('/video/poetry', routes)
+    const user = userEvent.setup()
+    await user.type(await screen.findByLabelText('What is the poem about?'), 'the moon over the river')
+    await user.selectOptions(screen.getByLabelText('Voice'), await screen.findByRole('option', { name: 'A voice of mine' }))
+    expect(screen.getByText('Pick the voice to sing in.')).toBeInTheDocument()
+    await user.selectOptions(screen.getByLabelText('Sung in the voice of'), await screen.findByRole('option', { name: 'Hamza' }))
+    const len = screen.getByLabelText(/^Length/)
+    fireEvent.change(len, { target: { value: '240' } })
+    expect(screen.getByText('Length: 4 min')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Make the Short/ }))
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/poetry')).toBeTruthy())
+    expect(calls.find((c) => c.method === 'POST' && c.path === '/poetry')!.body).toMatchObject({ vocal: 'voice', sing_voice_id: 'v9', length_s: 240 })
   })
 })
 

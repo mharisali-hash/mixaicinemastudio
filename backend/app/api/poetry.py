@@ -38,8 +38,11 @@ class CreateIn(BaseModel):
     mood: str = Field("", max_length=PROMPT_MAX)
     style: str = Field("", max_length=PROMPT_MAX, description="Music style tags for the singer")
     # boy / girl / choir: sung by the model, then changed into a child's voice (app.song_voice)
-    vocal: Literal["female", "male", "boy", "girl", "choir"] = "female"
-    length_s: float = Field(60, ge=30, le=90)
+    vocal: Literal["female", "male", "boy", "girl", "choir", "voice"] = "female"
+    sing_voice_id: str | None = Field(None, max_length=80,
+                                      description="vocal=voice: the Library voice (or gallery:<id>) that sings it")
+    # up to the song model's own limit; scenes come about one every 9 s
+    length_s: float = Field(60, ge=30, le=240)
     character_id: str | None = Field(None, max_length=64, description="A Character Studio character")
     character: str = Field("", max_length=PROMPT_MAX, description="Or a short description of the person")
     setting: str = Field("", max_length=PROMPT_MAX)
@@ -49,6 +52,9 @@ class CreateIn(BaseModel):
     title_card: bool = False
     # how the verses appear: classic burned subtitles, or animated (app.overlays)
     caption_style: Literal["classic", "pill", "highlight", "clean"] = "classic"
+    # a picture or a short clip from the Library shown before / after the song, with no captions on it
+    intro_media_id: str | None = Field(None, max_length=64)
+    outro_media_id: str | None = Field(None, max_length=64)
     review: bool = Field(True, description="Stop for an OK after the poem, song, timing and scenes")
     whisper: bool = True
 
@@ -108,6 +114,15 @@ def create_short(body: CreateIn, db: Session = Depends(get_db), cur: CurrentUser
     mc.get(body.image_model, "image")  # 422 when it isn't an image model or isn't installed
     if body.vocal in song_voice.VOCALS and not song_voice.enabled():
         raise HTTPException(422, "Children's voices aren't set up on this server yet")
+    if body.vocal == "voice":
+        from app import voices
+
+        if voices.find_voice(db, cur.workspace_id, body.sing_voice_id) is None:
+            raise HTTPException(422, "Pick the voice to sing in" if not body.sing_voice_id
+                                else "That voice isn't in the library any more")
+    for key in ("intro_media_id", "outro_media_id"):
+        if getattr(body, key):
+            svc.bookend_source(db, cur.workspace_id, getattr(body, key), key.split("_")[0])
     ps = svc.create(db, cur, body.model_dump())
     svc.queue(db, ps)
     db.commit()

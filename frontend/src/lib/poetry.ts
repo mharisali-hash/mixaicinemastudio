@@ -15,6 +15,8 @@ export interface PoetrySettings {
   style: string
   // boy / girl / choir only when the server can change a sung voice
   vocal: PoetryVocal
+  // vocal 'voice': the Library voice that sings it
+  sing_voice_id?: string | null
   length_s: number
   character_id: string | null
   character: string
@@ -25,6 +27,9 @@ export interface PoetrySettings {
   title_card: boolean
   // how the verses appear in the video
   caption_style?: CaptionStyle
+  // a Library picture or short clip before / after the song, no captions on it
+  intro_media_id?: string | null
+  outro_media_id?: string | null
   review: boolean
   whisper: boolean
 }
@@ -239,9 +244,10 @@ export function timingProblem(rows: Timing[], duration: number | null): string |
 export const SECTION_LABEL: Record<string, string> = { verse: 'Verse', chorus: 'Chorus', bridge: 'Bridge', intro: 'Intro', outro: 'Outro' }
 export const sectionLabel = (s: string) => SECTION_LABEL[s] ?? s.charAt(0).toUpperCase() + s.slice(1)
 
-export type PoetryVocal = 'female' | 'male' | 'boy' | 'girl' | 'choir'
+export type PoetryVocal = 'female' | 'male' | 'boy' | 'girl' | 'choir' | 'voice'
 export const CHILD_VOCALS: { value: PoetryVocal; label: string }[] = [
   { value: 'boy', label: 'Boy (child)' },
   { value: 'girl', label: 'Girl (child)' },
   { value: 'choir', label: "Children's choir" },
+  { value: 'voice', label: 'A voice of mine' },
 ]

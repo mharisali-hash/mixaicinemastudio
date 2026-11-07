@@ -731,22 +731,34 @@ def make_poetry_short(
     title: Annotated[str, Field(max_length=200)] = "",
     mood: Annotated[str, Field(max_length=200)] = "",
     style: Annotated[str, Field(max_length=300, description="Music style tags for the singer")] = "",
-    vocal: Literal["female", "male", "boy", "girl", "choir"] = "female",
-    length_s: Annotated[float, Field(ge=30, le=90)] = 60,
+    vocal: Annotated[Literal["female", "male", "boy", "girl", "choir", "voice"],
+                     Field(description="boy / girl / choir sing as children; voice sings in sing_voice_id")] = "female",
+    sing_voice_id: Annotated[str | None, Field(description="vocal=voice: a voice id from list_voices")] = None,
+    length_s: Annotated[float, Field(ge=30, le=240, description="Up to 240 s; about one scene every 9 s")] = 60,
     character: Annotated[str, Field(max_length=500, description="Short description of the person on screen")] = "",
     character_id: str | None = None,
     setting: Annotated[str, Field(max_length=600)] = "",
     aspect: Literal["9:16", "16:9", "1:1"] = "9:16",
     quality: Literal["draft", "final"] = "draft",
+    caption_style: Annotated[Literal["classic", "pill", "highlight", "clean"],
+                             Field(description="How the verses appear: classic subtitles, or animated: pill "
+                                               "(karaoke), highlight, clean (word by word)")] = "classic",
+    intro_media_id: Annotated[str | None, Field(description="A Library picture or short clip shown before the "
+                                                            "song, without captions")] = None,
+    outro_media_id: Annotated[str | None, Field(description="A Library picture or short clip shown after the "
+                                                            "song, without captions")] = None,
 ) -> dict:
     """A poem sung by ACE-Step, timed line by line and cut to slow cinematic scenes with the verses burned in.
-    Runs straight through (no review stops); takes 15-30 minutes. Follow it with get_poetry_short."""
+    Runs straight through (no review stops); takes 15-30 minutes for a minute, longer for a 4-minute Episode.
+    Follow it with get_poetry_short."""
     from app.api.poetry import CreateIn, create_short
 
     with acting(ctx, "generate") as (db, cur):
         out = create_short(CreateIn(topic=topic, poem=poem, language=language, title=title, mood=mood, style=style,
-                                    vocal=vocal, length_s=length_s, character=character, character_id=character_id,
-                                    setting=setting, aspect=aspect, quality=quality, review=False), db=db, cur=cur)
+                                    vocal=vocal, sing_voice_id=sing_voice_id, length_s=length_s,
+                                    character=character, character_id=character_id, setting=setting, aspect=aspect,
+                                    quality=quality, caption_style=caption_style, intro_media_id=intro_media_id,
+                                    outro_media_id=outro_media_id, review=False), db=db, cur=cur)
         return {"short_id": out["id"], "title": out["title"], "job_id": (out["job"] or {}).get("id"),
                 "next": "get_poetry_short until status is done, then get_media on video.media_id"}
 
