@@ -65,9 +65,11 @@ def generate_audio(body: AudioGenerateIn, db: Session = Depends(get_db), cur: Cu
         # lyrics, language and voice only mean something to the song models
         params.update(lyrics=body.lyrics.strip(), language=body.language, vocal=body.vocal or "none", aerab=body.aerab)
         if body.vocal in song_voice.VOCALS:
-            sing = song_voice.plan(db, cur.workspace_id, body.vocal, body.sing_voice_id, body.lyrics)
-            # the model sings with the nearest stock vocal; the worker changes it afterwards
-            params.update(vocal=sing["base"], sing_as=sing)
+            sing = song_voice.plan(db, cur.workspace_id, body.vocal, body.sing_voice_id, body.lyrics,
+                                   lead=body.lead_voice, group_size=body.group_size)
+            # the model sings with the nearest stock vocal; the worker changes it afterwards. Who-sings-what
+            # markers ([verse: lead]) go to the model as plain [verse]
+            params.update(vocal=sing["base"], sing_as=sing, **({"lyrics": sing["lyrics"]} if "lyrics" in sing else {}))
     for key in ("bpm", "category", "steps", "keyscale", "time_signature", "guidance", "think"):
         if getattr(body, key) is not None:
             params[key] = getattr(body, key)

@@ -335,8 +335,13 @@ def make_song(
     lyrics: Annotated[str, Field(max_length=6000, description="With [verse] / [chorus] section markers")] = "",
     language: Annotated[str, Field(pattern=r"^[a-z]{2,3}(-[a-z]{2,4})?$", description="ISO 639-1 of the "
                                                                                       "lyrics")] = "en",
-    vocal: Annotated[Literal["male", "female", "duet", "none", "boy", "girl", "choir", "voice"] | None,
-                     Field(description="boy / girl / choir sing as children; voice sings in sing_voice_id")] = None,
+    vocal: Annotated[Literal["male", "female", "duet", "none", "boy", "girl", "choir", "voice", "lead_group"] | None,
+                     Field(description="boy / girl / choir sing as children; voice sings in sing_voice_id; "
+                                       "lead_group: a lead child and a group of children, parts marked in the "
+                                       "lyrics as [verse: lead] / [chorus: group] / [chorus: all] and (answers)")
+                     ] = None,
+    lead_voice: Annotated[Literal["boy", "girl", "voice"], Field(description="vocal=lead_group: who leads")] = "girl",
+    group_size: Annotated[Literal[3, 5], Field(description="vocal=lead_group: children in the group")] = 3,
     sing_voice_id: Annotated[str | None, Field(description="vocal=voice: a voice id from list_voices")] = None,
     duration_s: Annotated[float, Field(ge=10, le=380)] = 60.0,
     bpm: Annotated[int | None, Field(ge=40, le=220)] = None,
@@ -344,7 +349,8 @@ def make_song(
 ) -> dict:
     """Make a song with sung lyrics. Urdu and Arabic lyrics get their vowel marks added before singing."""
     return _audio(ctx, AudioGenerateIn(kind="song", prompt=prompt, lyrics=lyrics, language=language, vocal=vocal,
-                                       sing_voice_id=sing_voice_id, duration_s=duration_s, bpm=bpm,
+                                       sing_voice_id=sing_voice_id, lead_voice=lead_voice, group_size=group_size,
+                                       duration_s=duration_s, bpm=bpm,
                                        count=count))
 
 
@@ -731,8 +737,13 @@ def make_poetry_short(
     title: Annotated[str, Field(max_length=200)] = "",
     mood: Annotated[str, Field(max_length=200)] = "",
     style: Annotated[str, Field(max_length=300, description="Music style tags for the singer")] = "",
-    vocal: Annotated[Literal["female", "male", "boy", "girl", "choir", "voice"],
-                     Field(description="boy / girl / choir sing as children; voice sings in sing_voice_id")] = "female",
+    vocal: Annotated[Literal["female", "male", "boy", "girl", "choir", "voice", "lead_group"],
+                     Field(description="boy / girl / choir sing as children; voice sings in sing_voice_id; "
+                                       "lead_group: a lead child and a group of children, parts marked in the "
+                                       "poem as [verse: lead] / [chorus: group] / [chorus: all] and (answers)")
+                     ] = "female",
+    lead_voice: Annotated[Literal["boy", "girl", "voice"], Field(description="vocal=lead_group: who leads")] = "girl",
+    group_size: Annotated[Literal[3, 5], Field(description="vocal=lead_group: children in the group")] = 3,
     sing_voice_id: Annotated[str | None, Field(description="vocal=voice: a voice id from list_voices")] = None,
     length_s: Annotated[float, Field(ge=30, le=240, description="Up to 240 s; about one scene every 9 s")] = 60,
     character: Annotated[str, Field(max_length=500, description="Short description of the person on screen")] = "",
@@ -755,7 +766,8 @@ def make_poetry_short(
 
     with acting(ctx, "generate") as (db, cur):
         out = create_short(CreateIn(topic=topic, poem=poem, language=language, title=title, mood=mood, style=style,
-                                    vocal=vocal, sing_voice_id=sing_voice_id, length_s=length_s,
+                                    vocal=vocal, sing_voice_id=sing_voice_id, lead_voice=lead_voice,
+                                    group_size=group_size, length_s=length_s,
                                     character=character, character_id=character_id, setting=setting, aspect=aspect,
                                     quality=quality, caption_style=caption_style, intro_media_id=intro_media_id,
                                     outro_media_id=outro_media_id, review=False), db=db, cur=cur)

@@ -1471,7 +1471,7 @@ export interface VideoGenerateRequest extends MagicFields {
 // contract-v14: Audio Studio
 export type AudioKind = 'song' | 'music' | 'sfx'
 // boy / girl / choir / voice: sung by the model, then changed into that voice on the server
-export type AudioVocal = 'male' | 'female' | 'duet' | 'none' | 'boy' | 'girl' | 'choir' | 'voice'
+export type AudioVocal = 'male' | 'female' | 'duet' | 'none' | 'boy' | 'girl' | 'choir' | 'voice' | 'lead_group'
 export type AudioCategory = 'music' | 'instrument' | 'loop' | 'sfx' | 'oneshot'
 
 export interface AudioGenerateRequest {
@@ -1483,6 +1483,9 @@ export interface AudioGenerateRequest {
   vocal?: AudioVocal
   // vocal 'voice': the Library voice (or gallery:<id>) that sings it
   sing_voice_id?: string
+  // vocal 'lead_group': who leads, and how many children sing with them
+  lead_voice?: 'boy' | 'girl' | 'voice'
+  group_size?: 3 | 5
   bpm?: number
   category?: AudioCategory
   duration_s: number

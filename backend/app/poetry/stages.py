@@ -252,7 +252,8 @@ class Run:
         sing = None
         if st["vocal"] in song_voice.VOCALS:
             sing = song_voice.plan(self.db, ps.workspace_id, st["vocal"], st.get("sing_voice_id"),
-                                   (ps.poem or {}).get("lyrics") or "x")
+                                   (ps.poem or {}).get("lyrics") or "x", lead=st.get("lead_voice"),
+                                   group_size=int(st.get("group_size") or 3))
         vocal = sing["base"] if sing else st["vocal"]
         prompt = ", ".join(x for x in (tags, st.get("mood"), f"{vocal} vocal") if x)
         m, chosen = mc.choose(svc.SONG_MODEL, "audio", prompt, kind="song")
@@ -260,7 +261,8 @@ class Run:
                             float(st["length_s"]), m.max_duration_s)
         mc.check_audio(m, "song", secs)
         params = {"kind": "song", "model": m.id, "duration_s": secs, "user_prompt": prompt,
-                  "lyrics": (ps.poem or {}).get("lyrics") or "", "language": ps.language, "vocal": vocal,
+                  "lyrics": (sing or {}).get("lyrics") or (ps.poem or {}).get("lyrics") or "", "language": ps.language,
+                  "vocal": vocal,
                   "aerab": True, "poetry": ps.id, "created_by": {"user_id": ps.created_by, "flow": "poetry_short"},
                   **chosen}
         if sing:

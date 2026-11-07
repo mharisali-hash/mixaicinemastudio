@@ -134,6 +134,7 @@ export function AudioDock({ form, setForm, modelPicked, onRun, pending, error }:
         language={form.language}
         aerab={form.aerab}
         onAerab={(on) => set('aerab', on)}
+        parts={form.vocal === 'lead_group'}
       />
     ) : kind === 'sfx' ? (
       <div role="group" aria-label="Quick presets" className="flex flex-wrap gap-1">
@@ -162,7 +163,16 @@ export function AudioDock({ form, setForm, modelPicked, onRun, pending, error }:
           <ModelChip models={models} model={model} onChange={chooseModel} highlighted={modelPicked} />
           <AudioLengthChip kind={kind} model={effective} value={duration} onChange={(v) => set('durationS', v)} estimate={estimate} />
           {kind === 'song' && (
-            <VocalChip value={form.vocal} onChange={(v) => set('vocal', v)} voiceId={form.singVoiceId} onVoice={(id) => set('singVoiceId', id)} />
+            <VocalChip
+              value={form.vocal}
+              onChange={(v) => set('vocal', v)}
+              voiceId={form.singVoiceId}
+              onVoice={(id) => set('singVoiceId', id)}
+              lead={form.leadVoice}
+              onLead={(v) => set('leadVoice', v)}
+              groupSize={form.groupSize}
+              onGroupSize={(n) => set('groupSize', n)}
+            />
           )}
           {kind === 'song' && <LanguageChip value={form.language} onChange={(v) => set('language', v)} />}
           {kind === 'music' && <CategoryChip value={form.category} onChange={(v) => set('category', v)} />}

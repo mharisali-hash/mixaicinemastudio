@@ -140,6 +140,31 @@ describe('Audio Studio', () => {
     expect(calls.filter((c) => c.method === 'POST' && c.path === '/audio/generate')[1].body).toMatchObject({ vocal: 'voice', sing_voice_id: 'v1' })
   })
 
+  it('Song: a lead child and a group, with the who-sings markers', async () => {
+    const calls = mockApi((method, path) => {
+      if (path === '/audio/song-voices') return { available: true, vocals: ['boy', 'girl', 'choir', 'voice', 'lead_group'] }
+      if (path === '/voices') return []
+      if (path === '/gallery') return { items: [], total: 0 }
+      if (path === '/media') return { items: [] }
+      if (method === 'POST' && path === '/audio/generate') return { items: [track('n1', { media_url: null })], jobs: [job('j1')], model_resolved: 'ace15_turbo' }
+      if (path === '/jobs') return []
+    })
+    renderAt('/audio/song', routes, seedCatalog)
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('textbox', { name: 'Style tags' }))
+    await user.paste("children's nasheed, soft drum")
+    const chip = await openChip(user, 'Vocal')
+    await user.click(await within(chip).findByRole('button', { name: "Lead child + children's group" }))
+    await user.click(within(chip).getByRole('button', { name: 'Boy' }))
+    await user.click(within(chip).getByRole('button', { name: '5 children' }))
+    await closeChip(user)
+    // the lyrics toolbar now offers the who-sings markers
+    await user.click(screen.getByRole('button', { name: 'Insert [verse: lead]' }))
+    await user.type(screen.getByRole('textbox', { name: 'Lyrics' }), 'Up with the sun (good morning!)')
+    await user.click(screen.getByRole('button', { name: /^Compose/ }))
+    expect(posted(calls)).toMatchObject({ vocal: 'lead_group', lead_voice: 'boy', group_size: 5, lyrics: '[verse: lead]\nUp with the sun (good morning!)' })
+  })
+
   it('Song: no child voices are offered when the server has no voice changer', async () => {
     api()
     renderAt('/audio/song', routes, seedCatalog)

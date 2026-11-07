@@ -38,7 +38,11 @@ class CreateIn(BaseModel):
     mood: str = Field("", max_length=PROMPT_MAX)
     style: str = Field("", max_length=PROMPT_MAX, description="Music style tags for the singer")
     # boy / girl / choir: sung by the model, then changed into a child's voice (app.song_voice)
-    vocal: Literal["female", "male", "boy", "girl", "choir", "voice"] = "female"
+    vocal: Literal["female", "male", "boy", "girl", "choir", "voice", "lead_group"] = "female"
+    # vocal=lead_group: a lead child and a group of children; [verse: lead] / [chorus: group] / [chorus: all]
+    # and (bracketed answers) in the poem say who sings what
+    lead_voice: Literal["boy", "girl", "voice"] = "girl"
+    group_size: Literal[3, 5] = 3
     sing_voice_id: str | None = Field(None, max_length=80,
                                       description="vocal=voice: the Library voice (or gallery:<id>) that sings it")
     # up to the song model's own limit; scenes come about one every 9 s
@@ -114,7 +118,7 @@ def create_short(body: CreateIn, db: Session = Depends(get_db), cur: CurrentUser
     mc.get(body.image_model, "image")  # 422 when it isn't an image model or isn't installed
     if body.vocal in song_voice.VOCALS and not song_voice.enabled():
         raise HTTPException(422, "Children's voices aren't set up on this server yet")
-    if body.vocal == "voice":
+    if body.vocal == "voice" or (body.vocal == "lead_group" and body.lead_voice == "voice"):
         from app import voices
 
         if voices.find_voice(db, cur.workspace_id, body.sing_voice_id) is None:

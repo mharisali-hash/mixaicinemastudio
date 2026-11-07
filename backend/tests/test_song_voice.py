@@ -37,7 +37,7 @@ def test_off_until_the_engine_is_installed(client):
 
 def test_a_boy_sings_it(client, sing_on, fast_driver):
     assert client.get("/api/audio/song-voices").json() == {"available": True,
-                                                           "vocals": ["boy", "girl", "choir", "voice"]}
+                                                           "vocals": ["boy", "girl", "choir", "voice", "lead_group"]}
     r = _song(client, vocal="boy")
     assert r.status_code == 202, r.text
     item = r.json()["items"][0]

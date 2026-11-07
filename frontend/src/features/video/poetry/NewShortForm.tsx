@@ -39,6 +39,8 @@ export function NewShortForm() {
     style: '',
     vocal: 'female' as PoetryVocal,
     sing_voice_id: '',
+    lead_voice: 'girl' as 'boy' | 'girl' | 'voice',
+    group_size: 3 as 3 | 5,
     length_s: 60,
     character_id: '',
     character: '',
@@ -51,13 +53,13 @@ export function NewShortForm() {
     review: true,
   })
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((o) => ({ ...o, [k]: v }))
-  const noVoice = f.vocal === 'voice' && !f.sing_voice_id
+  const noVoice = (f.vocal === 'voice' || (f.vocal === 'lead_group' && f.lead_voice === 'voice')) && !f.sing_voice_id
   const missing = (own ? !f.poem.trim() : !f.topic.trim()) || noVoice
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     if (missing) return
-    const body: PoetryCreate = { ...f, sing_voice_id: f.vocal === 'voice' ? f.sing_voice_id || null : null, character_id: f.character_id || null, topic: own ? '' : f.topic, poem: own ? f.poem : '' }
+    const body: PoetryCreate = { ...f, sing_voice_id: f.vocal === 'voice' || (f.vocal === 'lead_group' && f.lead_voice === 'voice') ? f.sing_voice_id || null : null, character_id: f.character_id || null, topic: own ? '' : f.topic, poem: own ? f.poem : '' }
     create.mutate(body, {
       onSuccess: (ps) => {
         announce('Poetry Short started.')
@@ -141,7 +143,30 @@ export function NewShortForm() {
               ))}
           </select>
         </div>
-        {f.vocal === 'voice' && (
+        {f.vocal === 'lead_group' && (
+          <>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor={id('lead')}>Lead</Label>
+              <select id={id('lead')} className={SELECT} value={f.lead_voice} onChange={(e) => set('lead_voice', e.target.value as 'boy' | 'girl' | 'voice')}>
+                <option value="girl">Girl</option>
+                <option value="boy">Boy</option>
+                <option value="voice">A voice of mine</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor={id('group')}>Group</Label>
+              <select id={id('group')} className={SELECT} value={f.group_size} onChange={(e) => set('group_size', Number(e.target.value) as 3 | 5)}>
+                <option value={3}>3 children</option>
+                <option value={5}>5 children</option>
+              </select>
+            </div>
+            <p className="text-small text-studio-muted sm:col-span-2">
+              In your poem, mark who sings: <span className="font-mono">[verse: lead]</span>, <span className="font-mono">[chorus: group]</span>,{' '}
+              <span className="font-mono">[chorus: all]</span>; words in (brackets) are the group answering.
+            </p>
+          </>
+        )}
+        {(f.vocal === 'voice' || (f.vocal === 'lead_group' && f.lead_voice === 'voice')) && (
           <div className="flex flex-col gap-1">
             <Label htmlFor={id('singer')}>Sung in the voice of</Label>
             <select id={id('singer')} className={SELECT} value={f.sing_voice_id} onChange={(e) => set('sing_voice_id', e.target.value)}>

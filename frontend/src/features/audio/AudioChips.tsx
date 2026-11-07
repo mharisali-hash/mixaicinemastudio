@@ -4,7 +4,7 @@ import { ChipGroup } from '@/components/studio/chip'
 import { DurationFields } from '@/components/studio/duration-picker'
 import { DockChip } from '@/components/generate/DockChip'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { audioDurationPresets, KIND_NOUN, MAX_TAKES, maxAudioDuration, MUSIC_CATEGORIES, SONG_LANGUAGES, SUNG_AS, vocalLabel, VOCALS } from '@/lib/audio'
+import { audioDurationPresets, KIND_NOUN, LEAD_VOICES, type LeadVoice, MAX_TAKES, maxAudioDuration, MUSIC_CATEGORIES, SONG_LANGUAGES, SUNG_AS, vocalLabel, VOCALS } from '@/lib/audio'
 import { useVoiceChoices } from '@/hooks/useGallery'
 import { useSongVoices } from '@/hooks/useStems'
 import { formatDuration } from '@/lib/duration'
@@ -53,11 +53,19 @@ export function VocalChip({
   onChange,
   voiceId,
   onVoice,
+  lead = 'girl',
+  onLead,
+  groupSize = 3,
+  onGroupSize,
 }: {
   value: AudioVocal | null
   onChange: (v: AudioVocal | null) => void
   voiceId: string | null
   onVoice: (id: string | null) => void
+  lead?: LeadVoice
+  onLead?: (v: LeadVoice) => void
+  groupSize?: 3 | 5
+  onGroupSize?: (n: 3 | 5) => void
 }) {
   const sung = useSongVoices().data?.available === true
   const voices = useVoiceChoices()
@@ -70,7 +78,26 @@ export function VocalChip({
       {sung && (
         <ChipGroup label="Sung by" options={SUNG_AS} value={SUNG_AS.some((s) => s.value === value) ? value : null} onChange={onChange} />
       )}
-      {sung && value === 'voice' && (
+      {sung && value === 'lead_group' && (
+        <>
+          <ChipGroup label="Lead" options={LEAD_VOICES} value={lead} onChange={(v) => v && onLead?.(v)} allowEmpty={false} />
+          <ChipGroup
+            label="Group"
+            options={[
+              { value: '3', label: '3 children' },
+              { value: '5', label: '5 children' },
+            ]}
+            value={String(groupSize) as '3' | '5'}
+            onChange={(v) => v && onGroupSize?.(Number(v) as 3 | 5)}
+            allowEmpty={false}
+          />
+          <p className="text-small text-studio-muted">
+            Mark who sings in the lyrics: <span className="font-mono">[verse: lead]</span>, <span className="font-mono">[chorus: group]</span>,{' '}
+            <span className="font-mono">[chorus: all]</span>. Words in (brackets) are the group answering. Unmarked verses are the lead; choruses are everyone.
+          </p>
+        </>
+      )}
+      {sung && (value === 'voice' || (value === 'lead_group' && lead === 'voice')) && (
         <div className="flex flex-col gap-1">
           <label htmlFor={selectId} className="section-label">
             Voice

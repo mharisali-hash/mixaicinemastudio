@@ -17,6 +17,9 @@ export interface PoetrySettings {
   vocal: PoetryVocal
   // vocal 'voice': the Library voice that sings it
   sing_voice_id?: string | null
+  // vocal 'lead_group': who leads, how many children sing with them
+  lead_voice?: 'boy' | 'girl' | 'voice'
+  group_size?: 3 | 5
   length_s: number
   character_id: string | null
   character: string
@@ -244,10 +247,11 @@ export function timingProblem(rows: Timing[], duration: number | null): string |
 export const SECTION_LABEL: Record<string, string> = { verse: 'Verse', chorus: 'Chorus', bridge: 'Bridge', intro: 'Intro', outro: 'Outro' }
 export const sectionLabel = (s: string) => SECTION_LABEL[s] ?? s.charAt(0).toUpperCase() + s.slice(1)
 
-export type PoetryVocal = 'female' | 'male' | 'boy' | 'girl' | 'choir' | 'voice'
+export type PoetryVocal = 'female' | 'male' | 'boy' | 'girl' | 'choir' | 'voice' | 'lead_group'
 export const CHILD_VOCALS: { value: PoetryVocal; label: string }[] = [
   { value: 'boy', label: 'Boy (child)' },
   { value: 'girl', label: 'Girl (child)' },
   { value: 'choir', label: "Children's choir" },
   { value: 'voice', label: 'A voice of mine' },
+  { value: 'lead_group', label: "Lead child + children's group" },
 ]

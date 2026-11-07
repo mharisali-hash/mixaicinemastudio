@@ -33,7 +33,16 @@ export const SUNG_AS: { value: AudioVocal; label: string }[] = [
   { value: 'girl', label: 'Girl (child)' },
   { value: 'choir', label: "Children's choir" },
   { value: 'voice', label: 'A voice of mine' },
+  { value: 'lead_group', label: "Lead child + children's group" },
 ]
+export type LeadVoice = 'boy' | 'girl' | 'voice'
+export const LEAD_VOICES: { value: LeadVoice; label: string }[] = [
+  { value: 'girl', label: 'Girl' },
+  { value: 'boy', label: 'Boy' },
+  { value: 'voice', label: 'A voice of mine' },
+]
+// who sings each part, written into the lyrics (app.song_parts on the server)
+export const PART_TAGS = ['[verse: lead]', '[chorus: group]', '[chorus: all]'] as const
 export const ALL_VOCALS = [...VOCALS, ...SUNG_AS]
 export const vocalLabel = (v: AudioVocal | null) => ALL_VOCALS.find((x) => x.value === v)?.label
 export const sungAs = (v: AudioVocal | null) => SUNG_AS.some((x) => x.value === v)
@@ -142,6 +151,9 @@ export interface AudioForm {
   vocal: AudioVocal | null
   // vocal 'voice' only
   singVoiceId: string | null
+  // vocal 'lead_group' only
+  leadVoice: LeadVoice
+  groupSize: 3 | 5
   language: string
   timbreId: string | null
   aerab: boolean
@@ -163,6 +175,8 @@ const BASE: Omit<AudioForm, 'kind' | 'durationS'> = {
   lyrics: '',
   vocal: null,
   singVoiceId: null,
+  leadVoice: 'girl',
+  groupSize: 3,
   language: 'en',
   timbreId: null,
   aerab: true,
@@ -195,7 +209,8 @@ export function audioBlockedReason(f: AudioForm, m: ModelInfo | undefined): stri
   if (!modelFits(m, f.kind)) return `${m.label} doesn't make ${KIND_NOUN[f.kind].many}. Pick another model.`
   if (f.prompt.trim().length < 3) return f.kind === 'song' ? 'Add a few style tags first.' : 'Describe the sound first.'
   if (f.kind === 'song' && sungAs(f.vocal) && !f.lyrics.trim()) return 'Add lyrics: a voice needs words to sing.'
-  if (f.kind === 'song' && f.vocal === 'voice' && !f.singVoiceId) return 'Pick the voice to sing in.'
+  if (f.kind === 'song' && (f.vocal === 'voice' || (f.vocal === 'lead_group' && f.leadVoice === 'voice')) && !f.singVoiceId)
+    return 'Pick the voice to sing in.'
   if (f.kind === 'song' && f.lyrics.length > LYRICS_MAX) return `The lyrics are ${f.lyrics.length.toLocaleString('en')} characters; the limit is ${LYRICS_MAX.toLocaleString('en')}.`
   const bpm = int(f.bpm)
   if (f.bpm.trim() && (bpm === null || bpm < BPM_MIN || bpm > BPM_MAX)) return `BPM goes from ${BPM_MIN} to ${BPM_MAX}.`
@@ -219,6 +234,11 @@ export function audioPayload(f: AudioForm, m: ModelInfo): AudioGenerateRequest {
     body.language = f.language || 'en'
     if (f.vocal) body.vocal = f.vocal
     if (f.vocal === 'voice' && f.singVoiceId) body.sing_voice_id = f.singVoiceId
+    if (f.vocal === 'lead_group') {
+      body.lead_voice = f.leadVoice
+      body.group_size = f.groupSize
+      if (f.leadVoice === 'voice' && f.singVoiceId) body.sing_voice_id = f.singVoiceId
+    }
     // empty lyrics already mean instrumental to the server
     const lyrics = f.lyrics.trim()
     if (lyrics && !instrumental(f)) body.lyrics = lyrics.slice(0, LYRICS_MAX)
@@ -243,12 +263,12 @@ export function audioPayload(f: AudioForm, m: ModelInfo): AudioGenerateRequest {
 }
 
 /** Puts "[chorus]" on a line of its own at the cursor, and says where the cursor goes next. */
-export function insertSection(text: string, at: number, section: LyricSection) {
+export function insertSection(text: string, at: number, section: LyricSection | string) {
   const pos = Math.max(0, Math.min(at, text.length))
   const before = text.slice(0, pos)
   const after = text.slice(pos)
   const lead = before && !before.endsWith('\n') ? '\n' : ''
-  const tag = `[${section}]\n`
+  const tag = `${section.startsWith('[') ? section : `[${section}]`}\n`
   const next = `${before}${lead}${tag}${after}`
   return { text: next, cursor: before.length + lead.length + tag.length }
 }

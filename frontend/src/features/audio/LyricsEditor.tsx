@@ -11,7 +11,7 @@ import { AerabButton } from '@/components/text/AerabButton'
 import { useWriteLyrics } from '@/hooks/useModels'
 import { aerabNote, aerabTerm, hasArabicScript, isArabicScriptLang } from '@/lib/aerab'
 import { ApiError } from '@/lib/api'
-import { insertSection, LYRIC_SECTIONS, LYRICS_LANGUAGES, LYRICS_MAX, type LyricSection } from '@/lib/audio'
+import { insertSection, LYRIC_SECTIONS, LYRICS_LANGUAGES, LYRICS_MAX, PART_TAGS, type LyricSection } from '@/lib/audio'
 import { cn } from '@/lib/utils'
 import { announce } from '@/stores/ui'
 
@@ -20,6 +20,8 @@ interface Props {
   onLyrics: (v: string) => void
   instrumental: boolean
   onInstrumental: (on: boolean) => void
+  // lead child + group: show the who-sings markers
+  parts?: boolean
   // the writer's language, so the song can be sung in it
   onLanguage?: (lyricsLanguage: string) => void
   // the song's language, so Add aerab marks Arabic with Arabic rules
@@ -37,13 +39,13 @@ function writerError(e: unknown) {
 }
 
 /** Lyrics with section buttons, a character count, an Instrumental switch and the ✨ writer. */
-export function LyricsEditor({ lyrics, onLyrics, instrumental, onInstrumental, onLanguage, language, aerab = true, onAerab }: Props) {
+export function LyricsEditor({ lyrics, onLyrics, instrumental, onInstrumental, onLanguage, language, aerab = true, onAerab, parts = false }: Props) {
   const uid = useId()
   const field = useRef<HTMLTextAreaElement>(null)
   const [pending, setPending] = useState<string | null>(null)
   const arabicScript = !instrumental && hasArabicScript(lyrics)
 
-  const add = (s: LyricSection) => {
+  const add = (s: LyricSection | string) => {
     const el = field.current
     const { text, cursor } = insertSection(lyrics, el?.selectionStart ?? lyrics.length, s)
     if (text.length > LYRICS_MAX) return announce('The lyrics are at the limit.')
@@ -76,6 +78,15 @@ export function LyricsEditor({ lyrics, onLyrics, instrumental, onInstrumental, o
             </Button>
           ))}
         </div>
+        {parts && (
+          <div role="toolbar" aria-label="Who sings" className="flex flex-wrap gap-1">
+            {PART_TAGS.map((t) => (
+              <Button key={t} type="button" size="sm" variant="ghost" disabled={instrumental} onClick={() => add(t)} aria-label={`Insert ${t}`} className="h-6 px-1.5 font-mono text-[12px] text-studio-accent">
+                {t}
+              </Button>
+            ))}
+          </div>
+        )}
         <div className="ml-auto flex items-center gap-1.5">
           {!instrumental && <AerabButton text={lyrics} onText={onLyrics} language={language} max={LYRICS_MAX} showNote={false} />}
           <WriteLyrics
