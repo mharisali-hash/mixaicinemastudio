@@ -74,6 +74,13 @@ def _ref(db, ps: PoetryShort, sc: dict) -> tuple[Generation | None, str]:
     c = character_of(db, ps)
     if c is None:
         return None, ""
+    look = svc.settings_of(ps).get("look_id")
+    if look:
+        from app.character_looks import finished_picture
+
+        g = finished_picture(db, c, look)
+        if g is not None:
+            return g, c.name
     # a throwaway shot so the storyboard's panel choice applies (from behind -> the back turn, and so on)
     shot = Shot(description=sc.get("image_prompt") or "", shot_type="wide", camera_rack={}, ref_panels={})
     return sb.character_ref(db, shot, c)["generation"], c.name

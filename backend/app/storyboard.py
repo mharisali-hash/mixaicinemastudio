@@ -268,6 +268,14 @@ def character_ref(db: Session, shot: Shot, c: Character) -> dict:
     from app.character_sheet import panel_generation
 
     picked = (shot.ref_panels or {}).get(c.id)
+    if picked and picked.startswith("look:"):
+        # one of the character's looks: that outfit and setting, the same face
+        from app.character_looks import finished_picture
+
+        g = finished_picture(db, c, picked)
+        if g is not None:
+            return {"generation": g, "panel": picked, "auto": False}
+        picked = None
     wanted = [picked] if picked else cp.pick_for_shot(shot_text(shot), shot.shot_type, shot.camera_rack)
     for key in wanted:
         if key == "portrait":

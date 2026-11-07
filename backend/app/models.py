@@ -192,6 +192,27 @@ class Character(Base):
     voice_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     # sheet state: preset, panel extras, hero-sourced panels waiting, palette, board (app.character_sheet)
     sheet: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
+    # how they move on camera: expressiveness calm | natural | lively, and a gestures note (migration 0031)
+    performance: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class CharacterLook(Base):
+    """One outfit / setting / pose of a character (HeyGen calls them looks). Its pictures are generations with
+    target_type "character_look", so each look keeps its own approved picture (migration 0031)."""
+    __tablename__ = "character_look"
+    id: Mapped[str] = _id()
+    workspace_id: Mapped[str] = _ws()
+    character_id: Mapped[str] = mapped_column(String(36), ForeignKey("character.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    outfit: Mapped[str] = mapped_column(Text, default="")
+    setting: Mapped[str] = mapped_column(Text, default="")
+    pose: Mapped[str] = mapped_column(Text, default="")
+    # anything else to say about it, in the user's words
+    prompt: Mapped[str] = mapped_column(Text, default="")
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    sort: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 

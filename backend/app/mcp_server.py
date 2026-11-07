@@ -453,6 +453,55 @@ def create_character(
         return out
 
 
+@tool("read", title="List characters")
+def list_characters(
+    ctx: Context,
+    q: Annotated[str, Field(max_length=200, description="Part of a name to look for")] = "",
+) -> list[dict]:
+    """The Character Studio characters, with their default voice and how many looks each has."""
+    from app import character_looks as cl
+
+    with acting(ctx, "read") as (db, cur):
+        rows = characters.list_studio(q=q or None, scope="studio", db=db, cur=cur)
+        out = []
+        for c in rows:
+            row = db.get(Character, c.id)
+            out.append({"character_id": c.id, "name": c.name, "voice_id": c.voice_id,
+                        "looks": len(cl.looks_of(db, row)) if row else 0,
+                        "portrait_ready": c.portrait is not None})
+        return out
+
+
+@tool("read", title="List a character's looks")
+def list_looks(ctx: Context, character_id: str) -> dict:
+    """A character's looks (outfit, setting, pose) with their pictures; the default one is marked. Pass a look's
+    id as look_id to make_poetry_short to dress the character in it."""
+    from app.api import character_looks as looks_api
+
+    with acting(ctx, "read") as (db, cur):
+        res = looks_api.list_looks(character_id, db=db, cur=cur)
+        return {"looks": [{"look_id": x["id"], "name": x["name"], "outfit": x["outfit"], "setting": x["setting"],
+                           "pose": x["pose"], "default": x["is_default"],
+                           "picture": (x["picture"] or {}).get("status")} for x in res["looks"]],
+                "packs": [p["id"] for p in res["packs"]]}
+
+
+@tool("generate", title="Make a look pack")
+def make_look_pack(
+    ctx: Context,
+    character_id: str,
+    pack: Literal["business", "casual", "traditional", "presenter", "outdoor"],
+) -> dict:
+    """Four new looks for a character at once (outfits, settings and poses), each drawn from its portrait. The
+    character needs a portrait first."""
+    from app.api import character_looks as looks_api
+
+    with acting(ctx, "generate") as (db, cur):
+        res = looks_api.add_pack(character_id, looks_api.PackIn(pack=pack), db=db, cur=cur)
+        return {"looks": [{"look_id": x["id"], "name": x["name"]} for x in res["looks"]],
+                "next": "list_looks until every picture is ready"}
+
+
 @tool("generate", title="Make a character sheet")
 def make_character_sheet(
     ctx: Context,
@@ -748,6 +797,7 @@ def make_poetry_short(
     length_s: Annotated[float, Field(ge=30, le=240, description="Up to 240 s; about one scene every 9 s")] = 60,
     character: Annotated[str, Field(max_length=500, description="Short description of the person on screen")] = "",
     character_id: str | None = None,
+    look_id: Annotated[str | None, Field(description="One of the character's looks (list_looks)")] = None,
     setting: Annotated[str, Field(max_length=600)] = "",
     aspect: Literal["9:16", "16:9", "1:1"] = "9:16",
     quality: Literal["draft", "final"] = "draft",
@@ -768,7 +818,8 @@ def make_poetry_short(
         out = create_short(CreateIn(topic=topic, poem=poem, language=language, title=title, mood=mood, style=style,
                                     vocal=vocal, sing_voice_id=sing_voice_id, lead_voice=lead_voice,
                                     group_size=group_size, length_s=length_s,
-                                    character=character, character_id=character_id, setting=setting, aspect=aspect,
+                                    character=character, character_id=character_id, look_id=look_id,
+                                    setting=setting, aspect=aspect,
                                     quality=quality, caption_style=caption_style, intro_media_id=intro_media_id,
                                     outro_media_id=outro_media_id, review=False), db=db, cur=cur)
         return {"short_id": out["id"], "title": out["title"], "job_id": (out["job"] or {}).get("id"),

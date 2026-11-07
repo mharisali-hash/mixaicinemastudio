@@ -338,6 +338,8 @@ class CharacterOut(Out):
     locked: bool
     profile: dict[str, Any] = {}
     voice_id: str | None = None
+    # how they move on camera: {expressiveness: calm | natural | lively, gestures}
+    performance: dict[str, Any] = {}
     studio: bool = False
     approved_portrait: GenerationOut | None = None
     # approved, else the newest finished one: what the studio grid shows while nothing is approved yet
@@ -364,6 +366,11 @@ class CharacterCreate(BaseModel):
                                                                      "height, languages...")
 
 
+class Performance(BaseModel):
+    expressiveness: Literal["calm", "natural", "lively"] | None = None
+    gestures: str = Field("", max_length=500, description="How they move, e.g. uses hands while explaining")
+
+
 class CharacterPatch(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=200)
     description: str | None = None
@@ -372,6 +379,7 @@ class CharacterPatch(BaseModel):
     profile: dict[str, ProfileText] | None = None
     # M12b: a library voice id or "gallery:<id>"; "" clears it
     voice_id: str | None = Field(None, max_length=80)
+    performance: Performance | None = None
 
 
 class PhotoConsent(BaseModel):

@@ -817,9 +817,13 @@ def piece_prompt(db: Session, vp: VideoPodcast, ep: PodcastEpisode, track: dict,
     if not said:
         return (f"{who} listens to the other host at the {place}, attentive, small nods and reactions, mouth "
                 f"closed. {still}")
+    from app.character_looks import performance_text
+    from app.models import Character
+
+    host = db.get(Character, ((vp.hosts or {}).get(track["host_id"] or "") or {}).get("character_id") or "")
+    manner = performance_text(host).rstrip(".") or "natural small head movements, calm hand gestures"
     return (f'{who} talks with the other host at the {place} and says: "{said}" The mouth moves with every '
-            f"word, natural small head movements, calm hand gestures; between sentences {who} listens with the "
-            f"mouth closed. {still}")
+            f"word, {manner}; between sentences {who} listens with the mouth closed. {still}")
 
 
 def first_unfinished(g: Generation) -> int | None:

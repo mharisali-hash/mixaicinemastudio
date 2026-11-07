@@ -513,8 +513,12 @@ def queue_test_clip(db: Session, cur, c: Character, text: str, quality: str = "s
     db.flush()
     who = f"{c.name}, {c.description.strip()}" if c.description.strip() else c.name
     said = text.replace('"', "'")
-    prompt = (f'Close-up of {who}, looking into the camera and saying: "{said}" Natural expression, the mouth '
-              "moving with every word, blinking, small head movements. Steady camera, soft light.")
+    from app.character_looks import performance_text
+
+    # the character's own way of moving (Character Looks), else the plain default
+    manner = performance_text(c) or "Natural expression, small head movements."
+    prompt = (f'Close-up of {who}, looking into the camera and saying: "{said}" The mouth moving with every word, '
+              f"blinking. {manner} Steady camera, soft light.")
     params = {"first_frame_id": source.id, "duration_s": TEST_CLIP_S[0], "fps": FPS,
               "aspect_ratio": _aspect(generation_file(source)), "dialogue": d,
               "test_clip": {"character_id": c.id, "panel": panel}, "quality": quality,

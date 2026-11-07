@@ -98,6 +98,11 @@ def resolve_target_project(db: Session, workspace_id: str, target_type: str, tar
         return get_owned(db, Project, target_id, workspace_id, "Project").id
     if target_type == "character":
         return get_owned(db, Character, target_id, workspace_id, "Character").project_id
+    if target_type == "character_look":
+        from app.models import CharacterLook
+
+        look = get_owned(db, CharacterLook, target_id, workspace_id, "Look")
+        return get_owned(db, Character, look.character_id, workspace_id, "Character").project_id
     if target_type == "scene":
         return get_owned(db, Scene, target_id, workspace_id, "Scene").project_id
     if target_type == "shot":

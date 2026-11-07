@@ -417,6 +417,8 @@ export interface Character {
   locked: boolean
   profile?: CharacterProfile
   voice_id?: string | null
+  // how they move on camera (Character Looks)
+  performance?: { expressiveness?: 'calm' | 'natural' | 'lively' | null; gestures?: string }
   studio?: boolean
   approved_portrait?: Generation | null
   // approved, else the newest finished portrait

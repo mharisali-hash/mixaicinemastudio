@@ -48,6 +48,7 @@ class CreateIn(BaseModel):
     # up to the song model's own limit; scenes come about one every 9 s
     length_s: float = Field(60, ge=30, le=240)
     character_id: str | None = Field(None, max_length=64, description="A Character Studio character")
+    look_id: str | None = Field(None, max_length=64, description="One of that character's looks to wear")
     character: str = Field("", max_length=PROMPT_MAX, description="Or a short description of the person")
     setting: str = Field("", max_length=PROMPT_MAX)
     aspect: Literal["9:16", "16:9", "1:1"] = "9:16"
@@ -115,6 +116,11 @@ def create_short(body: CreateIn, db: Session = Depends(get_db), cur: CurrentUser
         c = db.get(Character, body.character_id)
         if c is None or c.workspace_id != cur.workspace_id:
             raise HTTPException(422, "That character isn't in this workspace")
+        if body.look_id:
+            from app.character_looks import finished_picture
+
+            if finished_picture(db, c, body.look_id) is None:
+                raise HTTPException(422, "That look isn't this character's, or its picture isn't ready yet")
     mc.get(body.image_model, "image")  # 422 when it isn't an image model or isn't installed
     if body.vocal in song_voice.VOCALS and not song_voice.enabled():
         raise HTTPException(422, "Children's voices aren't set up on this server yet")

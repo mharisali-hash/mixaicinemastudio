@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { ArrowLeft, Clapperboard, Download, IdCard, ImageIcon, LayoutGrid, Mic, Trash2 } from 'lucide-react'
+import { ArrowLeft, Clapperboard, Download, IdCard, ImageIcon, LayoutGrid, Mic, Shirt, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/alert-dialog'
 import { Make3DLink } from '@/components/generate/Make3DLink'
@@ -12,6 +12,7 @@ import { api } from '@/lib/api'
 import type { Character } from '@/lib/types'
 import { announce } from '@/stores/ui'
 import { PortraitSection } from './PortraitSection'
+import { LooksTab } from './LooksTab'
 import { ProfileForm } from './ProfileForm'
 import { SheetTab } from './SheetTab'
 import { TestClipTab } from './TestClipTab'
@@ -96,6 +97,10 @@ export function CharacterPage() {
               <LayoutGrid aria-hidden />
               Sheet
             </TabsTrigger>
+            <TabsTrigger value="looks">
+              <Shirt aria-hidden />
+              Looks
+            </TabsTrigger>
             <TabsTrigger value="voice">
               <Mic aria-hidden />
               Voice
@@ -115,6 +120,9 @@ export function CharacterPage() {
           </TabsContent>
           <TabsContent value="sheet">
             <SheetTab character={c} />
+          </TabsContent>
+          <TabsContent value="looks">
+            <LooksTab character={c} />
           </TabsContent>
           <TabsContent value="voice">
             <VoiceTab character={c} />

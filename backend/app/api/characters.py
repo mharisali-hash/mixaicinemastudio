@@ -175,6 +175,10 @@ def patch_character(
         if vid and voices.find_voice(db, cur.workspace_id, vid) is None:
             raise HTTPException(422, "That voice isn't in your library or the gallery")
         c.voice_id = vid or None
+    if "performance" in data:
+        perf = data.pop("performance") or {}
+        c.performance = {k: v for k, v in {"expressiveness": perf.get("expressiveness"),
+                                            "gestures": " ".join((perf.get("gestures") or "").split())}.items() if v}
     changes = {k: v for k, v in data.items() if v is not None}
     text_changed = any(changes.get(f, getattr(c, f)) != getattr(c, f) for f in ("name", "description"))
     for k, v in changes.items():

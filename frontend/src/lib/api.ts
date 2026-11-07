@@ -472,7 +472,7 @@ export const api = {
     list: (projectId: string) => get<Character[]>(`/projects/${projectId}/characters`),
     create: (projectId: string, body: { name: string; description?: string }) =>
       post<Character>(`/projects/${projectId}/characters`, body),
-    update: (id: string, body: Partial<Pick<Character, 'name' | 'description' | 'locked' | 'profile' | 'voice_id'>>) =>
+    update: (id: string, body: Partial<Pick<Character, 'name' | 'description' | 'locked' | 'profile' | 'voice_id' | 'performance'>>) =>
       patch<Character>(`/characters/${id}`, body),
     // from a film (projectId) a studio character is only unlinked; without it, it goes everywhere
     remove: (id: string, projectId?: string) =>

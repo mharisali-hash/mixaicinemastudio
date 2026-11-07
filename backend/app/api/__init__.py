@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api import ai, audio, audio_edit, auth, brands, catalog, characters, events, generations, jobs, library, locations, looks, media, mentions, organise, photo, photos, projects, prompts, quick, reel, scenes, shots, system, videos, voices
+from app.api import ai, audio, audio_edit, auth, brands, catalog, character_looks, characters, events, generations, jobs, library, locations, looks, media, mentions, organise, photo, photos, projects, prompts, quick, reel, scenes, shots, system, videos, voices
 from app.api import dialogue
 from app.api import dub, transcribe
 from app.api import gallery
@@ -21,7 +21,7 @@ from app.api import implant
 from app.api import site
 
 router = APIRouter(prefix="/api")
-for mod in (auth, system, projects, scenes, shots, characters, locations, generations, jobs, events, library, organise, media, ai, reel, quick, catalog, videos, audio, audio_edit, brands, prompts, mentions, photo, looks, photos, gallery, voices):
+for mod in (auth, system, projects, scenes, shots, characters, character_looks, locations, generations, jobs, events, library, organise, media, ai, reel, quick, catalog, videos, audio, audio_edit, brands, prompts, mentions, photo, looks, photos, gallery, voices):
     # sign-in, the event stream and system checks are for the app itself, not API clients
     router.include_router(mod.router, include_in_schema=mod not in (auth, system, events))
 router.include_router(dialogue.router)

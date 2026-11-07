@@ -41,7 +41,7 @@ DEFAULTS = {"topic": "", "mood": "", "style": "", "vocal": "female", "length_s":
             "character": "", "setting": "", "aspect": "9:16", "quality": "draft", "image_model": "krea2_turbo",
             "title_card": False, "review": True, "whisper": True,
             "caption_style": "classic", "sing_voice_id": None, "intro_media_id": None, "outro_media_id": None,
-            "lead_voice": "girl", "group_size": 3}
+            "lead_voice": "girl", "group_size": 3, "look_id": None}
 
 # "[verse]", "[Chorus 2]", and "[verse: lead]" for who sings it (app.song_parts)
 _MARKER = re.compile(r"^\s*\[\s*([A-Za-z][A-Za-z -]*?)\s*\d*\s*(?::\s*[A-Za-z]+\s*)?\]\s*$")

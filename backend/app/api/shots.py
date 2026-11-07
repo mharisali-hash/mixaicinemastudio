@@ -71,9 +71,14 @@ def shot_refs(shot_id: str, db: Session = Depends(get_db), cur: CurrentUser = De
             p = cp.panel(key, cs.extras(c))
             if p is not None and p.source != "none" and cs.current(gens) is not None:
                 options.append({"key": key, "label": cs.panel_label(c, p), "section_title": cs.section_title(c, p.section)})
+        from app import character_looks as cl
+
+        looks = {cl.ref_key(x.id): x.name for x in cl.looks_of(db, c) if cl.finished_picture(db, c, x.id)}
+        options += [{"key": k, "label": name, "section_title": "Looks"} for k, name in looks.items()]
         p = cp.panel(r["panel"] or "", cs.extras(c))
+        label = cs.panel_label(c, p) if p else looks.get(r["panel"] or "") or ("Portrait" if r["panel"] else None)
         out.append({"kind": "character", "id": c.id, "name": c.name, "panel": r["panel"],
-                    "panel_label": cs.panel_label(c, p) if p else ("Portrait" if r["panel"] else None),
+                    "panel_label": label,
                     "auto": r["auto"], "generation": gen_out(r["generation"]) if r["generation"] else None,
                     "options": options})
     loc_id = shot.location_id or (db.get(Scene, shot.scene_id).location_id if shot.scene_id else None)
@@ -144,7 +149,8 @@ def patch_shot(shot_id: str, body: ShotPatch, db: Session = Depends(get_db), cur
         picks = changes.pop("ref_panels") or {}
         merged = {**(shot.ref_panels or {}), **picks}
         # a blank or "auto" pick goes back to the automatic choice
-        shot.ref_panels = {k: v for k, v in merged.items() if v and v != "auto" and cp.panel(v) is not None}
+        shot.ref_panels = {k: v for k, v in merged.items()
+                           if v and v != "auto" and (cp.panel(v) is not None or v.startswith("look:"))}
     if "dialogue" in changes:
         lines = changes.pop("dialogue")
         if lines is not None:
