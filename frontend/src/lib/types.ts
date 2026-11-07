@@ -1108,7 +1108,7 @@ export interface MagicFields {
 
 export interface PromptEnhanceRequest {
   prompt: string
-  kind: 'image' | 'video' | 'quick'
+  kind: 'image' | 'video' | 'quick' | 'edit'
   model?: string
   style?: string
   brand_kit_id?: string

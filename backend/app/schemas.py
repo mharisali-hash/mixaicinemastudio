@@ -990,6 +990,9 @@ class ImageEditIn(BaseModel):
                                                                          "finished images; the first is edited")
     # may be empty when an image tool does the work (depth map, edge map, LaMa with a mask)
     instruction: str = Field("", max_length=PROMPT_MAX, description="What to change")
+    # unlike the generators, a missing value is off: edits from the API and MCP keep the user's exact words
+    magic_prompt: MagicMode | None = Field(None, description="Prompt correction for the instruction; empty is off")
+    prompt_enhanced: bool = Field(False, description="The instruction was already corrected; skip that step")
     aspect: ImageAspect | None = Field(None, description="Empty keeps the first picture's shape")
     count: int = Field(1, ge=1, le=4)
     seed: int | None = Field(None, ge=0, le=2**31 - 1, description=_SEED)

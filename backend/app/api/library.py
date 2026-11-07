@@ -393,13 +393,16 @@ def edit_images(body: ImageEditIn, db: Session = Depends(get_db), cur: CurrentUs
         sw, sh = lib._image_dims(sources[0][1])
         w, h = lib.size_for_ratio(sw, sh) if sw and sh else lib.size_for_aspect("1:1")
     instruction = mn.ref_preamble(mentioned.ref_labels, len(sources) + 1) + mentioned.prompt
+    magic = prompt_enhance.marker(body.magic_prompt or "off", body.prompt_enhanced, "edit",
+                                  brand_kit_id=body.brand_kit_id)
     title = (body.title or "").strip() or f"Edit · {lib.short_title(mn.plain(body.instruction).strip(), 5)}"
     edit_of = [{"media_id": m, "generation_id": g.id} for m, g in sources]
     items, jobs = [], []
     for i in range(body.count):
         params = {"width": w, "height": h, "aspect": body.aspect, "instruction": instruction, "edit_of": edit_of,
                   "reference_ids": [g.id for _, g in sources] + mentioned.ref_ids, "model": model.id,
-                  "created_by": {"user_id": cur.id, "flow": "image_edit"}, **chosen}
+                  "created_by": {"user_id": cur.id, "flow": "image_edit"}, "magic_prompt": magic,
+                  "user_prompt": mentioned.prompt.strip(), **chosen}
         if mentioned.mentions:
             params["mentions"] = mentioned.mentions
         if body.template_id:

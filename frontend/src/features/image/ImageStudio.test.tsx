@@ -124,8 +124,15 @@ describe('Edit Image page', () => {
     await user.click(screen.getByRole('button', { name: /^Edit/ }))
     expect(calls.find((c) => c.method === 'POST')).toMatchObject({
       path: '/images/edit',
-      body: { source_ids: ['a', 'b', 'c'], instruction: 'Put them on a boat', count: 2 },
+      // prompt correction is on Auto unless changed, and an edit always says which
+      body: { source_ids: ['a', 'b', 'c'], instruction: 'Put them on a boat', count: 2, magic_prompt: 'auto' },
     })
+    // queued: the box empties; turning correction off is sent with the next edit
+    expect(screen.getByRole('textbox', { name: 'What should change?' })).toHaveValue('')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Prompt correction' }), 'Off: use my prompt exactly')
+    await user.type(screen.getByRole('textbox', { name: 'What should change?' }), 'Make it night')
+    await user.click(screen.getByRole('button', { name: /^Edit/ }))
+    expect(calls.filter((c) => c.method === 'POST' && c.path === '/images/edit')[1].body).toMatchObject({ instruction: 'Make it night', magic_prompt: 'off' })
 
     await user.click(await within(chosen).findByRole('button', { name: 'Remove Image b' }))
     expect(within(chosen).getAllByRole('listitem')).toHaveLength(2)

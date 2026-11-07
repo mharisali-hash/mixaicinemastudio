@@ -12,6 +12,7 @@ import { GeneratorPage, ResultsHeading } from '@/components/generate/GeneratorPa
 import { PromptDock } from '@/components/generate/PromptDock'
 import { SaveTemplateDialog } from '@/components/generate/SaveTemplateDialog'
 import { SessionResults } from '@/components/generate/SessionResults'
+import { useMagicPrompt } from '@/components/generate/useMagicPrompt'
 import { useDockModels } from '@/components/generate/useDockModels'
 import { useRecordRun } from '@/components/generate/useRecordRun'
 import { useBrandChoice } from '@/hooks/useBrandKits'
@@ -76,6 +77,8 @@ export function ImageEditPage() {
   const brand = useBrandChoice()
   const record = useRecordRun<EditRun>(PAGE)
   const { models, model, send, effective } = useDockModels('edit', modelId)
+  // prompt correction clarifies the instruction (what changes, where, what stays); it never pads it
+  const magic = useMagicPrompt(instruction, { kind: 'edit', model: send?.id, brandKitId: brand.sendId })
   const max = effective?.max_refs ?? MAX_EDIT_SOURCES
   const over = Math.max(0, sources.length - max)
   const estimate = useGenEstimate(effective ? { kind: 'image', model: effective.id, count } : null, localEstimate(effective, { count }))
@@ -159,8 +162,10 @@ export function ImageEditPage() {
 
   const submit = () => {
     if (blocked || edit.isPending) return
-    // images/edit has no magic prompt: an instruction is already specific
-    const base = editPayload(sources, instruction, count, aspect, send && { id: send.id, max_refs: max })
+    // images/edit treats a missing choice as off (API and MCP edits keep their words), so the dock always says which
+    const f = magic.fields()
+    const said = f.prompt_enhanced ? { prompt_enhanced: true } : { magic_prompt: f.magic_prompt ?? magic.mode }
+    const base = { ...editPayload(sources, f.prompt, count, aspect, send && { id: send.id, max_refs: max }), ...said }
     const n = Number.parseInt(seed, 10)
     const body = withBrand({ ...base, ...(Number.isFinite(n) && n >= 0 ? { seed: n } : {}) }, brand.sendId)
     if (tpl?.id) body.template_id = tpl.id
@@ -231,6 +236,7 @@ export function ImageEditPage() {
           )
         }
         mentions={{ refBudget: max, refsUsed: sources.length }}
+        magic={magic}
         placeholder={sources.length > 1 ? 'e.g. Put the woman from image 1 in the jacket from image 2, on the street from image 3' : 'What should change? e.g. Make it night, with rain on the window'}
         chips={
           <>

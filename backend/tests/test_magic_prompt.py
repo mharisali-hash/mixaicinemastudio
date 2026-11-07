@@ -23,10 +23,13 @@ class FakeWriter:
     def __init__(self, reply):
         self.reply = reply
         self.calls = 0
+        # the system message of each call, to see which rules the writer got
+        self.seen: list[str] = []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.calls += 1
         body = json.loads(request.content)
+        self.seen.append(body["messages"][0]["content"])
         user = body["messages"][-1]["content"].split("Prompt:\n", 1)[-1]
         out = self.reply(user)
         if isinstance(out, Exception):
@@ -290,3 +293,32 @@ def test_quick_carries_the_marker_and_outline_uses_it(client):
         assert "image_model" not in (p.settings or {})  # auto there means the default for now
         text = outline_messages(p, "cinematic", True, 10, expanded="A red kite drifts over rooftops")[1]["content"]
         assert "a lost kite finds its way home" in text and "A red kite drifts over rooftops" in text
+
+
+def test_prompt_correction_on_an_edit(client, fast_driver):
+    from tests.test_camera_mentions import upload
+
+    fake = install(lambda p: {"prompt": "Make the sky a deep night blue with stars; keep the boat and the people "
+                                        "exactly as they are"})
+    a, b = upload(client), upload(client)
+    # no choice sent (API and MCP edits): the instruction goes exactly as written
+    plain = client.post("/api/images/edit", json={"source_ids": [a["id"]], "instruction": "make it night"}).json()
+    asked = client.post("/api/images/edit", json={"source_ids": [a["id"], b["id"]], "instruction": "make it night",
+                                                  "magic_prompt": "on"}).json()
+    _run_all(fast_driver)
+    assert fake.calls == 1
+    g_plain, = _gens(plain)
+    assert g_plain.prompt == "make it night" and g_plain.params["magic_prompt"]["status"] == "off"
+    g, = _gens(asked)
+    # the corrected instruction replaces the user's words (a mention's "Picture 2" line would stay in front:
+    # test_splice_finds_the_words_after_a_preamble)
+    assert g.prompt.startswith("Make the sky a deep night blue with stars")
+    assert "make it night" not in g.prompt and g.params["original_prompt"] == "make it night"
+    # the writer was asked for an edit, not a fresh picture
+    assert "image editing model" in fake.seen[0]
+
+
+def test_splice_finds_the_words_after_a_preamble():
+    assert pe.splice("Picture 2 is a hat. make it night", "make it night", "Night sky") == "Picture 2 is a hat. Night sky"
+    assert pe.splice("make it night. brand suffix", "make it night", "Night sky") == "Night sky. brand suffix"
+    assert pe.splice("something else", "make it night", "Night sky") is None

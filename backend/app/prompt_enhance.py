@@ -17,8 +17,8 @@ from app.llm.client import LLMError, chat, chat_sync
 
 log = logging.getLogger("mixai.enhance")
 
-KINDS = ("image", "video", "quick")
-WORD_CAP = {"image": 120, "video": 160, "quick": 160}
+KINDS = ("image", "video", "quick", "edit")
+WORD_CAP = {"image": 120, "video": 160, "quick": 160, "edit": 80}
 SHORT_WORDS = 12
 CACHE_TTL_S = 600.0
 CACHE_MAX = 256
@@ -103,6 +103,11 @@ def messages(prompt: str, kind: str, *, model: str | None = None, style: str | N
     elif kind == "video":
         what = ("a video model that also makes sound. Add the camera (shot size and one clear movement), how the "
                 "subject moves over the clip, the light, and sound cues: ambience, effects, and any spoken line.")
+    elif kind == "edit":
+        what = ("an image editing model that changes an existing picture. Rewrite the instruction as one clear, "
+                "literal edit: what to change, where in the picture, and what must stay exactly as it is (the "
+                "people, faces, pose, clothes, background and framing). Don't describe the whole picture, and add "
+                "nothing the user didn't ask for. Keep references such as \"Picture 2\" as they are.")
     else:
         what = ("a short-film planner. Expand the idea into one vivid paragraph: setting, who is in it, what "
                 "happens, mood, visual style and sound. Don't write a script or scene list.")
@@ -211,11 +216,13 @@ def marker(mode: str | None, prompt_enhanced: bool, kind: str, *, style: str | N
 def splice(full: str, original: str, enhanced: str) -> str | None:
     """Swap the user's words at the head of the stored prompt (style/brand suffixes follow them)."""
     base = original.strip()
-    if not full.startswith(base):
+    # an edit's stored prompt opens with its "Picture 1..3" reference lines; the user's words follow them
+    at = 0 if full.startswith(base) else full.find(base)
+    if at < 0 or not base:
         return None
-    rest = full[len(base):].lstrip(" .")
+    rest = full[at + len(base):].lstrip(" .")
     head = enhanced.strip().rstrip(" .")
-    return f"{head}. {rest}" if rest else head
+    return full[:at] + (f"{head}. {rest}" if rest else head)
 
 
 def brand_context_for(db, workspace_id: str, kit_id: str | None) -> str:

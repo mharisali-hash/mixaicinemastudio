@@ -17,7 +17,7 @@ router = APIRouter(prefix="/prompts", tags=["prompts"])
 
 class EnhanceIn(BaseModel):
     prompt: str = Field(min_length=1, max_length=PROMPT_MAX)
-    kind: Literal["image", "video", "quick"] = "image"
+    kind: Literal["image", "video", "quick", "edit"] = "image"
     model: str | None = Field(None, max_length=60)
     style: str | None = Field(None, max_length=40)
     brand_kit_id: str | None = None
