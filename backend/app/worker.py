@@ -418,6 +418,11 @@ def handle_generate(ctx: JobContext) -> dict:
 
     if getattr(result, "params_update", None):
         gen.params = {**(gen.params or {}), **result.params_update}
+    if gen.kind == "song" and (gen.params or {}).get("sing_as"):
+        # a child, a choir or a Library voice: the song is sung again in that voice (app.song_voice)
+        from app import song_voice
+
+        song_voice.apply(ctx, gen, abs_path, driver)
     if (gen.params or {}).get("mux_audio") and result.media_type.startswith("video/"):
         # a feature's take cut from the scene's dialogue track keeps that exact slice as its sound
         from app import film_audio

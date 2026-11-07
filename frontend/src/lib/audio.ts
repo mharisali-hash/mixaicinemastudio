@@ -27,6 +27,17 @@ export const VOCALS: { value: AudioVocal; label: string }[] = [
   { value: 'none', label: 'None' },
 ]
 
+// only offered when the server can change a sung voice (GET /audio/song-voices)
+export const SUNG_AS: { value: AudioVocal; label: string }[] = [
+  { value: 'boy', label: 'Boy (child)' },
+  { value: 'girl', label: 'Girl (child)' },
+  { value: 'choir', label: "Children's choir" },
+  { value: 'voice', label: 'A voice of mine' },
+]
+export const ALL_VOCALS = [...VOCALS, ...SUNG_AS]
+export const vocalLabel = (v: AudioVocal | null) => ALL_VOCALS.find((x) => x.value === v)?.label
+export const sungAs = (v: AudioVocal | null) => SUNG_AS.some((x) => x.value === v)
+
 export const SONG_LANGUAGES = [
   { value: 'en', label: 'English' },
   { value: 'ur', label: 'Urdu' },
@@ -129,6 +140,8 @@ export interface AudioForm {
   // song only
   lyrics: string
   vocal: AudioVocal | null
+  // vocal 'voice' only
+  singVoiceId: string | null
   language: string
   timbreId: string | null
   aerab: boolean
@@ -149,6 +162,7 @@ const BASE: Omit<AudioForm, 'kind' | 'durationS'> = {
   bpm: '',
   lyrics: '',
   vocal: null,
+  singVoiceId: null,
   language: 'en',
   timbreId: null,
   aerab: true,
@@ -180,6 +194,8 @@ export function audioBlockedReason(f: AudioForm, m: ModelInfo | undefined): stri
   if (!m) return `No ${KIND_NOUN[f.kind].one} model is available on this server yet.`
   if (!modelFits(m, f.kind)) return `${m.label} doesn't make ${KIND_NOUN[f.kind].many}. Pick another model.`
   if (f.prompt.trim().length < 3) return f.kind === 'song' ? 'Add a few style tags first.' : 'Describe the sound first.'
+  if (f.kind === 'song' && sungAs(f.vocal) && !f.lyrics.trim()) return 'Add lyrics: a voice needs words to sing.'
+  if (f.kind === 'song' && f.vocal === 'voice' && !f.singVoiceId) return 'Pick the voice to sing in.'
   if (f.kind === 'song' && f.lyrics.length > LYRICS_MAX) return `The lyrics are ${f.lyrics.length.toLocaleString('en')} characters; the limit is ${LYRICS_MAX.toLocaleString('en')}.`
   const bpm = int(f.bpm)
   if (f.bpm.trim() && (bpm === null || bpm < BPM_MIN || bpm > BPM_MAX)) return `BPM goes from ${BPM_MIN} to ${BPM_MAX}.`
@@ -202,6 +218,7 @@ export function audioPayload(f: AudioForm, m: ModelInfo): AudioGenerateRequest {
   if (f.kind === 'song') {
     body.language = f.language || 'en'
     if (f.vocal) body.vocal = f.vocal
+    if (f.vocal === 'voice' && f.singVoiceId) body.sing_voice_id = f.singVoiceId
     // empty lyrics already mean instrumental to the server
     const lyrics = f.lyrics.trim()
     if (lyrics && !instrumental(f)) body.lyrics = lyrics.slice(0, LYRICS_MAX)
@@ -263,7 +280,7 @@ const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : u
 /** A form from a prompt template's prefill or a result's params; anything unknown keeps the default. */
 export function audioFormFrom(kind: AudioKind, p: Record<string, unknown>): AudioForm {
   const d = DEFAULT_AUDIO_FORM[kind]
-  const vocal = VOCALS.find((v) => v.value === p.vocal)?.value
+  const vocal = ALL_VOCALS.find((v) => v.value === p.vocal)?.value
   const category = MUSIC_CATEGORIES.find((c) => c.value === p.category)?.value
   const bpm = num(p.bpm)
   return {

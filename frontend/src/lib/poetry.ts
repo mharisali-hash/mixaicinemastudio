@@ -12,7 +12,8 @@ export interface PoetrySettings {
   topic: string
   mood: string
   style: string
-  vocal: 'female' | 'male'
+  // boy / girl / choir only when the server can change a sung voice
+  vocal: PoetryVocal
   length_s: number
   character_id: string | null
   character: string
@@ -234,3 +235,10 @@ export function timingProblem(rows: Timing[], duration: number | null): string |
 
 export const SECTION_LABEL: Record<string, string> = { verse: 'Verse', chorus: 'Chorus', bridge: 'Bridge', intro: 'Intro', outro: 'Outro' }
 export const sectionLabel = (s: string) => SECTION_LABEL[s] ?? s.charAt(0).toUpperCase() + s.slice(1)
+
+export type PoetryVocal = 'female' | 'male' | 'boy' | 'girl' | 'choir'
+export const CHILD_VOCALS: { value: PoetryVocal; label: string }[] = [
+  { value: 'boy', label: 'Boy (child)' },
+  { value: 'girl', label: 'Girl (child)' },
+  { value: 'choir', label: "Children's choir" },
+]

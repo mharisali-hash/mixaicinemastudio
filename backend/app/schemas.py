@@ -1154,7 +1154,10 @@ class AudioGenerateIn(BaseModel):
                                                          "POST /api/audio/lyrics can write them")
     # ISO 639-1, plus "ur-latn" for Roman Urdu; ACE-Step reads anything it doesn't know as "unknown"
     language: str = Field("en", min_length=2, max_length=12, pattern=r"^[a-z]{2,3}(-[a-z]{2,4})?$")
-    vocal: Literal["male", "female", "duet", "none"] | None = None
+    # boy / girl / choir / voice are sung by the model and then changed into that voice (app.song_voice)
+    vocal: Literal["male", "female", "duet", "none", "boy", "girl", "choir", "voice"] | None = None
+    sing_voice_id: str | None = Field(None, max_length=80,
+                                      description="vocal=voice: the Library voice (or gallery:<id>) to sing in")
     bpm: int | None = Field(None, ge=40, le=220)
     category: Literal["music", "instrument", "loop", "sfx", "oneshot"] | None = None
     duration_s: float = Field(30.0, ge=1, le=380, description="Seconds")

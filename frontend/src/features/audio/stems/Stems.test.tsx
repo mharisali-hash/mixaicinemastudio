@@ -105,6 +105,23 @@ describe('Stems', () => {
     expect(within(panel).getByRole('button', { name: 'Split' })).toBeEnabled()
   })
 
+  it('can also write out the lyrics, shown with a Copy button', async () => {
+    const withWords = { ...twoStems, lyrics: 'First line we heard\nSecond line we heard' }
+    const calls = mockApi((method, path) => {
+      if (path === '/jobs' || path === '/models') return []
+      if (method === 'GET' && path === '/media/v1') return { ...clip, versions: [] }
+      if (method === 'POST' && path === '/audio/v1/stems') return { job: job('j9', { type: 'audio_stems' }), items: [] }
+      if (method === 'GET' && path === '/audio/v1/stems') return response([withWords])
+    })
+    const user = userEvent.setup()
+    renderAt('/audio/stems?source=v1', routes)
+    await user.click(await screen.findByRole('checkbox', { name: /Also write out the lyrics/ }))
+    await user.click(screen.getByRole('button', { name: 'Split' }))
+    expect(sent(calls, 'POST', '/audio/v1/stems')[0]).toEqual({ mode: 'two', lyrics: true })
+    expect(await screen.findByText(/First line we heard/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument()
+  })
+
   it('opens from a tile link with ?source and says when a track was never split', async () => {
     api()
     renderAt('/audio/stems?source=a1', routes)

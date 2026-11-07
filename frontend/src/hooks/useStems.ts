@@ -16,10 +16,15 @@ export function useStems(id: string | null | undefined) {
   })
 }
 
+/** Whether songs can be sung by a child, a choir or a Library voice on this server. */
+export function useSongVoices() {
+  return useQuery({ queryKey: ['song-voices'], queryFn: () => api.audio.songVoices(), staleTime: 5 * 60_000 })
+}
+
 export function useSplitStems(id: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { mode: StemsMode; version?: string }) => api.audio.stems(id, body),
+    mutationFn: (body: { mode: StemsMode; version?: string; lyrics?: boolean }) => api.audio.stems(id, body),
     onSuccess: (res) => {
       upsertJob(qc, res.job)
       qc.invalidateQueries({ queryKey: qk.stems(id) })

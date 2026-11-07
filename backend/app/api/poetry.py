@@ -10,6 +10,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.limits import PROMPT_MAX
 from app import visibility as vis
 from app import models_catalog as mc
+from app import song_voice
 from app.db import get_db
 from app.models import Character, Generation, PoetryShort
 from app.poetry import service as svc
@@ -36,7 +37,8 @@ class CreateIn(BaseModel):
     language: str = Lang
     mood: str = Field("", max_length=PROMPT_MAX)
     style: str = Field("", max_length=PROMPT_MAX, description="Music style tags for the singer")
-    vocal: Literal["female", "male"] = "female"
+    # boy / girl / choir: sung by the model, then changed into a child's voice (app.song_voice)
+    vocal: Literal["female", "male", "boy", "girl", "choir"] = "female"
     length_s: float = Field(60, ge=30, le=90)
     character_id: str | None = Field(None, max_length=64, description="A Character Studio character")
     character: str = Field("", max_length=PROMPT_MAX, description="Or a short description of the person")
@@ -102,6 +104,8 @@ def create_short(body: CreateIn, db: Session = Depends(get_db), cur: CurrentUser
         if c is None or c.workspace_id != cur.workspace_id:
             raise HTTPException(422, "That character isn't in this workspace")
     mc.get(body.image_model, "image")  # 422 when it isn't an image model or isn't installed
+    if body.vocal in song_voice.VOCALS and not song_voice.enabled():
+        raise HTTPException(422, "Children's voices aren't set up on this server yet")
     ps = svc.create(db, cur, body.model_dump())
     svc.queue(db, ps)
     db.commit()

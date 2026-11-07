@@ -25,7 +25,7 @@ import {
   SFX_PRESETS,
   SONG_LANGUAGES,
   songLanguageOf,
-  VOCALS,
+  vocalLabel,
   type AudioForm,
 } from '@/lib/audio'
 import { formatDuration } from '@/lib/duration'
@@ -113,7 +113,7 @@ export function AudioDock({ form, setForm, modelPicked, onRun, pending, error }:
     const summary = [
       model?.label,
       formatDuration(duration),
-      kind === 'song' ? (instrumental(form) ? 'instrumental' : VOCALS.find((v) => v.value === form.vocal)?.label.toLowerCase()) : null,
+      kind === 'song' ? (instrumental(form) ? 'instrumental' : vocalLabel(form.vocal)?.toLowerCase()) : null,
       kind === 'song' ? SONG_LANGUAGES.find((l) => l.value === form.language)?.label : null,
       form.category,
       form.count > 1 ? `${form.count} ${noun.many}` : null,
@@ -161,7 +161,9 @@ export function AudioDock({ form, setForm, modelPicked, onRun, pending, error }:
         <>
           <ModelChip models={models} model={model} onChange={chooseModel} highlighted={modelPicked} />
           <AudioLengthChip kind={kind} model={effective} value={duration} onChange={(v) => set('durationS', v)} estimate={estimate} />
-          {kind === 'song' && <VocalChip value={form.vocal} onChange={(v) => set('vocal', v)} />}
+          {kind === 'song' && (
+            <VocalChip value={form.vocal} onChange={(v) => set('vocal', v)} voiceId={form.singVoiceId} onVoice={(id) => set('singVoiceId', id)} />
+          )}
           {kind === 'song' && <LanguageChip value={form.language} onChange={(v) => set('language', v)} />}
           {kind === 'music' && <CategoryChip value={form.category} onChange={(v) => set('category', v)} />}
           <TakesChip kind={kind} value={form.count} onChange={(n) => set('count', n)} />

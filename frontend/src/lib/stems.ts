@@ -11,6 +11,8 @@ export interface StemSplit {
   created_at: string
   stems: string[]
   items: MediaItem[]
+  // the words heard on the vocal stem, when they were asked for
+  lyrics?: string | null
 }
 
 export interface StemsResponse {

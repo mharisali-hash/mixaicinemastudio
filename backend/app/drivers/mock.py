@@ -309,6 +309,16 @@ class MockDriver:
         progress_cb(1.0, "Done")
         return out
 
+    def convert_singing(self, src: Path, ref: Path, out: Path, progress_cb) -> Path:
+        # the "new voice" is the vocals a fifth up, so a test can hear that something changed
+        self._tick(progress_cb, "Singing it again")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run([get_settings().ffmpeg_path(), "-y", "-loglevel", "error", "-i", str(src), "-af",
+                        "asetrate=72000,aresample=48000", "-ac", "1", str(out)],
+                       check=True, capture_output=True, timeout=120)
+        progress_cb(1.0, "Done")
+        return out
+
     def speaker_embed(self, src: Path, spans, progress_cb) -> list[list[float]]:
         from app.audio_analysis import _decode_mono
         from app.dub.engines import band_embedding

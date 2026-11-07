@@ -108,6 +108,47 @@ describe('Audio Studio', () => {
     expect(await screen.findByRole('listitem', { name: 'Request: soulful qawwali, harmonium, tabla' })).toBeInTheDocument()
   })
 
+  it('Song: a child or one of my voices sings it when the server can change voices', async () => {
+    const calls = mockApi((method, path) => {
+      if (path === '/audio/song-voices') return { available: true, vocals: ['boy', 'girl', 'choir', 'voice'] }
+      if (path === '/voices') return [{ id: 'v1', name: 'Ammi', kind: 'clone', language: 'ur' }]
+      if (path === '/gallery') return { items: [], total: 0 }
+      if (path === '/media') return { items: [] }
+      if (method === 'POST' && path === '/audio/generate') return { items: [track('n1', { media_url: null })], jobs: [job('j1')], model_resolved: 'ace15_turbo' }
+      if (path === '/jobs') return []
+    })
+    renderAt('/audio/song', routes, seedCatalog)
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('textbox', { name: 'Style tags' }))
+    await user.paste('lullaby, soft piano')
+    await user.type(screen.getByRole('textbox', { name: 'Lyrics' }), 'Taaron ki chhaon mein')
+
+    const chip = await openChip(user, 'Vocal')
+    await user.click(await within(chip).findByRole('button', { name: 'Girl (child)' }))
+    await closeChip(user)
+    await user.click(screen.getByRole('button', { name: /^Compose/ }))
+    expect(posted(calls)).toMatchObject({ vocal: 'girl' })
+
+    // one of my voices has to be picked before it can be sent
+    await user.type(screen.getByRole('textbox', { name: 'Style tags' }), 'lullaby')
+    await user.type(screen.getByRole('textbox', { name: 'Lyrics' }), 'So ja')
+    const again = await openChip(user, 'Vocal')
+    await user.click(within(again).getByRole('button', { name: 'A voice of mine' }))
+    await user.selectOptions(await within(again).findByRole('combobox', { name: 'Voice' }), 'Ammi')
+    await closeChip(user)
+    await user.click(screen.getByRole('button', { name: /^Compose/ }))
+    expect(calls.filter((c) => c.method === 'POST' && c.path === '/audio/generate')[1].body).toMatchObject({ vocal: 'voice', sing_voice_id: 'v1' })
+  })
+
+  it('Song: no child voices are offered when the server has no voice changer', async () => {
+    api()
+    renderAt('/audio/song', routes, seedCatalog)
+    const user = userEvent.setup()
+    const chip = await openChip(user, 'Vocal')
+    expect(within(chip).getByRole('button', { name: 'Duet' })).toBeInTheDocument()
+    expect(within(chip).queryByRole('button', { name: 'Boy (child)' })).not.toBeInTheDocument()
+  })
+
   it('Song: Instrumental sets the lyrics aside and sends vocal none', async () => {
     const calls = api()
     renderAt('/audio/song', routes, seedCatalog)
@@ -368,7 +409,7 @@ describe('Audio navigation', () => {
       ['Podcast', '/audio/podcast'],
       ['Editor', '/audio/edit'],
       ['Score a Clip', '/audio/score'],
-      ['Stems', '/audio/stems'],
+      ['Split a song', '/audio/stems'],
       ['Transcribe', '/audio/transcribe'],
       ['Dub a video', '/audio/dub'],
       ['Prompt templates', '/audio/prompt-templates'],

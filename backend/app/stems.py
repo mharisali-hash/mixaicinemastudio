@@ -8,6 +8,7 @@ the audio lane.
 import logging
 import shutil
 import time
+from pathlib import Path
 
 from fastapi import HTTPException
 from sqlalchemy import String, cast, select
@@ -72,12 +73,12 @@ def active_jobs(db: Session, workspace_id: str, item_id: str) -> list[Job]:
     return [j for j in rows if (j.payload or {}).get("source_id") == item_id]
 
 
-def queue(db: Session, item: MediaItem, g: Generation, mode: str, user_id: str | None) -> Job:
+def queue(db: Session, item: MediaItem, g: Generation, mode: str, user_id: str | None, lyrics: bool = False) -> Job:
     if any((j.payload or {}).get("mode") == mode for j in active_jobs(db, item.workspace_id, item.id)):
         raise HTTPException(409, "This track is already being split that way")
     job = Job(workspace_id=item.workspace_id, type=JOB, message="Waiting for a worker · Stems",
               payload={"source_id": item.id, "generation_id": g.id, "mode": mode, "model": model_for(mode),
-                       "user_id": user_id})
+                       "user_id": user_id, "lyrics": lyrics})
     db.add(job)
     db.flush()
     return job
@@ -127,6 +128,17 @@ def handle(ctx) -> dict:
         if missing:
             raise StemsError(f"The model didn't write {', '.join(label(x).lower() for x in missing)}")
 
+        words = None
+        if p.get("lyrics") and stems.get("vocals"):
+            ctx.progress(0.8, "Writing out the lyrics")
+            try:
+                heard = driver.transcribe(Path(stems["vocals"]), None,
+                                          lambda f, m: ctx.progress(0.8 + 0.05 * f, "Writing out the lyrics"))
+                words = lyrics_text(heard)
+            except Exception as e:
+                # the split is what was asked for; lyrics are a bonus
+                log.warning("lyrics for split %s failed: %s", job.id, e)
+
         names = _order(stems, mode)
         files = []
         for i, name in enumerate(names):
@@ -153,13 +165,14 @@ def handle(ctx) -> dict:
                               title=title, tags=list(tags), duration_s=dur, folder_id=item.folder_id)
         db.add(stem_item)
         db.flush()
+        extra = {"lyrics": words} if name == "vocals" and words else {}
         sg = Generation(id=gid, workspace_id=job.workspace_id, project_id=None, target_type="media",
                         target_id=stem_item.id, kind="audio", version=1, status="ready", prompt=title,
                         seed=new_seed(), job_id=job.id, media_type="audio/flac",
                         file_path=f"{rel_folder}/{dst.name}",
                         params={"kind": "stem", "stem": name, "source_id": item.id, "source_generation_id": g.id,
                                 "mode": mode, "model": model, "split_id": job.id, "duration_s": dur,
-                                "created_by": {"user_id": p.get("user_id"), "flow": "stems"}})
+                                "created_by": {"user_id": p.get("user_id"), "flow": "stems"}, **extra})
         db.add(sg)
         db.flush()
         stem_item.generation_id = sg.id
@@ -168,6 +181,13 @@ def handle(ctx) -> dict:
     return {"mode": mode, "model": model, "source_id": item.id, "items": [m[1] for m in made],
             "generation_ids": [m[2] for m in made], "stems": {m[0]: m[1] for m in made},
             "seconds": round(time.monotonic() - t0, 3)}
+
+
+def lyrics_text(heard: dict) -> str:
+    """One line per sung phrase, the way lyrics are written."""
+    lines = [" ".join((s.get("text") or "").split()) for s in heard.get("segments") or []]
+    lines = [ln for ln in lines if ln]
+    return "\n".join(lines) if lines else (heard.get("text") or "").strip()
 
 
 def on_job_finished(db, job) -> None:
@@ -208,10 +228,13 @@ def splits_of(db: Session, workspace_id: str, item_id: str) -> dict:
                                       "items": []})
         grp["created_at"] = min(grp["created_at"], i.created_at)
         grp["items"].append((gp.get("stem") or "", outs[i.id]))
+        if gp.get("lyrics"):
+            grp["lyrics"] = gp["lyrics"]
     splits = []
     for grp in groups.values():
         order = MODES.get(grp["mode"], ())
         grp["items"].sort(key=lambda x: (order.index(x[0]) if x[0] in order else len(order), x[0]))
+        grp.setdefault("lyrics", None)
         splits.append({**grp, "stems": [s for s, _ in grp["items"]], "items": [o for _, o in grp["items"]]})
     splits.sort(key=lambda x: x["created_at"], reverse=True)
     return {"source_id": item_id, "splits": splits, "items": [o for sp in splits for o in sp["items"]],

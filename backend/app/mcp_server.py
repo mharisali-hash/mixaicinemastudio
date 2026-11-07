@@ -335,14 +335,17 @@ def make_song(
     lyrics: Annotated[str, Field(max_length=6000, description="With [verse] / [chorus] section markers")] = "",
     language: Annotated[str, Field(pattern=r"^[a-z]{2,3}(-[a-z]{2,4})?$", description="ISO 639-1 of the "
                                                                                       "lyrics")] = "en",
-    vocal: Literal["male", "female", "duet", "none"] | None = None,
+    vocal: Annotated[Literal["male", "female", "duet", "none", "boy", "girl", "choir", "voice"] | None,
+                     Field(description="boy / girl / choir sing as children; voice sings in sing_voice_id")] = None,
+    sing_voice_id: Annotated[str | None, Field(description="vocal=voice: a voice id from list_voices")] = None,
     duration_s: Annotated[float, Field(ge=10, le=380)] = 60.0,
     bpm: Annotated[int | None, Field(ge=40, le=220)] = None,
     count: Annotated[int, Field(ge=1, le=4)] = 1,
 ) -> dict:
     """Make a song with sung lyrics. Urdu and Arabic lyrics get their vowel marks added before singing."""
     return _audio(ctx, AudioGenerateIn(kind="song", prompt=prompt, lyrics=lyrics, language=language, vocal=vocal,
-                                       duration_s=duration_s, bpm=bpm, count=count))
+                                       sing_voice_id=sing_voice_id, duration_s=duration_s, bpm=bpm,
+                                       count=count))
 
 
 @tool("generate", title="Make music")
@@ -728,7 +731,7 @@ def make_poetry_short(
     title: Annotated[str, Field(max_length=200)] = "",
     mood: Annotated[str, Field(max_length=200)] = "",
     style: Annotated[str, Field(max_length=300, description="Music style tags for the singer")] = "",
-    vocal: Literal["female", "male"] = "female",
+    vocal: Literal["female", "male", "boy", "girl", "choir"] = "female",
     length_s: Annotated[float, Field(ge=30, le=90)] = 60,
     character: Annotated[str, Field(max_length=500, description="Short description of the person on screen")] = "",
     character_id: str | None = None,

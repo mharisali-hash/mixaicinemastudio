@@ -17,12 +17,14 @@ router = APIRouter(prefix="/audio", tags=["audio"])
 class StemsIn(BaseModel):
     mode: Literal["two", "four"] = "two"
     version: str | None = None
+    # also write out the words heard on the vocal stem (WhisperX)
+    lyrics: bool = False
 
 
 @router.post("/{item_id}/stems", status_code=202)
 def split(item_id: str, body: StemsIn, db: Session = Depends(get_db), cur: CurrentUser = Depends(require_editor)):
     item, g = stems.source(db, cur.workspace_id, item_id, body.version)
-    job = stems.queue(db, item, g, body.mode, cur.id)
+    job = stems.queue(db, item, g, body.mode, cur.id, lyrics=body.lyrics)
     db.commit()
     # the stems arrive as new Library items when the job finishes; GET lists them
     return {"job": job_out(job), "items": []}

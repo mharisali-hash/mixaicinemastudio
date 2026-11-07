@@ -165,6 +165,14 @@ class Settings(BaseSettings):
     # Stems (contract v21): the four-stem Demucs model; two-stem splits reuse dub_separation_model.
     # Both live in dub_separation_model_dir
     stems_four_model: str = "htdemucs_ft.yaml"
+    # songs sung in a chosen voice (child, choir, a Library voice): "" is off, "seed-vc" turns it on once
+    # scripts/install-song-voice.sh has set up the venv and the Seed-VC checkout (GPL-3.0, runs here only)
+    song_voice_engine: str = ""
+    song_voice_venv: str = "seed-vc"
+    song_voice_repo: str = "/data/venvs/seed-vc/src"
+    # Seed-VC's own advice for singing is 30-50 steps
+    song_voice_steps: int = 30
+    song_voice_vram_gb: float = 8.0
     # burned subtitles (contract v24a): where the Noto fonts live (fonts-noto-core / -extra on Debian);
     # renderer auto | ass | pillow
     subtitle_fonts_dir: str = "/usr/share/fonts/truetype/noto"

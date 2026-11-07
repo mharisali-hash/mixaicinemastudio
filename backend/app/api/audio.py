@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app import aerab
+from app import song_voice
 from app import voices
 from app import library as lib
 from app import models_catalog as mc
@@ -63,6 +64,10 @@ def generate_audio(body: AudioGenerateIn, db: Session = Depends(get_db), cur: Cu
     if body.kind == "song":
         # lyrics, language and voice only mean something to the song models
         params.update(lyrics=body.lyrics.strip(), language=body.language, vocal=body.vocal or "none", aerab=body.aerab)
+        if body.vocal in song_voice.VOCALS:
+            sing = song_voice.plan(db, cur.workspace_id, body.vocal, body.sing_voice_id, body.lyrics)
+            # the model sings with the nearest stock vocal; the worker changes it afterwards
+            params.update(vocal=sing["base"], sing_as=sing)
     for key in ("bpm", "category", "steps", "keyscale", "time_signature", "guidance", "think"):
         if getattr(body, key) is not None:
             params[key] = getattr(body, key)
@@ -84,6 +89,12 @@ def generate_audio(body: AudioGenerateIn, db: Session = Depends(get_db), cur: Cu
         jobs.append(db.get(Job, g.job_id))
     db.commit()
     return ImageBatchOut(items=lib.items_out(db, items), jobs=[job_out(j) for j in jobs], model_resolved=m.id)
+
+
+@router.get("/song-voices")
+def song_voices(cur: CurrentUser = Depends(require_editor)):
+    """Whether songs can be sung by a child, a choir or a Library voice on this server."""
+    return {"available": song_voice.enabled(), "vocals": list(song_voice.VOCALS)}
 
 
 @router.post("/speak", response_model=SpeakOut, status_code=202)

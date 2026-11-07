@@ -18,6 +18,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app import aerab
 from app import audio_analysis as aa
 from app import library as lib
+from app import song_voice
 from app import models_catalog as mc
 from app.autopilot import POLL_S, WAIT_PRIORITY, Skip, StageFailed, Wait
 from app.llm import LLMError, chat_sync
@@ -243,15 +244,21 @@ class Run:
     def make_song(self) -> Generation:
         ps, st = self.ps, self.st
         tags = (ps.poem or {}).get("tags") or ""
-        prompt = ", ".join(x for x in (tags, st.get("mood"), f"{st['vocal']} vocal") if x)
+        sing = None
+        if st["vocal"] in song_voice.VOCALS:
+            sing = song_voice.plan(self.db, ps.workspace_id, st["vocal"], None, (ps.poem or {}).get("lyrics") or "x")
+        vocal = sing["base"] if sing else st["vocal"]
+        prompt = ", ".join(x for x in (tags, st.get("mood"), f"{vocal} vocal") if x)
         m, chosen = mc.choose(svc.SONG_MODEL, "audio", prompt, kind="song")
         secs = song_seconds([ln["text"] for ln in ps.lines or []], " ".join((tags, st.get("style") or "")),
                             float(st["length_s"]), m.max_duration_s)
         mc.check_audio(m, "song", secs)
         params = {"kind": "song", "model": m.id, "duration_s": secs, "user_prompt": prompt,
-                  "lyrics": (ps.poem or {}).get("lyrics") or "", "language": ps.language, "vocal": st["vocal"],
+                  "lyrics": (ps.poem or {}).get("lyrics") or "", "language": ps.language, "vocal": vocal,
                   "aerab": True, "poetry": ps.id, "created_by": {"user_id": ps.created_by, "flow": "poetry_short"},
                   **chosen}
+        if sing:
+            params["sing_as"] = sing
         item = self.db.get(MediaItem, (ps.song or {}).get("media_id") or "")
         if item is None:
             item = MediaItem(id=new_id(), workspace_id=ps.workspace_id, kind="audio", origin="generated",

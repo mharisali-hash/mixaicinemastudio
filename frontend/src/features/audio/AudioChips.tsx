@@ -4,7 +4,9 @@ import { ChipGroup } from '@/components/studio/chip'
 import { DurationFields } from '@/components/studio/duration-picker'
 import { DockChip } from '@/components/generate/DockChip'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { audioDurationPresets, KIND_NOUN, MAX_TAKES, maxAudioDuration, MUSIC_CATEGORIES, SONG_LANGUAGES, VOCALS } from '@/lib/audio'
+import { audioDurationPresets, KIND_NOUN, MAX_TAKES, maxAudioDuration, MUSIC_CATEGORIES, SONG_LANGUAGES, SUNG_AS, vocalLabel, VOCALS } from '@/lib/audio'
+import { useVoiceChoices } from '@/hooks/useGallery'
+import { useSongVoices } from '@/hooks/useStems'
 import { formatDuration } from '@/lib/duration'
 import { rangeText } from '@/lib/estimate'
 import type { AudioCategory, AudioKind, AudioVocal, EstimateResult, ModelInfo } from '@/lib/types'
@@ -46,12 +48,52 @@ export function AudioLengthChip({
   )
 }
 
-export function VocalChip({ value, onChange }: { value: AudioVocal | null; onChange: (v: AudioVocal | null) => void }) {
-  const label = VOCALS.find((v) => v.value === value)?.label ?? 'Any'
+export function VocalChip({
+  value,
+  onChange,
+  voiceId,
+  onVoice,
+}: {
+  value: AudioVocal | null
+  onChange: (v: AudioVocal | null) => void
+  voiceId: string | null
+  onVoice: (id: string | null) => void
+}) {
+  const sung = useSongVoices().data?.available === true
+  const voices = useVoiceChoices()
+  const selectId = useId()
+  const chosen = value === 'voice' ? voices.find((v) => v.id === voiceId)?.name : null
+  const label = chosen ?? vocalLabel(value) ?? 'Any'
   return (
     <DockChip name="Vocal" showName value={label} icon={<MicVocal aria-hidden />} active={!!value}>
-      <ChipGroup label="Vocal" options={VOCALS} value={value} onChange={onChange} />
-      <p className="text-small text-studio-muted">None makes it instrumental, and the lyrics are set aside. Any lets the model choose.</p>
+      <ChipGroup label="Vocal" options={VOCALS} value={sung && SUNG_AS.some((s) => s.value === value) ? null : value} onChange={onChange} />
+      {sung && (
+        <ChipGroup label="Sung by" options={SUNG_AS} value={SUNG_AS.some((s) => s.value === value) ? value : null} onChange={onChange} />
+      )}
+      {sung && value === 'voice' && (
+        <div className="flex flex-col gap-1">
+          <label htmlFor={selectId} className="section-label">
+            Voice
+          </label>
+          <select
+            id={selectId}
+            className="h-9 rounded-[6px] border border-studio-border-strong bg-studio-raised px-2 text-body"
+            value={voiceId ?? ''}
+            onChange={(e) => onVoice(e.target.value || null)}
+          >
+            <option value="">Choose a voice…</option>
+            {voices.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      <p className="text-small text-studio-muted">
+        None makes it instrumental, and the lyrics are set aside. Any lets the model choose.
+        {sung ? ' A child, a choir or your own voice takes a few minutes more: the song is sung first, then changed into that voice.' : ''}
+      </p>
     </DockChip>
   )
 }

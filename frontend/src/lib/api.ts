@@ -692,8 +692,9 @@ export const api = {
     mix: (body: MixIn & { stems?: boolean; note?: string }) => post<{ item: MediaItem; job: Job }>('/audio/mix', body),
     // contract-v16
     speak: (body: SpeakRequest) => post<SpeakResponse>('/audio/speak', body),
+    songVoices: () => get<{ available: boolean; vocals: string[] }>('/audio/song-voices'),
     // contract-v21
-    stems: (id: string, body: { mode: StemsMode; version?: string }) => post<{ job: Job; items: MediaItem[] }>(`/audio/${id}/stems`, body),
+    stems: (id: string, body: { mode: StemsMode; version?: string; lyrics?: boolean }) => post<{ job: Job; items: MediaItem[] }>(`/audio/${id}/stems`, body),
     stemsOf: (id: string) => get<StemsResponse>(`/audio/${id}/stems`),
   },
   voices: {

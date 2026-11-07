@@ -146,7 +146,7 @@ const AUDIO_MENU: MenuSection = {
     { id: 'podcast', title: 'Podcast', description: 'Topic or article to a finished episode', to: '/audio/podcast', icon: Podcast },
     { id: 'editor', title: 'Editor', description: 'Trim, fade, effects, loudness', to: '/audio/edit', icon: Scissors },
     { id: 'score', title: 'Score a Clip', description: 'Mix music and effects under a video', to: '/audio/score', icon: AudioWaveform },
-    { id: 'stems', title: 'Stems', description: 'Vocals, drums, bass and the rest, apart', to: '/audio/stems', icon: SquareSplitHorizontal },
+    { id: 'stems', title: 'Split a song', description: 'Upload a song: get the vocals and the music as separate tracks', to: '/audio/stems', icon: SquareSplitHorizontal },
     { id: 'transcribe', title: 'Transcribe', description: 'Timed text, SRT and VTT subtitles', to: '/audio/transcribe', icon: Captions },
     { id: 'dub', title: 'Dub a video', description: 'Translate and re-voice, Urdu and more', to: '/audio/dub', icon: Languages },
     { id: 'templates', title: 'Prompt templates', description: 'Qawwali, tense score, rain…', to: '/audio/prompt-templates', icon: LayoutTemplate },

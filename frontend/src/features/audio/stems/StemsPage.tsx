@@ -93,6 +93,7 @@ function Splitter({ id }: { id: string }) {
   const stems = useStems(id)
   const split = useSplitStems(id)
   const [mode, setMode] = useState<StemsMode>('two')
+  const [lyrics, setLyrics] = useState(false)
   const [mine, setMine] = useState<string | null>(null)
   const running = stems.data?.jobs[0]
   const live = useJob(running?.id ?? mine) ?? running
@@ -121,7 +122,7 @@ function Splitter({ id }: { id: string }) {
 
   const go = () =>
     split.mutate(
-      { mode },
+      { mode, ...(lyrics ? { lyrics: true } : {}) },
       {
         onSuccess: (res) => {
           setMine(res.job.id)
@@ -170,6 +171,11 @@ function Splitter({ id }: { id: string }) {
             </label>
           ))}
         </fieldset>
+        <label className="flex items-center gap-2 text-body">
+          <input type="checkbox" className="size-4 accent-studio-accent" checked={lyrics} disabled={busy} onChange={(e) => setLyrics(e.target.checked)} />
+          Also write out the lyrics
+          <span className="text-small text-studio-muted">(from the vocals, takes a little longer)</span>
+        </label>
         <div className="flex flex-wrap items-center gap-2">
           <p className="mr-auto text-[11px] text-studio-muted">Runs on the GPU. Longer tracks take longer; you can leave this page while it works.</p>
           <Button type="button" variant="primary" disabled={busy} loading={split.isPending} onClick={go}>
@@ -224,6 +230,33 @@ function SplitResults({ split, heading, handlers }: { split: StemSplit; heading?
           </li>
         ))}
       </ul>
+      {split.lyrics && <SplitLyrics text={split.lyrics} />}
     </section>
+  )
+}
+
+function SplitLyrics({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+  const copy = () => {
+    navigator.clipboard?.writeText(text).then(
+      () => {
+        setCopied(true)
+        announce('Lyrics copied.')
+      },
+      () => announce("Couldn't copy; select the text instead."),
+    )
+  }
+  return (
+    <div className="flex flex-col gap-1.5 rounded-[6px] border border-studio-border bg-studio-raised p-3">
+      <div className="flex items-center gap-2">
+        <span className="section-label mr-auto">Lyrics heard on the vocals</span>
+        <Button type="button" size="sm" variant="secondary" onClick={copy}>
+          {copied ? 'Copied' : 'Copy'}
+        </Button>
+      </div>
+      <p dir="auto" className="whitespace-pre-line text-body">
+        {text}
+      </p>
+    </div>
   )
 }

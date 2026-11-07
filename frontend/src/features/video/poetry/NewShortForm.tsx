@@ -9,7 +9,8 @@ import { SwitchRow } from '@/components/studio/switch-row'
 import { AerabButton } from '@/components/text/AerabButton'
 import { useStudioCharacters } from '@/hooks/useCharacterStudio'
 import { useCreatePoetry } from '@/hooks/usePoetry'
-import { IMAGE_MODELS, POETRY_LANGUAGES, type PoetryAspect, type PoetryCreate } from '@/lib/poetry'
+import { useSongVoices } from '@/hooks/useStems'
+import { CHILD_VOCALS, IMAGE_MODELS, POETRY_LANGUAGES, type PoetryAspect, type PoetryCreate, type PoetryVocal } from '@/lib/poetry'
 import { announce } from '@/stores/ui'
 
 const SELECT = 'h-8 w-full rounded-[6px] border border-studio-border-strong bg-studio-raised px-2 text-body focus-visible:outline-2 focus-visible:outline-studio-accent'
@@ -22,6 +23,7 @@ export function NewShortForm() {
   const create = useCreatePoetry()
   const chars = useStudioCharacters()
   const [own, setOwn] = useState(false)
+  const sung = useSongVoices().data?.available === true
   const [f, setF] = useState({
     title: '',
     topic: '',
@@ -29,7 +31,7 @@ export function NewShortForm() {
     language: 'ur',
     mood: '',
     style: '',
-    vocal: 'female' as 'female' | 'male',
+    vocal: 'female' as PoetryVocal,
     length_s: 60,
     character_id: '',
     character: '',
@@ -119,9 +121,15 @@ export function NewShortForm() {
         </div>
         <div className="flex flex-col gap-1">
           <Label htmlFor={id('vocal')}>Voice</Label>
-          <select id={id('vocal')} className={SELECT} value={f.vocal} onChange={(e) => set('vocal', e.target.value as 'female' | 'male')}>
+          <select id={id('vocal')} className={SELECT} value={f.vocal} onChange={(e) => set('vocal', e.target.value as PoetryVocal)}>
             <option value="female">Female</option>
             <option value="male">Male</option>
+            {sung &&
+              CHILD_VOCALS.map((v) => (
+                <option key={v.value} value={v.value}>
+                  {v.label}
+                </option>
+              ))}
           </select>
         </div>
         <div className="flex flex-col gap-1">

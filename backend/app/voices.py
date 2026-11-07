@@ -379,6 +379,21 @@ def is_gallery(voice: VoiceProfile | None) -> bool:
 
 # ---------------------------------------------------------------- speaking
 
+def voice_spec(db: Session, voice: VoiceProfile) -> dict:
+    """What a speech job (or a song sung in this voice) needs to know about the voice."""
+    spec: dict = {"kind": voice.kind, "name": voice.name}
+    if voice.kind == "clone":
+        g = db.get(Generation, voice.ref_generation_id or "")
+        if g is None or not g.file_path:
+            raise HTTPException(422, f"The reference clip of “{voice.name}” is gone")
+        spec.update(ref_file=g.file_path, ref_text=voice.ref_text or "")
+    elif voice.kind == "design":
+        spec["design"] = voice.design
+    else:
+        spec["preset"] = (voice.preset or {}).get("id")
+    return spec
+
+
 def queue_speech(db: Session, cur, body, *, flow: str = "speak", seed: int | None = None,
                  home: str | None = None) -> dict:
     """Validate a speak request and queue its takes. `body` is a SpeakIn (or the design preview's
@@ -418,16 +433,7 @@ def queue_speech(db: Session, cur, body, *, flow: str = "speak", seed: int | Non
 
     vspec: dict = {"kind": None}
     if voice is not None:
-        vspec = {"kind": voice.kind, "name": voice.name}
-        if voice.kind == "clone":
-            g = db.get(Generation, voice.ref_generation_id or "")
-            if g is None or not g.file_path:
-                raise HTTPException(422, f"The reference clip of “{voice.name}” is gone")
-            vspec.update(ref_file=g.file_path, ref_text=voice.ref_text or "")
-        elif voice.kind == "design":
-            vspec["design"] = voice.design
-        else:
-            vspec["preset"] = (voice.preset or {}).get("id")
+        vspec = voice_spec(db, voice)
     elif design is not None:
         design = {"description": " ".join(design["description"].split()),
                   "seed": design.get("seed") if design.get("seed") is not None else new_seed(), "engine": e.id}
