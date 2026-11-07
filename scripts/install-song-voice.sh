@@ -76,14 +76,22 @@ if [[ -n $comfy ]]; then
   sleep 3
 fi
 set +e
-(cd "$SRC" && CUDA_VISIBLE_DEVICES="${GPU:-0}" "$DIR/bin/python" inference.py --source "$tmp/src.wav" \
-  --target "$tmp/ref.wav" --output "$tmp/out" --diffusion-steps 4 --f0-condition True --auto-f0-adjust False \
-  --semi-tone-shift 0 --fp16 True) > "$tmp/log" 2>&1
+# through the same shim the worker uses: torchaudio's FFmpeg writer crashes against FFmpeg 8 half way
+# through the .wav, so the shim writes it with soundfile
+shim="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/backend/runners/seedvc_run.py"
+(cd "$SRC" && CUDA_VISIBLE_DEVICES="${GPU:-0}" TORIO_USE_FFMPEG=0 "$DIR/bin/python" "$shim" inference.py \
+  --source "$tmp/src.wav" --target "$tmp/ref.wav" --output "$tmp/out" --diffusion-steps 4 --f0-condition True \
+  --auto-f0-adjust False --semi-tone-shift 0 --fp16 True) > "$tmp/log" 2>&1
 rc=$?
 set -e
-# some builds crash on the way out after the file is written; the file is what counts
-if ls "$tmp/out"/*.wav >/dev/null 2>&1; then
-  if (( rc )); then echo "    OK: Seed-VC converts (it exited with $rc after writing)"; else echo "    OK: Seed-VC converts"; fi
+# a file with a header and no audio is a failure too
+out=$(ls "$tmp/out"/*.wav 2>/dev/null | head -n1)
+frames=0
+if [[ -n $out ]]; then
+  frames=$("$DIR/bin/python" -c 'import sys, soundfile as sf; print(sf.info(sys.argv[1]).frames)' "$out" 2>/dev/null || echo 0)
+fi
+if (( frames > 1000 )); then
+  echo "    OK: Seed-VC converts ($frames samples)"
 else
   tail -n 15 "$tmp/log"
   echo "!! no output from Seed-VC (exit $rc)"

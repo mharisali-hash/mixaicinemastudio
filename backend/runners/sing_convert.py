@@ -21,16 +21,27 @@ def run(job: dict) -> dict:
     tmp = tempfile.mkdtemp(prefix="seedvc-")
     try:
         rio.progress(0.05, "Loading the singing voice model")
-        cmd = [sys.executable, "inference.py", "--source", job["source"], "--target", job["target"],
+        # seedvc_run.py writes the result with soundfile; torchaudio's FFmpeg writer crashes on the server
+        shim = os.path.join(os.path.dirname(os.path.abspath(__file__)), "seedvc_run.py")
+        cmd = [sys.executable, shim, "inference.py", "--source", job["source"], "--target", job["target"],
                "--output", tmp, "--diffusion-steps", str(job.get("steps") or 30), "--length-adjust", "1.0",
                "--inference-cfg-rate", "0.7", "--f0-condition", "True", "--auto-f0-adjust", "False",
                "--semi-tone-shift", str(job.get("shift") or 0), "--fp16", "True"]
+        env = {**os.environ, "TORIO_USE_FFMPEG": "0"}
         # its chatter goes to our stderr, which the worker keeps for the error message
-        done = subprocess.run(cmd, cwd=repo, stdout=sys.stderr, stderr=sys.stderr)
+        done = subprocess.run(cmd, cwd=repo, stdout=sys.stderr, stderr=sys.stderr, env=env)
         made = sorted(glob.glob(os.path.join(tmp, "*.wav")), key=os.path.getmtime)
-        # it has been seen to crash on the way out after writing; the file is what counts
         if not made:
             raise RuntimeError(f"Seed-VC wrote no audio (exit code {done.returncode})")
+        import soundfile as sf
+
+        # a crash half way through leaves a header and no audio; that is a failure, not a song
+        try:
+            frames = sf.info(made[-1]).frames
+        except Exception:  # noqa: BLE001
+            frames = 0
+        if frames < 1000:
+            raise RuntimeError(f"Seed-VC's output is empty or broken (exit code {done.returncode})")
         os.makedirs(os.path.dirname(job["out"]) or ".", exist_ok=True)
         shutil.move(made[-1], job["out"])
         rio.progress(1.0, "Sung")
