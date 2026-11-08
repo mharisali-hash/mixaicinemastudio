@@ -136,6 +136,13 @@ import type {
   VPEstimate,
   VPQuality,
   VPRegenerate,
+  ModLogRow,
+  ModPerson,
+  Notice,
+  ReviewItem,
+  ReviewState,
+  RightsOverview,
+  UserRights,
 } from './types'
 import type { BrandKit, BrandKitPatch, LogoRevealRequest, PreviewKind } from './brand'
 import type { CameraPreset } from './camera'
@@ -261,6 +268,7 @@ const get = <T>(path: string, query?: Query) => request<T>('GET', path, undefine
 const post = <T>(path: string, body?: unknown) => request<T>('POST', path, body ?? {})
 const patch = <T>(path: string, body: unknown) => request<T>('PATCH', path, body)
 const del = (path: string) => request<void>('DELETE', path)
+const put = <T>(path: string, body: unknown) => request<T>('PUT', path, body)
 
 export async function postBlob(path: string, body: unknown): Promise<Blob> {
   let res: Response
@@ -428,10 +436,37 @@ export const api = {
     usage: (days = 30, userId = '') => get<UsageReport>('/admin/usage', { days, user_id: userId }),
     usageCsvUrl: (days = 30, userId = '') => `${API_BASE}/admin/usage.csv?days=${days}${userId ? `&user_id=${encodeURIComponent(userId)}` : ''}`,
     audit: (action = '', q = '') => get<AuditRow[]>('/admin/audit', { action, q }),
+    // contract v42: Admin › Rights
+    rights: () => get<RightsOverview>('/admin/rights'),
+    release: (kind: 'feature' | 'model', key: string) => post<unknown>('/admin/rights/release', { kind, key }),
+    withdraw: (kind: 'feature' | 'model', key: string) => post<unknown>('/admin/rights/withdraw', { kind, key }),
+    userRights: (id: string) => get<UserRights>(`/admin/users/${id}/rights`),
+    setUserRights: (id: string, body: { features: Record<string, boolean | null>; models: Record<string, boolean | null> }) =>
+      put<UserRights>(`/admin/users/${id}/rights`, body),
+    setStaff: (id: string, body: { staff_role: 'manager' | null; manager_scope: 'site' | 'team'; team: string[] }) =>
+      put<UserRights>(`/admin/users/${id}/staff`, body),
   },
   // contract v39: your own package and GPU meter
   account: {
     usage: () => get<Usage>('/account/usage'),
+    // contract v42: what a moderator told you
+    notices: () => get<Notice[]>('/account/notices'),
+    ackNotice: (id: string) => post<void>(`/account/notices/${id}/ack`),
+  },
+  // contract v42: admins and managers; everyone else gets 404
+  moderation: {
+    items: (q: { user?: string; kind?: string; state?: ReviewState; q?: string; since?: string; until?: string; before?: string; limit?: number }) =>
+      get<{ items: ReviewItem[]; next: string | null }>('/moderation/items', q),
+    reviewed: (ids: string[]) => post<{ reviewed: number }>('/moderation/items/reviewed', { ids }),
+    remove: (id: string, body: { reason: string; warn: boolean; email: boolean }) => post<ReviewItem>(`/moderation/items/${id}/remove`, body),
+    restore: (id: string) => post<ReviewItem>(`/moderation/items/${id}/restore`),
+    people: (q = '', status: 'all' | 'warned' | 'blocked' = 'all') =>
+      get<{ warn_limit: number; users: ModPerson[] }>('/moderation/users', { q, status }),
+    warn: (id: string, body: { reason: string; item_id?: string; email: boolean }) =>
+      post<{ warnings: number; warn_limit: number }>(`/moderation/users/${id}/warn`, body),
+    block: (id: string, body: { reason: string; email: boolean }) => post<unknown>(`/moderation/users/${id}/block`, body),
+    unblock: (id: string, body: { reason?: string; email: boolean }) => post<unknown>(`/moderation/users/${id}/unblock`, body),
+    log: () => get<ModLogRow[]>('/moderation/log'),
   },
   // contract v27: browser session only; the server refuses these with a token
   tokens: {

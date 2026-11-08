@@ -29,6 +29,11 @@ const FEATURES: { key: FeatureKey; label: string }[] = [
   { key: 'stories', label: 'Stories' },
   { key: '3d', label: '3D Studio' },
   { key: 'api', label: 'API and MCP' },
+  // contract v42; a studio that isn't released yet stays off whatever this says (Admin › Rights)
+  { key: 'song_voices', label: 'Song voices' },
+  { key: 'presenter', label: 'Presenter Video' },
+  { key: 'print', label: 'Print Studio' },
+  { key: 'bulk_edit', label: 'Bulk edit' },
 ]
 
 const MODEL_TYPES: { type: ModelType; label: string }[] = [

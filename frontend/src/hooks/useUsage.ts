@@ -29,6 +29,21 @@ export function useFeature(key: FeatureKey) {
   return data?.features?.[key] !== false
 }
 
+// studios nobody had before rights existed (contract v42) stay hidden until the server says they're on;
+// everything else counts as on until it answers, as useFeature does
+const OFF_UNTIL_TOLD: FeatureKey[] = ['print', 'presenter', 'bulk_edit', 'implant']
+
+/** allows(feature) for hiding what the plan doesn't have; no feature means always shown. */
+export function useAllows() {
+  const { data } = useUsage()
+  const { data: me } = useMe()
+  return (key?: FeatureKey) => {
+    if (!key || me?.admin) return true
+    const said = data?.features?.[key]
+    return said === undefined ? !OFF_UNTIL_TOLD.includes(key) : said
+  }
+}
+
 export const fmtMinutes = (n: number) => n.toLocaleString('en-GB', { maximumFractionDigits: n < 10 ? 1 : 0 })
 
 export const fmtClock = (iso: string | null | undefined) =>

@@ -167,3 +167,21 @@ def test_staff_role_is_admin_only_and_checked(client, people):
     assert r.status_code == 422
     admin_id = client.get("/api/auth/me").json()["id"]
     assert client.put(f"/api/admin/users/{admin_id}/staff", json={"staff_role": "manager"}).status_code == 422
+
+
+def test_admin_work_is_never_shown_to_anyone_else(client, people, login):  # noqa: F811
+    # owner's rule (8 Nov): an admin's generations stay private to that admin, managers included
+    ids, c = people
+    mine = _upload(client)
+    for who in ("mo", "tess"):
+        listed = c[who].get("/api/moderation/items?state=all").json()["items"]
+        assert mine["id"] not in {i["id"] for i in listed}
+        for tail in ("thumb", "file"):
+            assert c[who].get(f"/api/moderation/items/{mine['id']}/{tail}").status_code == 404
+        assert c[who].post(f"/api/moderation/items/{mine['id']}/remove", json={"reason": "nope"}).status_code == 404
+        assert c[who].get(f"/api/media/{mine['id']}").status_code == 404
+    # nor to another admin through the review screens
+    make_user("ada@example.com", "Ada", admin=True)
+    ada = login({"email": "ada@example.com", "password": PW})
+    assert mine["id"] not in {i["id"] for i in ada.get("/api/moderation/items?state=all").json()["items"]}
+    assert ada.get(f"/api/moderation/items/{mine['id']}/thumb").status_code == 404

@@ -16,6 +16,7 @@ import type { AdminUser, AdminUserDetail, AdminUserPatch } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { Notice } from '@/features/auth/AuthLayout'
 import { announce } from '@/stores/ui'
+import { UserRightsSection } from './UserRightsSection'
 import { PayBadge, SubBadge, day, endOfDay, minutes, pkr, rupees, startOfDay, usePackages, when } from './shared'
 
 function useAdminAction<T>(fn: (arg: T) => Promise<unknown>, done: string) {
@@ -492,6 +493,9 @@ export function UserDrawer({ user, self, onClose, onPatch }: { user: AdminUser |
             ) : detail.data ? (
               <>
                 <Billing user={user} detail={detail.data} />
+                <Section title="Rights">
+                  <UserRightsSection user={user} />
+                </Section>
                 <Section title="Recent jobs">
                   <RecentJobs detail={detail.data} />
                 </Section>

@@ -50,7 +50,7 @@ import {
 } from 'lucide-react'
 
 import { FALLBACK_MODELS } from './models'
-import type { ModelBadgeId, ModelInfo, ModelType } from './types'
+import type { FeatureKey, ModelBadgeId, ModelInfo, ModelType } from './types'
 
 // docs/design/navigation.md, revision 2. Only models wired into the backend are listed.
 
@@ -63,6 +63,8 @@ export interface Feature {
   to: string
   icon: LucideIcon
   disabled?: boolean
+  // contract v42: hidden when the person's plan doesn't have this studio
+  feature?: FeatureKey
 }
 
 export interface Model {
@@ -91,6 +93,7 @@ export interface RailItem {
   icon: LucideIcon
   to: string
   menu?: MenuSection
+  feature?: FeatureKey
 }
 
 const IMAGE_MENU: MenuSection = {
@@ -100,7 +103,7 @@ const IMAGE_MENU: MenuSection = {
     { id: 'edit', title: 'Edit Image', description: 'Change an image with words', to: '/image/edit', icon: Brush },
     { id: 'img2img', title: 'Image to Image', description: 'Restyle or vary your picture', to: '/image/img2img', icon: Shuffle },
     { id: 'control', title: 'Sketch, depth & pose', description: 'Your layout, a new picture', to: '/image/control', icon: PenLine },
-    { id: 'ads', title: 'Ad Studio', description: 'Finished ads with your brand', to: '/image/ads', icon: Megaphone },
+    { id: 'ads', title: 'Ad Studio', description: 'Finished ads with your brand', to: '/image/ads', icon: Megaphone, feature: 'ads' },
     { id: 'refs', title: 'References', description: 'Keep a face, product or style', to: '/image/references', icon: Layers },
     { id: 'upscale', title: 'Image Upscale', description: 'Sharper, bigger, 2× to 4K', to: '/image/upscale', icon: ImageUpscale },
     { id: 'studio', title: 'Photo Studio', description: 'Develop, restore, cut-out', to: '/image/studio', icon: Aperture },
@@ -121,8 +124,8 @@ const VIDEO_MENU: MenuSection = {
     { id: 'img2vid', title: 'Image to Video', description: 'Animate your picture', to: '/video/img2vid', icon: Film },
     { id: 'quick', title: 'Quick Video', description: 'One prompt, a finished video', to: '/video/quick', icon: Wand2 },
     { id: 'projects', title: 'Studio Projects', description: 'Script, cast, storyboard, render', to: '/video/projects', icon: Clapperboard },
-    { id: 'poetry', title: 'Poetry Short', description: 'A sung poem with its verses on screen', to: '/video/poetry', icon: Feather },
-    { id: 'presenter', title: 'Presenter Video', description: 'Your character presents a script to camera', to: '/video/presenter', icon: Presentation },
+    { id: 'poetry', title: 'Poetry Short', description: 'A sung poem with its verses on screen', to: '/video/poetry', icon: Feather, feature: 'poetry' },
+    { id: 'presenter', title: 'Presenter Video', description: 'Your character presents a script to camera', to: '/video/presenter', icon: Presentation, feature: 'presenter' },
     { id: 'templates', title: 'Prompt templates', description: 'Product ad, documentary, teaser…', to: '/video/prompt-templates', icon: LayoutTemplate },
     { id: 'upscale', title: 'Video Upscale', description: 'Sharper video, up to 4K', to: '/video/upscale', icon: Maximize2 },
     { id: 'library', title: 'Library', description: 'Every finished video', to: '/video/library', icon: Film },
@@ -149,7 +152,7 @@ const AUDIO_MENU: MenuSection = {
     { id: 'score', title: 'Score a Clip', description: 'Mix music and effects under a video', to: '/audio/score', icon: AudioWaveform },
     { id: 'stems', title: 'Split a song', description: 'Upload a song: get the vocals and the music as separate tracks', to: '/audio/stems', icon: SquareSplitHorizontal },
     { id: 'transcribe', title: 'Transcribe', description: 'Timed text, SRT and VTT subtitles', to: '/audio/transcribe', icon: Captions },
-    { id: 'dub', title: 'Dub a video', description: 'Translate and re-voice, Urdu and more', to: '/audio/dub', icon: Languages },
+    { id: 'dub', title: 'Dub a video', description: 'Translate and re-voice, Urdu and more', to: '/audio/dub', icon: Languages, feature: 'dub' },
     { id: 'templates', title: 'Prompt templates', description: 'Qawwali, tense score, rain…', to: '/audio/prompt-templates', icon: LayoutTemplate },
     { id: 'library', title: 'Library', description: 'Every song, cue and effect', to: '/audio/library', icon: Library },
   ],
@@ -185,7 +188,7 @@ const UPSCALE_MENU: MenuSection = {
 const ASSETS_MENU: MenuSection = {
   title: 'Assets',
   features: [
-    { id: 'characters', title: 'Characters', description: 'Character Studio: shared cast and sheets', to: '/characters', icon: Users },
+    { id: 'characters', title: 'Characters', description: 'Character Studio: shared cast and sheets', to: '/characters', icon: Users, feature: 'character' },
     { id: 'locations', title: 'Locations', description: 'Places from your projects', to: '/assets#locations', icon: MapPin },
     { id: 'uploads', title: 'Uploads', description: 'Images and videos you brought in', to: '/assets#uploads', icon: FolderUp },
     { id: 'loras', title: 'LoRAs', description: 'Custom styles and faces · later', to: '/assets#loras', icon: Boxes, disabled: true },
@@ -199,14 +202,14 @@ export const RAIL_ITEMS: RailItem[] = [
   { id: 'assets', label: 'Assets', icon: UserRound, to: '/assets', menu: ASSETS_MENU },
   { id: 'brand', label: 'Brand Kits', icon: Stamp, to: '/brand-kits' },
   { id: 'photos', label: 'Photos', icon: Camera, to: '/photos' },
-  { id: 'image', label: 'Image', icon: ImageIcon, to: '/image/generate', menu: IMAGE_MENU },
-  { id: 'video', label: 'Video', icon: Clapperboard, to: '/video/quick', menu: VIDEO_MENU },
-  { id: 'audio', label: 'Audio', icon: Music, to: '/audio/song', menu: AUDIO_MENU },
-  { id: 'podcast', label: 'Podcast Studio', icon: Podcast, to: '/podcast', menu: PODCAST_MENU },
+  { id: 'image', label: 'Image', icon: ImageIcon, to: '/image/generate', menu: IMAGE_MENU, feature: 'image' },
+  { id: 'video', label: 'Video', icon: Clapperboard, to: '/video/quick', menu: VIDEO_MENU, feature: 'video' },
+  { id: 'audio', label: 'Audio', icon: Music, to: '/audio/song', menu: AUDIO_MENU, feature: 'audio' },
+  { id: 'podcast', label: 'Podcast Studio', icon: Podcast, to: '/podcast', menu: PODCAST_MENU, feature: 'podcast' },
   // contract-v25: a studio of its own, not a menu under Video
-  { id: 'characters', label: 'Characters', icon: UsersRound, to: '/characters' },
+  { id: 'characters', label: 'Characters', icon: UsersRound, to: '/characters', feature: 'character' },
   // contract v40: picture to 3D model, a studio of its own
-  { id: '3d', label: '3D', icon: Box, to: '/3d' },
+  { id: '3d', label: '3D', icon: Box, to: '/3d', feature: '3d' },
   { id: 'upscale', label: 'Upscale', icon: ImageUpscale, to: '/image/upscale', menu: UPSCALE_MENU },
   { id: 'queue', label: 'Queue', icon: ListOrdered, to: '/queue' },
 ]
@@ -214,6 +217,8 @@ export const RAIL_ITEMS: RailItem[] = [
 export const SETTINGS_ITEM: RailItem = { id: 'settings', label: 'Settings', icon: Settings, to: '/settings' }
 // contract v38: only rendered for admins
 export const ADMIN_ITEM: RailItem = { id: 'admin', label: 'Admin', icon: ShieldUser, to: '/admin' }
+// contract v42: a manager's way into the same section, which shows them only the moderation pages
+export const MODERATION_ITEM: RailItem = { id: 'admin', label: 'Moderation', icon: ShieldUser, to: '/admin/review' }
 // contract v41: Print Studio, admins only too
 export const PRINT_ITEM: RailItem = { id: 'print', label: 'Print Studio', icon: Printer, to: '/admin/print' }
 // M22: admins, plus surgeons an admin has granted it to
@@ -340,8 +345,45 @@ const TITLES: [RegExp, string][] = [
   [/^\/admin\/audit/, 'Audit log'],
   [/^\/admin\/print/, 'Print Studio'],
   [/^\/admin\/bulk/, 'Bulk'],
+  [/^\/admin\/rights/, 'Rights'],
+  [/^\/admin\/review/, 'Review'],
+  [/^\/admin\/people/, 'People'],
+  [/^\/admin\/moderation-log/, 'Moderation log'],
   [/^\/clinic\/implant/, 'Implant Preview'],
   [/^\/admin$/, 'Admin'],
 ]
 
 export const pageTitle = (pathname: string) => TITLES.find(([re]) => re.test(pathname.replace(/(.)\/+$/, '$1')))?.[1] ?? 'Jafat AI Studio'
+
+// contract v42: the studios behind each part of the app. A direct link to one the plan doesn't have shows a
+// calm note instead of the page (the server refuses its changes either way). Longest prefix first.
+const FEATURE_PATHS: [string, FeatureKey][] = [
+  ['/image/ads', 'ads'],
+  ['/video/poetry', 'poetry'],
+  ['/video/presenter', 'presenter'],
+  ['/audio/podcast', 'podcast'],
+  ['/podcast', 'podcast'],
+  ['/audio/dub', 'dub'],
+  ['/characters', 'character'],
+  ['/3d', '3d'],
+  ['/image/upscale', 'image'],
+  ['/video/upscale', 'video'],
+  ['/image', 'image'],
+  ['/video', 'video'],
+  ['/audio', 'audio'],
+  ['/admin/print', 'print'],
+]
+
+export function featureForPath(pathname: string): FeatureKey | null {
+  const p = pathname.replace(/\/+$/, '')
+  return FEATURE_PATHS.find(([prefix]) => p === prefix || p.startsWith(prefix + '/'))?.[1] ?? null
+}
+
+/** The menus without the studios this person can't use. */
+export function allowedMenus(menus: Record<MenuId, MenuSection>, allows: (f?: FeatureKey) => boolean): Record<MenuId, MenuSection> {
+  const out = {} as Record<MenuId, MenuSection>
+  for (const [id, section] of Object.entries(menus) as [MenuId, MenuSection][]) {
+    out[id] = { ...section, features: section.features.filter((f) => allows(f.feature)) }
+  }
+  return out
+}

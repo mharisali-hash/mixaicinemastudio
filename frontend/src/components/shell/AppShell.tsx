@@ -13,6 +13,8 @@ import { Rail } from './Rail'
 import { BottomBar } from './BottomBar'
 import { Toaster } from './Toaster'
 import { VerifyBanner } from './VerifyBanner'
+import { NoticeBanner } from './NoticeBanner'
+import { FeatureGate } from './FeatureGate'
 
 function LiveAnnouncer() {
   const { text, n } = useUi((s) => s.announcement)
@@ -48,9 +50,12 @@ export function AppShell() {
         className="flex min-w-0 flex-1 flex-col"
       >
         <VerifyBanner />
+        <NoticeBanner />
         <TopBar />
         <div className="min-h-0 flex-1">
-          <Outlet />
+          <FeatureGate>
+            <Outlet />
+          </FeatureGate>
         </div>
         {mobile && <BottomBar />}
       </Tabs>

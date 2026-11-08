@@ -3,7 +3,8 @@ import { Link, useLocation } from 'react-router'
 import { Tooltip } from '@/components/ui/tooltip'
 import { useConnections } from '@/hooks/useConnections'
 import { useMe } from '@/hooks/useAuth'
-import { activeRail, ADMIN_ITEM, IMPLANT_ITEM, PRINT_ITEM, RAIL_ITEMS, SETTINGS_ITEM, type MenuId, type RailId, type RailItem } from '@/lib/nav'
+import { useAllows } from '@/hooks/useUsage'
+import { activeRail, ADMIN_ITEM, IMPLANT_ITEM, MODERATION_ITEM, PRINT_ITEM, RAIL_ITEMS, SETTINGS_ITEM, type MenuId, type RailId, type RailItem } from '@/lib/nav'
 import { cn } from '@/lib/utils'
 import { StatusDot } from './ConnectionStatus'
 import { JobsTray } from './JobsTray'
@@ -42,6 +43,8 @@ export function Rail() {
   const conn = useConnections()
   const { data: me } = useMe()
   const menus = useMenus()
+  const allows = useAllows()
+  const staffItem = me?.admin ? ADMIN_ITEM : me?.staff === 'manager' ? MODERATION_ITEM : null
   // set on pointerdown so the click handler knows mouse vs touch vs keyboard
   const [pointer, setPointer] = useState<string | null>(null)
 
@@ -67,7 +70,7 @@ export function Rail() {
       </Link>
 
       <ul className="flex flex-col items-center gap-1">
-        {RAIL_ITEMS.map((item) => {
+        {RAIL_ITEMS.filter((item) => allows(item.feature)).map((item) => {
           const on = active === item.id
           if (item.id === 'queue') {
             return (
@@ -161,7 +164,7 @@ export function Rail() {
             <Face item={IMPLANT_ITEM} />
           </Link>
         )}
-        {me?.admin && (
+        {allows('print') && (
           <Link
             to={PRINT_ITEM.to}
             aria-current={active === 'print' ? 'page' : undefined}
@@ -173,16 +176,16 @@ export function Rail() {
             <Face item={PRINT_ITEM} />
           </Link>
         )}
-        {me?.admin && (
+        {staffItem && (
           <Link
-            to={ADMIN_ITEM.to}
+            to={staffItem.to}
             aria-current={active === 'admin' ? 'page' : undefined}
-            aria-label={ADMIN_ITEM.label}
+            aria-label={staffItem.label}
             className={cn(ITEM, active === 'admin' && ACTIVE)}
             onPointerEnter={() => menu.open && menu.hoverLeave()}
           >
             <Indicator on={active === 'admin'} />
-            <Face item={ADMIN_ITEM} />
+            <Face item={staffItem} />
           </Link>
         )}
         <Tooltip

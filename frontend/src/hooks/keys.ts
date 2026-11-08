@@ -16,6 +16,13 @@ export const qk = {
   adminPayment: (id: string) => ['admin-payments', 'detail', id] as const,
   adminUsage: (days: number, userId: string) => ['admin-usage', days, userId] as const,
   adminAudit: (action: string, q: string) => ['admin-audit', action, q] as const,
+  // contract v42
+  adminRights: ['admin-rights'] as const,
+  userRights: (id: string) => ['admin-users', 'rights', id] as const,
+  notices: ['account-notices'] as const,
+  review: (filters: object) => ['moderation', 'items', filters] as const,
+  modPeople: (q: string, status: string) => ['moderation', 'people', q, status] as const,
+  modLog: ['moderation', 'log'] as const,
   system: ['system-status'] as const,
   projects: ['projects'] as const,
   project: (id: string) => ['projects', id] as const,

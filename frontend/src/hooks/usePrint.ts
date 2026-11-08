@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
-import { useMe } from '@/hooks/useAuth'
+import { useAllows } from '@/hooks/useUsage'
 import { printApi, printBusy, type DesignPatch, type PrintCreate, type PrintDesign, type PrintJob, type PrintJobType } from '@/lib/print'
 import type { Job } from '@/lib/types'
 import { qk } from './keys'
@@ -11,8 +11,8 @@ export const printKey = (id: string) => ['print', id] as const
 const LIST = ['print', 'list'] as const
 
 export function usePrintList() {
-  const { data: me } = useMe()
-  return useQuery({ queryKey: LIST, queryFn: printApi.list, enabled: !!me?.admin })
+  const allows = useAllows()
+  return useQuery({ queryKey: LIST, queryFn: printApi.list, enabled: allows('print') })
 }
 
 export function usePrintJob(id: string | undefined) {

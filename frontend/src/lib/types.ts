@@ -20,6 +20,9 @@ export interface User {
   verified?: boolean
   // M22: Implant Preview (admins, or granted by one)
   implant?: boolean
+  // contract v42: the staff role, and the hold a moderator put the account under (read-only while set)
+  staff?: 'admin' | 'manager' | null
+  blocked?: { reason: string; at: string } | null
 }
 
 // contract v38
@@ -68,7 +71,10 @@ export interface AdminUserPatch {
 // contract v39: packages, the GPU meter and the admin panel
 export type PackagePeriod = 'day' | 'week' | 'month' | 'year' | 'none'
 export type PackageKind = 'standard' | 'demo' | 'custom'
-export type FeatureKey = 'image' | 'video' | 'audio' | 'character' | 'ads' | 'poetry' | 'podcast' | 'dub' | 'stories' | '3d' | 'api'
+export type FeatureKey =
+  | 'image' | 'video' | 'audio' | 'character' | 'ads' | 'poetry' | 'podcast' | 'dub' | 'stories' | '3d' | 'api'
+  // contract v42
+  | 'song_voices' | 'presenter' | 'print' | 'implant' | 'bulk_edit'
 
 export interface Package {
   id: string
@@ -2096,4 +2102,72 @@ export interface Turntable3DResult {
 export interface Shots3DResult {
   items: MediaItem[]
   ids: string[]
+}
+
+// contract v42: rights and moderation
+export interface RightsOverview {
+  features: { key: FeatureKey; label: string; released: boolean; own_switch: boolean }[]
+  models: { key: string; label: string; type: ModelType; released: boolean }[]
+  packages: { id: string; name: string; kind: PackageKind; custom: boolean; features: Partial<Record<FeatureKey, boolean>>; models: string[] | null }[]
+}
+
+export interface UserRights {
+  user_id: string
+  admin: boolean
+  package: string
+  overrides: { features: Partial<Record<FeatureKey, boolean>>; models: Record<string, boolean> }
+  features: Record<FeatureKey, boolean>
+  models: string[] | null
+  staff_role: 'manager' | null
+  manager_scope: 'site' | 'team'
+  team: string[]
+}
+
+export interface Notice {
+  id: string
+  kind: 'warning' | 'removal' | 'unblock'
+  reason: string
+  item_id: string | null
+  at: string
+}
+
+export type ReviewState = 'queue' | 'reviewed' | 'removed' | 'all'
+
+export interface ReviewItem {
+  id: string
+  kind: 'image' | 'video' | 'audio'
+  origin: string
+  title: string
+  prompt: string
+  media_type: string | null
+  width: number | null
+  height: number | null
+  duration_s: number | null
+  created_at: string
+  owner: { id: string; email: string; name: string }
+  reviewed_at: string | null
+  removed_at: string | null
+  removed_reason: string
+  thumb_url: string | null
+  file_url: string | null
+}
+
+export interface ModPerson {
+  id: string
+  email: string
+  name: string
+  is_active: boolean
+  warnings: number
+  blocked_at: string | null
+  blocked_reason: string
+}
+
+export interface ModLogRow {
+  id: string
+  at: string
+  actor: string
+  action: string
+  target_type: string
+  target_id: string | null
+  detail: Record<string, unknown>
 }

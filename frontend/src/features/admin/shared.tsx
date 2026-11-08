@@ -1,8 +1,9 @@
-import { NavLink, Navigate, Outlet } from 'react-router'
+import { NavLink, Navigate, Outlet, useLocation } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { Badge } from '@/components/ui/badge'
 import { qk } from '@/hooks/keys'
 import { useMe } from '@/hooks/useAuth'
+import { useAllows } from '@/hooks/useUsage'
 import { api } from '@/lib/api'
 import type { PaymentStatus, SubscriptionStatus } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -71,27 +72,45 @@ export function AdminPage({ title, intro, actions, children, id }: { title: stri
   )
 }
 
-const SECTIONS = [
-  { to: '/admin', label: 'Overview', end: true },
-  { to: '/admin/users', label: 'Users' },
-  { to: '/admin/packages', label: 'Packages' },
-  { to: '/admin/subscriptions', label: 'Subscriptions' },
-  { to: '/admin/payments', label: 'Payments' },
-  { to: '/admin/usage', label: 'Usage' },
-  { to: '/admin/audit', label: 'Audit log' },
-  { to: '/admin/print', label: 'Print Studio' },
-  { to: '/admin/bulk', label: 'Bulk' },
+// who sees each page (contract v42): admins all of it, managers only moderation, Print whoever has it
+type Who = 'admin' | 'staff' | 'print'
+const SECTIONS: { to: string; label: string; end?: boolean; who: Who }[] = [
+  { to: '/admin', label: 'Overview', end: true, who: 'admin' },
+  { to: '/admin/users', label: 'Users', who: 'admin' },
+  { to: '/admin/packages', label: 'Packages', who: 'admin' },
+  { to: '/admin/rights', label: 'Rights', who: 'admin' },
+  { to: '/admin/subscriptions', label: 'Subscriptions', who: 'admin' },
+  { to: '/admin/payments', label: 'Payments', who: 'admin' },
+  { to: '/admin/usage', label: 'Usage', who: 'admin' },
+  { to: '/admin/audit', label: 'Audit log', who: 'admin' },
+  { to: '/admin/review', label: 'Review', who: 'staff' },
+  { to: '/admin/people', label: 'People', who: 'staff' },
+  { to: '/admin/moderation-log', label: 'Moderation log', who: 'staff' },
+  { to: '/admin/print', label: 'Print Studio', who: 'print' },
+  { to: '/admin/bulk', label: 'Bulk', who: 'admin' },
 ]
 
-/** The Admin section: its own sub-navigation over each page. Anyone not an admin is sent home. */
+function sectionOf(pathname: string) {
+  const p = pathname.replace(/\/+$/, '')
+  return [...SECTIONS].sort((a, b) => b.to.length - a.to.length).find((s) => p === s.to || p.startsWith(s.to + '/'))
+}
+
+/** The Admin section: its own sub-navigation over each page. Managers get the moderation pages only; anyone
+ * with none of it is sent home. The server answers 404 to whatever they shouldn't reach anyway. */
 export function AdminLayout() {
   const { data: me } = useMe()
-  if (me && !me.admin) return <Navigate to="/" replace />
+  const allows = useAllows()
+  const { pathname } = useLocation()
+  const sees = (who: Who) => !!me?.admin || (who === 'staff' && me?.staff === 'manager') || (who === 'print' && allows('print'))
+  const visible = SECTIONS.filter((s) => sees(s.who))
+  const here = sectionOf(pathname)
+  if (me && !visible.length) return <Navigate to="/" replace />
+  if (me && here && !sees(here.who)) return <Navigate to={visible[0].to} replace />
   return (
     <main data-f6-region tabIndex={-1} className="relative h-full overflow-y-auto focus-visible:outline-none" aria-label="Admin">
       <nav aria-label="Admin sections" className="sticky top-0 z-10 border-b border-studio-border bg-studio-panel/95 px-4 md:px-8">
         <ul className="mx-auto flex max-w-6xl gap-1 overflow-x-auto py-1.5">
-          {SECTIONS.map((s) => (
+          {visible.map((s) => (
             <li key={s.to}>
               <NavLink
                 to={s.to}

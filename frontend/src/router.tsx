@@ -310,6 +310,23 @@ export const shellRoutes: RouteObject[] = [
         const { BulkBatchPage } = await import('@/features/admin/bulk/BulkBatchPage')
         return <BulkBatchPage />
       }),
+      // contract v42: rights (admins), and the moderation pages managers share with admins
+      page('rights', async () => {
+        const { RightsPage } = await import('@/features/admin/RightsPage')
+        return <RightsPage />
+      }),
+      page('review', async () => {
+        const { ReviewPage } = await import('@/features/admin/ModerationPages')
+        return <ReviewPage />
+      }),
+      page('people', async () => {
+        const { PeoplePage } = await import('@/features/admin/ModerationPages')
+        return <PeoplePage />
+      }),
+      page('moderation-log', async () => {
+        const { ModerationLogPage } = await import('@/features/admin/ModerationPages')
+        return <ModerationLogPage />
+      }),
       // contract v41: Print Studio, inside the admin section so its guard covers it
       page('print', async () => {
         const { PrintStudioPage } = await import('@/features/print/PrintStudioPage')
