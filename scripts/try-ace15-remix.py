@@ -14,6 +14,9 @@ Run on the GPU box, from the repo, with the backend's Python:
     backend/.venv/bin/python scripts/try-ace15-remix.py /path/to/song.mp3 --tags "deep house, warm bass"
     backend/.venv/bin/python scripts/try-ace15-remix.py "harbour" --dry-run  # print the graphs, run nothing
 
+    backend/.venv/bin/python scripts/try-ace15-remix.py "jaane jaana" --keep-vocals --tags "..."
+             # only the instrumental is restyled; the original vocals go back on top (needs a vocals split)
+
 A Library song's trials land in the same Library, titled "Trial — …", so they can be played in the browser.
 Every file is also written to remix-trials/<time>/ next to this script's repo.
 """
@@ -195,7 +198,8 @@ def find_song(query: str):
             g = db.get(Generation, item.generation_id) if item.generation_id else None
             path = generation_file(g) if g is not None else None
             if path is not None and path.is_file():
-                return path, {"workspace_id": item.workspace_id, "title": item.title, "folder_id": item.folder_id}
+                return path, {"workspace_id": item.workspace_id, "title": item.title, "folder_id": item.folder_id,
+                              "item_id": item.id, "generation_id": g.id}
         recent = db.scalars(select(MediaItem).where(MediaItem.kind == "audio", MediaItem.generation_id.is_not(None),
                                                     MediaItem.title != "")
                             .order_by(MediaItem.created_at.desc()).limit(15)).all()
@@ -203,6 +207,31 @@ def find_song(query: str):
     head = f"No finished Library song has “{query}” in its title." if query.strip() else "Which song?"
     raise SystemExit(f"{head} The latest audio in the Library:\n{names}\n"
                      "Run again with a few words from one of those titles, in quotes.")
+
+
+def find_stems(src: dict) -> tuple[Path, Path] | None:
+    """The song's vocals and instrumental: the split a Remix job keeps, else a split from the Stems page."""
+    lib, get_settings, SessionLocal, Generation, MediaItem, _, generation_file, _ = _app()
+    cache = get_settings().data_dir / "workspaces" / src["workspace_id"] / "remix" / "stems" / src["generation_id"]
+    if (cache / "vocals.flac").is_file() and (cache / "instrumental.flac").is_file():
+        return cache / "vocals.flac", cache / "instrumental.flac"
+    from sqlalchemy import String, cast, select
+
+    from app.stems import source_tag
+
+    found: dict[str, Path] = {}
+    with SessionLocal() as db:
+        rows = db.scalars(select(MediaItem).where(cast(MediaItem.tags, String).like(f'%"{source_tag(src["item_id"])}"%'))
+                          .order_by(MediaItem.created_at.desc())).all()
+        for item in rows:
+            g = db.get(Generation, item.generation_id) if item.generation_id else None
+            stem = ((g.params if g is not None else None) or {}).get("stem")
+            path = generation_file(g) if g is not None else None
+            if stem in ("vocals", "instrumental") and stem not in found and path is not None and path.is_file():
+                found[stem] = path
+    if len(found) == 2:
+        return found["vocals"], found["instrumental"]
+    return None
 
 
 def to_library(src: dict, path: Path, label: str, tags: str) -> str:
@@ -231,6 +260,21 @@ def to_library(src: dict, path: Path, label: str, tags: str) -> str:
 
 
 # ---------------------------------------------------------------- main
+
+def keep_vocals(vocals: Path, music: Path, dst: Path) -> Path:
+    """The Remix mix: the music ducks a little under the voice. Plain amix when the app can't be loaded."""
+    try:
+        _app()
+        from app import remix
+
+        remix.over(vocals, music, dst, [], 0.0, music_level=0.85)
+    except Exception as e:  # noqa: BLE001
+        print(f"(app mix unavailable, plain mix: {e})")
+        subprocess.run([ffmpeg(), "-y", "-loglevel", "error", "-i", str(vocals), "-i", str(music), "-filter_complex",
+                        "[0:a][1:a]amix=inputs=2:duration=first:normalize=0,loudnorm=I=-14:TP=-1[out]",
+                        "-map", "[out]", "-c:a", "flac", str(dst)], check=True)
+    return dst
+
 
 def analyse(path: Path):
     try:
@@ -267,6 +311,8 @@ def main() -> int:
     ap.add_argument("--url", help="ComfyUI address (default: the app's audio ComfyUI)")
     ap.add_argument("--bpm", type=int)
     ap.add_argument("--key", help='e.g. "A minor"')
+    ap.add_argument("--keep-vocals", action="store_true",
+                    help="restyle only the instrumental and lay the original vocals back on top (needs a split)")
     ap.add_argument("--repaint", action="store_true", help="also try the masked repaint (fails on stock nodes)")
     ap.add_argument("--dry-run", action="store_true", help="print the graphs only")
     args = ap.parse_args()
@@ -280,9 +326,23 @@ def main() -> int:
 
     out = ROOT / "remix-trials" / time.strftime("%Y%m%d-%H%M%S")
     out.mkdir(parents=True, exist_ok=True)
+
+    def cut(src_path: Path, dst: Path) -> Path:
+        subprocess.run([ffmpeg(), "-y", "-loglevel", "error", "-ss", str(args.start), "-t", str(CLIP_S), "-i",
+                        str(src_path), "-vn", "-ac", "2", "-ar", "48000", "-c:a", "flac", str(dst)], check=True)
+        return dst
+
+    cut(path, out / "original_clip.flac")
+    vocals = None
     clip = out / "original_clip.flac"
-    subprocess.run([ffmpeg(), "-y", "-loglevel", "error", "-ss", str(args.start), "-t", str(CLIP_S), "-i", str(path),
-                    "-vn", "-ac", "2", "-ar", "48000", "-c:a", "flac", str(clip)], check=True)
+    if args.keep_vocals:
+        pair = find_stems(src) if src is not None else None
+        if pair is None:
+            raise SystemExit("--keep-vocals needs the song split into vocals and instrumental first: open Audio → Stems, "
+                             "pick the song, Split (vocals + instrumental), then run this again.")
+        vocals = cut(pair[0], out / "vocals_clip.flac")
+        # the music alone is what gets restyled; the vocals never go through the model
+        clip = cut(pair[1], out / "instrumental_clip.flac")
     bpm, key = args.bpm, args.key
     if bpm is None or key is None:
         heard_bpm, heard_key = analyse(clip)
@@ -293,6 +353,10 @@ def main() -> int:
     comfy = Comfy(args.url or comfy_url())
     song = "mixai/remix_trial_source.flac" if args.dry_run else comfy.upload(clip)
     plans = trials(song, args.tags, bpm, key, args.seed, CLIP_S, args.repaint)
+    if vocals is not None:
+        # three strengths of new music under the same vocals; the song's own timbre makes no sense for music alone
+        plans = [(f"new music {d:.2f} + original vocals", restyle_graph(song, args.tags, bpm, key, args.seed, CLIP_S, d))
+                 for d in (0.45, 0.6, 0.75)]
     if args.dry_run:
         for label, g in plans:
             print(f"\n== {label}\n{json.dumps(g, indent=1)}")
@@ -308,16 +372,21 @@ def main() -> int:
                 raise RuntimeError("no audio came back")
             dst = comfy.download(files[0], out / f"{n}_{label.replace(' ', '_').replace('+', 'and')}"
                                  f"{Path(files[0]['filename']).suffix}")
-            line = f"ok    {label:<28} {time.monotonic() - t0:5.1f} s  {dst.name}"
+            if vocals is not None:
+                dst = keep_vocals(vocals, dst, out / f"{n}_mix.flac")
+            line = f"ok    {label:<34} {time.monotonic() - t0:5.1f} s  {dst.name}"
             if src is not None:
                 line += f"\n      in the Library as “{to_library(src, dst, label, args.tags)}”"
             results.append(line)
         except Exception as e:  # noqa: BLE001 - one failed trial says something too
-            results.append(f"FAIL  {label:<28} {e}")
+            results.append(f"FAIL  {label:<34} {e}")
         print(results[-1])
     print(f"\nFiles: {out}")
     print("Listen to each next to original_clip.flac and paste this output back with what you hear:")
-    print("does the restyle keep the melody and the vocals, and which strength sounds best.")
+    if vocals is not None:
+        print("do the original vocals sit in time and in tune with the new music, and which strength sounds best.")
+    else:
+        print("does the restyle keep the melody and the vocals, and which strength sounds best.")
     return 0
 
 
