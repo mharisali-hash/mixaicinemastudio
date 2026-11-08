@@ -8,6 +8,7 @@ from app import thumbs
 from app.config import get_settings
 from app.db import get_db, release
 from app.models import Generation
+from app.moderation import removed_generation, removed_path
 from app.security import CurrentUser, get_current_user
 
 router = APIRouter(tags=["media"])
@@ -40,7 +41,7 @@ def get_thumb(gen_id: str, w: int = Query(thumbs.DEFAULT), db: Session = Depends
     if w not in thumbs.SIZES:
         raise HTTPException(422, f"w must be one of {', '.join(map(str, thumbs.SIZES))}")
     g = db.get(Generation, gen_id)
-    if g is None or g.workspace_id != cur.workspace_id or thumbs.url_for(g) is None:
+    if g is None or g.workspace_id != cur.workspace_id or thumbs.url_for(g) is None or removed_generation(db, g):
         raise HTTPException(404, "Not found")
     data_dir = get_settings().data_dir
     src = resolve_media_path(g.file_path, cur.workspace_id, data_dir)
@@ -58,7 +59,7 @@ def get_thumb(gen_id: str, w: int = Query(thumbs.DEFAULT), db: Session = Depends
 @router.get("/media/{path:path}")
 def get_media(path: str, db: Session = Depends(get_db), cur: CurrentUser = Depends(get_current_user)):
     target = resolve_media_path(path, cur.workspace_id, get_settings().data_dir)
-    if target is None:
+    if target is None or removed_path(db, cur.workspace_id, path):
         raise HTTPException(404, "Not found")
     release(db)
     # mimetypes doesn't know .flac / .m4a everywhere; <audio> wants the real type to start playing

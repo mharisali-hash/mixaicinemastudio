@@ -31,10 +31,16 @@ def wanted(cur: CurrentUser) -> bool | None:
 
 
 def where(model, want: bool | None) -> list:
-    return [] if want is None else [model.via_api == want]
+    out = [] if want is None else [model.via_api == want]
+    # removed by a moderator (contract v42): out of every list, whichever channel asks
+    if hasattr(model, "removed_at"):
+        out.append(model.removed_at.is_(None))
+    return out
 
 
 def keep(row, want: bool | None) -> bool:
+    if getattr(row, "removed_at", None) is not None:
+        return False
     return want is None or bool(getattr(row, "via_api", False)) == want
 
 

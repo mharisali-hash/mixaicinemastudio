@@ -47,6 +47,8 @@ _UUID = re.compile(r"^[0-9a-fA-F-]{36}$")
 
 def _owned_item(db: Session, media_id: str, workspace_id: str) -> MediaItem:
     item = db.get(MediaItem, media_id) if _UUID.match(media_id) else None
+    if item is not None and item.removed_at is not None:
+        raise HTTPException(404, "Media not found")
     if item is None or item.workspace_id != workspace_id:
         if _UUID.match(media_id) and lib.project_row(db, workspace_id, media_id) is not None:
             raise HTTPException(409, "This is a project result; change it inside its project")

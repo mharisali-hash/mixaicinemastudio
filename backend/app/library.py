@@ -384,6 +384,8 @@ def project_row(db: Session, workspace_id: str, gen_id: str) -> tuple[Generation
 
 def detail(db: Session, workspace_id: str, id_: str) -> MediaDetailOut | None:
     item = db.get(MediaItem, id_)
+    if item is not None and item.removed_at is not None:
+        return None
     if item is not None and item.workspace_id == workspace_id:
         versions = db.scalars(select(Generation).where(
             Generation.target_type == "media", Generation.target_id == item.id,

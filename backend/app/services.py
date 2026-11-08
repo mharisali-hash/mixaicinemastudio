@@ -37,7 +37,9 @@ def get_owned(db: Session, model, obj_id: str, workspace_id: str, label: str):
     obj = db.get(model, obj_id)
     # same 404 for "missing" and "someone else's" so ids can't be probed. Implant Preview's photos and results
     # are reached only through /api/implant, never as an ordinary generation
-    if obj is None or obj.workspace_id != workspace_id or getattr(obj, "target_type", "").startswith("implant_"):
+    # a Library item a moderator removed is gone as far as its owner can tell (app.moderation)
+    if (obj is None or obj.workspace_id != workspace_id or getattr(obj, "target_type", "").startswith("implant_")
+            or getattr(obj, "removed_at", None) is not None):
         raise HTTPException(404, f"{label} not found")
     return obj
 

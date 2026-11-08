@@ -131,6 +131,8 @@ class Settings(BaseSettings):
     bulk_in_flight: int = 2
     bulk_disk_reserve_gb: int = 20
     bulk_zip_max_gb: int = 4
+    # contract v42: warnings in 90 days before the people screen suggests a hold (it never holds by itself)
+    moderation_warn_limit: int = 3
     urdu_aerab: bool = True
     aerab_languages: str = "ur,ar,fa,ps,sd,pnb"
     # whether ACE-Step sees the aerab on Urdu lyrics; the lyrics keep them either way. Off is the A/B for
