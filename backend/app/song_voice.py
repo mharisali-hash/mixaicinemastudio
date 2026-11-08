@@ -76,6 +76,11 @@ def plan(db: Session, workspace_id: str, vocal: str, voice_id: str | None, lyric
         return {"vocal": vocal, "base": one["base"], "name": f"{one['name']} with a children's group",
                 "lead": one["targets"][0], "lead_name": one["name"], "targets": _choir(group_size),
                 "group_size": 5 if group_size >= 5 else 3, "lines": lines, "lyrics": clean}
+    return targets_for(db, workspace_id, vocal, voice_id)
+
+
+def targets_for(db: Session, workspace_id: str, vocal: str, voice_id: str | None) -> dict:
+    """Who sings, for one voice or the choir; a remix (app.remix) sings words already there, so no lyrics."""
     if vocal == "voice":
         v = voices.find_voice(db, workspace_id, voice_id)
         if v is None:

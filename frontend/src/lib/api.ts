@@ -152,6 +152,7 @@ import type { RenderResponse, Script, ScriptCreate, ScriptPatch, ScriptSummary, 
 import type { Dub, DubCreate, DubExportBody, DubPatch, DubSummary, Transcript, TranscriptSummary } from './dub'
 import type { GalleryQuery, GalleryResponse, GallerySample } from './gallery'
 import type { StemsMode, StemsResponse } from './stems'
+import type { RemixAnalysis, RemixesResponse, RemixRecipes, RemixRequest } from './remix'
 import type { Ad, EditOp, Episode, EpisodeCreate, EpisodePatch, EpisodeSummary, InsertBody, PublishBody, Show, ShowCreate, ShowPatch, VideoBody } from './podcast'
 import type {
   AutoResult, Background, Described, DevelopParams, EffectSpec, Edge, ExportFormat, Histogram, ImportResult, Look, PhotoHistory, PhotoSchema, ProfileInfo,
@@ -731,6 +732,11 @@ export const api = {
     // contract-v21
     stems: (id: string, body: { mode: StemsMode; version?: string; lyrics?: boolean }) => post<{ job: Job; items: MediaItem[] }>(`/audio/${id}/stems`, body),
     stemsOf: (id: string) => get<StemsResponse>(`/audio/${id}/stems`),
+    // contract-v43
+    remixRecipes: () => get<RemixRecipes>('/audio/remix/recipes'),
+    remixAnalyse: (id: string) => get<RemixAnalysis>(`/audio/remix/analyse/${id}`),
+    remix: (body: RemixRequest) => post<{ items: MediaItem[]; jobs: Job[] }>('/audio/remix', body),
+    remixesOf: (id: string) => get<RemixesResponse>(`/audio/remix/${id}`),
   },
   voices: {
     list: async (q: VoiceQuery = {}) => listOf(await get<Voice[] | { items: Voice[] }>('/voices', { ...q, starred: q.starred || undefined })),

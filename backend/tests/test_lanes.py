@@ -45,6 +45,8 @@ def test_every_registered_job_type_has_a_lane():
         "voice_transcribe": "audio",  # faster-whisper on whichever GPU worker claims it
         "voice_sample": "audio",  # a gallery voice's sample line through a speech engine
         "audio_stems": "audio",  # audio-separator (RoFormer / Demucs) on whichever GPU worker claims it
+        # Remix: effect versions and medleys are ffmpeg; new beats, voices and mashups split on a GPU first
+        "audio_remix_fx": "general", "audio_remix": "audio",
         "script_mix": "general", "script_stems": "general",  # dialogue: ffmpeg joins of finished takes
         "transcribe": "audio", "transcript_cleanup": "general", "transcript_video": "general",
         "dub_stage": None,  # by payload.stage, below

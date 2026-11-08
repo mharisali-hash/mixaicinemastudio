@@ -30,7 +30,7 @@ VIDEO_JOB_TYPES = frozenset({"upscale"})
 # a story's narration (contract v28) speaks and checks the whole book in one job; a Poetry Short's line
 # timing (contract v33) splits the vocals off its song and listens to them
 AUDIO_JOB_TYPES = frozenset({"voice_transcribe", "transcribe", "voice_sample", "audio_stems", "story_audio",
-                             "poetry_timing"})
+                             "poetry_timing", "audio_remix"})
 # a dub_stage job's lane depends on its payload's stage, so it is set when the job is made (dub_lane)
 DUB_GPU_STAGES = frozenset({"separate", "transcribe", "render", "verify"})
 

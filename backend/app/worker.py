@@ -543,6 +543,13 @@ from app import stems  # noqa: E402
 
 HANDLERS[stems.JOB] = stems.handle
 FINISHED_HOOKS.append(stems.on_job_finished)
+from app import remix  # noqa: E402
+
+# effect versions and medleys are ffmpeg on the general lane; new beats, voices and mashups split on a GPU first
+HANDLERS[remix.FX_JOB] = remix.handle_fx
+HANDLERS[remix.JOB] = remix.handle
+FINISHED_HOOKS.append(remix.on_job_finished)
+CPU_JOB_LEDGER[remix.FX_JOB] = "audio_edit"
 from app.podcast import video as video_podcast, video_stages as video_podcast_stages  # noqa: E402
 
 # the orchestrator only waits on its takes (they bill their own GPU time); the cut is ffmpeg

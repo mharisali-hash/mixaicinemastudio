@@ -178,7 +178,8 @@ def check_minutes(db: Session, user: User, lim: Limits, now: datetime) -> None:
 _PREFIX_FEATURE = (("ad_", "ads"), ("poetry_", "poetry"), ("podcast_", "podcast"), ("video_podcast", "podcast"),
                    ("dub_", "dub"), ("story_", "stories"), ("character_", "character"),
                    ("ai_character", "character"), ("autopilot", "video"), ("reel_", "video"),
-                   ("upscale", "video"), ("presenter", "presenter"))
+                   ("upscale", "video"), ("presenter", "presenter"),
+                   ("audio_remix", "audio"))
 
 
 def _gen(db: Session, gen_id: str | None) -> Generation | None:

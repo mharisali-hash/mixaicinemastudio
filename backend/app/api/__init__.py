@@ -6,6 +6,7 @@ from app.api import dub, transcribe
 from app.api import gallery
 from app.api import podcast
 from app.api import stems
+from app.api import remix
 from app.api import video_podcast
 from app.api import tokens
 from app.api import files
@@ -25,6 +26,8 @@ from app.api import implant
 from app.api import site
 
 router = APIRouter(prefix="/api")
+# before the /audio/{item_id}/... routes, so /audio/remix/recipes is never read as an item id
+router.include_router(remix.router)
 for mod in (auth, system, projects, scenes, shots, characters, character_looks, locations, generations, jobs, events, library, organise, media, ai, reel, quick, catalog, videos, audio, audio_edit, brands, prompts, mentions, photo, looks, photos, gallery, voices):
     # sign-in, the event stream and system checks are for the app itself, not API clients
     router.include_router(mod.router, include_in_schema=mod not in (auth, system, events))
