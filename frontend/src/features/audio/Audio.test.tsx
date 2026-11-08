@@ -439,6 +439,7 @@ describe('Audio navigation', () => {
       ['Editor', '/audio/edit'],
       ['Score a Clip', '/audio/score'],
       ['Split a song', '/audio/stems'],
+      ['Remix a song', '/audio/remix'],
       ['Transcribe', '/audio/transcribe'],
       ['Dub a video', '/audio/dub'],
       ['Prompt templates', '/audio/prompt-templates'],

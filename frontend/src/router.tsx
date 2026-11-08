@@ -189,6 +189,11 @@ export const shellRoutes: RouteObject[] = [
         const { StemsPage } = await import('@/features/audio/stems/StemsPage')
         return <StemsPage />
       }),
+      // contract v43
+      page('remix', async () => {
+        const { RemixPage } = await import('@/features/audio/remix/RemixPage')
+        return <RemixPage />
+      }),
       page('dub', async () => {
         const { DubListPage } = await import('@/features/audio/dub/DubListPage')
         return <DubListPage />

@@ -151,6 +151,7 @@ const AUDIO_MENU: MenuSection = {
     { id: 'editor', title: 'Editor', description: 'Trim, fade, effects, loudness', to: '/audio/edit', icon: Scissors },
     { id: 'score', title: 'Score a Clip', description: 'Mix music and effects under a video', to: '/audio/score', icon: AudioWaveform },
     { id: 'stems', title: 'Split a song', description: 'Upload a song: get the vocals and the music as separate tracks', to: '/audio/stems', icon: SquareSplitHorizontal },
+    { id: 'remix', title: 'Remix a song', description: 'Slowed, lo-fi, a new beat or voice, mashups of 2–3 songs', to: '/audio/remix', icon: Shuffle },
     { id: 'transcribe', title: 'Transcribe', description: 'Timed text, SRT and VTT subtitles', to: '/audio/transcribe', icon: Captions },
     { id: 'dub', title: 'Dub a video', description: 'Translate and re-voice, Urdu and more', to: '/audio/dub', icon: Languages, feature: 'dub' },
     { id: 'templates', title: 'Prompt templates', description: 'Qawwali, tense score, rain…', to: '/audio/prompt-templates', icon: LayoutTemplate },
