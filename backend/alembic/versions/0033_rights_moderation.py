@@ -1,8 +1,8 @@
 """Rights and moderation (contract v42): user rights/staff/block columns, manager_member, user_notice,
 right_release, media_item review and removal columns
 
-Revision ID: 0032
-Revises: 0031
+Revision ID: 0033
+Revises: 0032
 Create Date: 2026-11-08 12:00:00
 
 right_release starts empty; app.rights.ensure_baseline fills it on the first start after this, so every studio
@@ -12,8 +12,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = '0032'
-down_revision = '0031'
+revision = '0033'
+down_revision = '0032'
 branch_labels = None
 depends_on = None
 

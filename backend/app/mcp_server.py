@@ -75,7 +75,8 @@ TOOL_FEATURE: dict[str, str] = {
     "make_character_sheet": "character", "set_character_voice": "character", "write_podcast_episode": "podcast",
     "render_podcast": "podcast", "make_ad_campaign": "ads", "make_print_design": "print",
     "get_print_design": "print", "print_other_size": "print", "make_poetry_short": "poetry",
-    "continue_poetry_short": "poetry", "get_poetry_short": "poetry",
+    "continue_poetry_short": "poetry", "get_poetry_short": "poetry", "make_presenter_video": "presenter",
+    "get_presenter_video": "presenter",
 }
 
 

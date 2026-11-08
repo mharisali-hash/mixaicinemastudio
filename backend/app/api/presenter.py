@@ -11,10 +11,10 @@ from app.db import get_db
 from app.limits import PROMPT_MAX
 from app.models import PresenterVideo, utcnow
 from app.presenter import service as svc
-from app.security import CurrentUser, get_current_user, require_editor
+from app.security import CurrentUser, get_current_user, require_editor, require_feature
 from app.services import get_owned, job_out
 
-router = APIRouter(prefix="/presenter", tags=["presenter"])
+router = APIRouter(prefix="/presenter", tags=["presenter"], dependencies=[Depends(require_feature("presenter"))])
 
 Lang = Field("en", min_length=2, max_length=12, pattern=r"^[a-z]{2,3}(-[a-z]{2,4})?$")
 Caption = Literal["classic", "pill", "highlight", "clean", "none"]

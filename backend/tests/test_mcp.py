@@ -121,7 +121,8 @@ def test_a_viewer_only_sees_read_tools(client, anon, login, flags):
         u = db.scalars(select(User).where(User.email == "ed@test.local")).one()
         db.scalars(select(Membership).where(Membership.user_id == u.id)).one().role = "viewer"
         db.commit()
-    assert m.tools() == READ_TOOLS - {"get_print_design"}  # not an admin: no Print Studio
+    # not an admin: Print Studio and Presenter aren't released to packages yet (contract v42)
+    assert m.tools() == READ_TOOLS - {"get_print_design", "get_presenter_video"}
     assert m.call("generate_image", prompt="x")["isError"]
 
 
