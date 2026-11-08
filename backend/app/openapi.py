@@ -27,7 +27,7 @@ TAG_AREA = {
     "ai": "Film", "projects": "Film", "scenes": "Film", "shots": "Film", "locations": "Film", "reel": "Film",
     "quick": "Film", "characters": "Characters", "audio": "Audio", "stems": "Audio", "text": "Audio",
     "voices": "Voice", "dialogue": "Voice", "dub": "Voice", "transcribe": "Voice", "stories": "Voice", "podcast": "Podcast",
-    "photo": "Photo", "photos": "Photo", "looks": "Photo", "videos": "Video", "poetry": "Video", "ads": "Library", "jobs": "Jobs",
+    "photo": "Photo", "photos": "Photo", "looks": "Photo", "videos": "Video", "poetry": "Video", "presenter": "Video", "ads": "Library", "jobs": "Jobs",
     "library": "Library", "media": "Library", "generations": "Library", "organise": "Library",
     "mentions": "Library", "models": "Library", "brand": "Library", "prompts": "Library", "3d": "3D",
 }
