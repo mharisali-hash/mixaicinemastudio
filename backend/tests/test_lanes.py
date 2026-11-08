@@ -66,6 +66,10 @@ def test_every_registered_job_type_has_a_lane():
         "text_aerab": "general",
         # 3D Studio's logo badge: traced and extruded with numpy; its cut-out is a generate job on the image lane
         "model3d_logo": "general",
+        # Presenter Video: the orchestrator (its takes are generate jobs) and the ffmpeg cut
+        "presenter_video": "general", "presenter_assemble": "general",
+        # admin bulk runs: the orchestrator, the ZIP unpack and the export; each picture is a generate job
+        "bulk_run": "general", "bulk_unzip": "general", "bulk_export": "general",
     }
     for t in worker.HANDLERS:
         if t.startswith("ai_"):
