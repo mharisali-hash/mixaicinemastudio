@@ -12,6 +12,7 @@ import { announce } from '@/stores/ui'
 import { cn } from '@/lib/utils'
 import { AdminPage, linkButton } from '../shared'
 import { ACTION_LABEL, STATUS, bulkApi, bulkKey, uploadBulkZip, uploadPrompts, type BulkBatch, type BulkItem, type BulkOptions, type PromptsResult } from './api'
+import { BulkViewer } from './BulkViewer'
 import { useBulkUpload } from './useBulkUpload'
 
 const card = 'flex flex-col gap-3 rounded-[8px] border border-studio-border bg-studio-raised p-4'
@@ -310,11 +311,16 @@ function SettingsStep({ b, locked, onSaved }: { b: BulkBatch; locked: boolean; o
 
 // ---------------------------------------------------------------- 3. try on three
 
-function Pair({ item, action }: { item: BulkItem; action: BulkBatch['action'] }) {
+function Pair({ item, action, onOpen }: { item: BulkItem; action: BulkBatch['action']; onOpen: () => void }) {
   const busy = item.status === 'queued' || item.status === 'running'
   return (
     <figure className="flex flex-col gap-1.5">
-      <div className="grid grid-cols-2 gap-1">
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`View ${item.filename} full size`}
+        className="grid cursor-zoom-in grid-cols-2 gap-1 rounded-[6px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-gold/50"
+      >
         {item.source_url && <img src={`${item.source_url}?w=256`} alt={`${item.filename}, before`} className="aspect-square w-full rounded-[6px] bg-studio-panel object-contain" loading="lazy" />}
         {item.result_url ? (
           <img
@@ -328,7 +334,7 @@ function Pair({ item, action }: { item: BulkItem; action: BulkBatch['action'] })
             {busy ? 'Working…' : item.status === 'failed' ? 'Failed' : 'Not run'}
           </div>
         )}
-      </div>
+      </button>
       <figcaption className="truncate text-small text-studio-muted" title={item.filename}>
         {item.filename}
         {item.error && <span className="block text-studio-danger">{item.error}</span>}
@@ -348,6 +354,7 @@ function SamplesStep({ b, locked, onBusy }: { b: BulkBatch; locked: boolean; onB
   const busy = !!samples.data?.items.some((i) => i.status === 'queued' || i.status === 'running')
   useEffect(() => onBusy(busy), [busy, onBusy])
   const run = useMutation({ mutationFn: () => bulkApi.preview(b.id), onSuccess: () => qc.invalidateQueries({ queryKey: key }) })
+  const [viewing, setViewing] = useState<number | null>(null)
   return (
     <Step n={3} title="Try on three pictures" id="bulk-step-samples">
       <p className="text-body text-studio-muted">Check the result on three pictures before spending GPU hours on all of them.</p>
@@ -359,11 +366,12 @@ function SamplesStep({ b, locked, onBusy }: { b: BulkBatch; locked: boolean; onB
       {run.error && <p className="text-small text-studio-danger" role="alert">{run.error.message}</p>}
       {!!samples.data?.items.length && (
         <div className="grid gap-3 sm:grid-cols-3">
-          {samples.data.items.map((i) => (
-            <Pair key={i.id} item={i} action={b.action} />
+          {samples.data.items.map((i, k) => (
+            <Pair key={i.id} item={i} action={b.action} onOpen={() => setViewing(k)} />
           ))}
         </div>
       )}
+      <BulkViewer items={samples.data?.items ?? []} index={viewing} onIndex={setViewing} action={b.action} />
     </Step>
   )
 }
@@ -408,6 +416,7 @@ function RunStep({ b }: { b: BulkBatch }) {
     refetchInterval: b.status === 'running' ? 10_000 : false,
   })
   const rows = items.data?.pages.flatMap((p) => p.items) ?? []
+  const [viewing, setViewing] = useState<number | null>(null)
 
   return (
     <Step n={4} title="Run" id="bulk-step-run">
@@ -456,13 +465,14 @@ function RunStep({ b }: { b: BulkBatch }) {
         <p className="text-small text-studio-muted">Nothing here yet.</p>
       ) : (
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4" aria-label="Pictures">
-          {rows.map((i) => (
+          {rows.map((i, k) => (
             <li key={i.id}>
-              <Pair item={i} action={b.action} />
+              <Pair item={i} action={b.action} onOpen={() => setViewing(k)} />
             </li>
           ))}
         </ul>
       )}
+      <BulkViewer items={rows} index={viewing != null && viewing < rows.length ? viewing : null} onIndex={setViewing} action={b.action} />
       {items.hasNextPage && (
         <div>
           <Button size="sm" onClick={() => items.fetchNextPage()} loading={items.isFetchingNextPage}>

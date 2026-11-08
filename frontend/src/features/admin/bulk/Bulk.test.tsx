@@ -66,6 +66,29 @@ describe('Admin: Bulk', () => {
     expect(calls.filter((c) => c.method === 'POST').map((c) => c.path)).toEqual(['/admin/bulk/b1/run', '/admin/bulk/b1/pause'])
   })
 
+  it('opens a picture full size and browses with the arrows', async () => {
+    const item = (id: string, filename: string) => ({
+      id, seq: 0, filename, status: 'done', error: null, instruction: null, prompt_used: `white background ${id}`, sample: false,
+      source_url: `/api/admin/bulk/b1/items/${id}/source`, result_url: `/api/admin/bulk/b1/items/${id}/result`,
+    })
+    mockApi((method, path) => {
+      if (path === '/auth/me') return admin
+      if (path === '/admin/bulk/b1' && method === 'GET') return batch({ status: 'done', counts: { ...batch().counts, uploaded: 0, done: 4200 } })
+      if (path === '/admin/bulk/b1/items') return { items: [item('i1', 'shoes/a.jpg'), item('i2', 'shoes/b.jpg')], next: null }
+      if (path === '/admin/bulk/b1/exports') return { exports: [] }
+    })
+    renderAt('/admin/bulk/b1', [{ path: '/admin/bulk/:id', element: <BulkBatchPage /> }], (qc) => qc.setQueryData(['me'], admin))
+    const grid = await screen.findByRole('list', { name: 'Pictures' })
+    const user = userEvent.setup()
+    await user.click(within(grid).getByRole('button', { name: 'View shoes/a.jpg full size' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByRole('img', { name: 'shoes/a.jpg, after' })).toHaveAttribute('src', '/api/admin/bulk/b1/items/i1/result?w=0')
+    expect(within(dialog).getByText('1 of 2')).toBeInTheDocument()
+    await user.keyboard('{ArrowRight}')
+    expect(within(dialog).getByRole('img', { name: 'shoes/b.jpg, after' })).toBeInTheDocument()
+    expect(within(dialog).getByText('white background i2')).toBeInTheDocument()
+  })
+
   it('asks before deleting a batch', async () => {
     const calls = mockApi((method, path) => {
       if (path === '/auth/me') return admin
