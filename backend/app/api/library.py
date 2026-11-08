@@ -22,6 +22,7 @@ from app import image_tools as it
 from app import library as lib
 from app import mentions as mn
 from app import models_catalog as mc
+from app import rights
 from app import organise as org
 from app import prompt_enhance, uploads
 from app import visibility as vis
@@ -238,7 +239,7 @@ def generate_images(body: ImageGenerateIn, db: Session = Depends(get_db), cur: C
     if not body.prompt.strip():
         raise HTTPException(422, "A prompt is required")
     into = generate_into(db, cur.workspace_id, body.folder_id, "image")
-    model, chosen = mc.choose(body.model, "image", mn.plain(body.prompt), count=body.count)
+    model, chosen = rights.choose(db, body.model, "image", mn.plain(body.prompt), count=body.count)
     speed = _speed(model, body)
     magic = prompt_enhance.marker(body.magic_prompt, body.prompt_enhanced, "image",
                                   style=style.label if style else None,
@@ -382,7 +383,7 @@ def edit_images(body: ImageEditIn, db: Session = Depends(get_db), cur: CurrentUs
         return _tool_images(db, cur, body, tool, template, sources, into)
     if not body.instruction.strip():
         raise HTTPException(422, "Say what to change")
-    model, chosen = mc.choose(body.model, "edit", mn.plain(body.instruction), refs=len(body.source_ids))
+    model, chosen = rights.choose(db, body.model, "edit", mn.plain(body.instruction), refs=len(body.source_ids))
     mc.check_refs(model, len(body.source_ids))
     mentioned = mn.resolve(db, cur.workspace_id, body.instruction.strip(), budget=model.max_refs or 3,
                            used=len(sources), model_label=model.label)
@@ -430,7 +431,7 @@ def img2img(body: Img2ImgIn, db: Session = Depends(get_db), cur: CurrentUser = D
     if "strength" not in body.model_fields_set and style is not None:
         strength = st.restyle_strength(style) or strength
     into = generate_into(db, cur.workspace_id, body.folder_id, "image")
-    model, chosen = mc.choose(body.model, "image", body.prompt or style.positive, count=body.count, cap="i2i")
+    model, chosen = rights.choose(db, body.model, "image", body.prompt or style.positive, count=body.count, cap="i2i")
     reason = mc.capability_unavailable(model, "i2i")
     if reason:
         raise HTTPException(422, f"Image to image with {model.label} isn't available: {reason}")
@@ -564,7 +565,7 @@ def brand_images(body: BrandImageIn, db: Session = Depends(get_db), cur: Current
     _brand_slots(instruction, "logo wording")
     into = generate_into(db, cur.workspace_id, body.folder_id, "image")
     refs = [logo.generation_id] + ([product[1]] if product else [])
-    model, chosen = mc.choose(body.model or d.get("model"), "edit", instruction, refs=1 + len(refs))
+    model, chosen = rights.choose(db, body.model or d.get("model"), "edit", instruction, refs=1 + len(refs))
     mc.check_refs(model, 1 + len(refs))
     record = {"kit_id": kit.id, "kit_name": kit.name, "logo_variant": logo.variant, "surface": surface,
               "mode": body.mode, "product_id": product[0]["media_id"] if product else None}
@@ -602,7 +603,7 @@ def brand_images(body: BrandImageIn, db: Session = Depends(get_db), cur: Current
     _brand_slots(prompt, "scene")
     aspect = body.aspect or scene.get("aspect") or d.get("aspect") or "1:1"
     w, h = lib.size_for_aspect(aspect)
-    smodel, schosen = mc.choose(scene.get("model") or mc.AUTO, "image", prompt, count=body.count)
+    smodel, schosen = rights.choose(db, scene.get("model") or mc.AUTO, "image", prompt, count=body.count)
     speed = mc.speed_of(smodel, None) if smodel.speeds else None
     negative = st.joined_negative(scene.get("negative"), None, speed.cfg if speed else None)
     for i in range(body.count):

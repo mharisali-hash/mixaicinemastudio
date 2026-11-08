@@ -78,7 +78,54 @@ class User(Base):
     limit_max_queued: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # M22: Implant Preview is opt-in per account; only an admin switches it on (admins always have it)
     implant_access: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("0"))
+    # contract v42 (app.rights / app.moderation). Admin stays is_admin; "manager" is the moderator below it
+    staff_role: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # a manager's reach: "site" (every non-staff account) or "team" (manager_member rows)
+    manager_scope: Mapped[str] = mapped_column(String(10), default="site", server_default="site")
+    # per-user overrides on top of the package: {"features": {key: bool}, "models": {id: bool}}
+    rights: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
+    # on hold: can sign in and look, can't make anything; the reason is shown to them
+    blocked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    blocked_reason: Mapped[str] = mapped_column(String(1000), default="", server_default="")
+    blocked_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class ManagerMember(Base):
+    """A user a team-scoped manager looks after."""
+    __tablename__ = "manager_member"
+    __table_args__ = (UniqueConstraint("manager_user_id", "user_id"),)
+    id: Mapped[str] = _id()
+    manager_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("user.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("user.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class UserNotice(Base):
+    """Something a moderator told a user (warning, removal, block, unblock). Shown as a banner until acknowledged;
+    a block's banner stays for as long as the block does."""
+    __tablename__ = "user_notice"
+    id: Mapped[str] = _id()
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("user.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(20))
+    reason: Mapped[str] = mapped_column(String(1000))
+    item_type: Mapped[str] = mapped_column(String(20), default="", server_default="")
+    item_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    emailed: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("0"))
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+
+class RightRelease(Base):
+    """A studio or model an admin has opened up to packages. Anything without a row is admin-only (deny by default)."""
+    __tablename__ = "right_release"
+    __table_args__ = (UniqueConstraint("kind", "key"),)
+    id: Mapped[str] = _id()
+    kind: Mapped[str] = mapped_column(String(10))  # feature | model
+    key: Mapped[str] = mapped_column(String(120))
+    released_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    released_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class EmailToken(Base):
@@ -504,6 +551,12 @@ class MediaItem(Base):
     source_type: Mapped[str | None] = mapped_column(String(40), nullable=True)
     # migration 0026: the studio this is a working part of; None is a final output, listed everywhere
     home: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    # contract v42: a moderator's marks. A removed item is hidden everywhere but the review screens
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    reviewed_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    removed_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    removed_reason: Mapped[str] = mapped_column(String(1000), default="", server_default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, index=True)
 

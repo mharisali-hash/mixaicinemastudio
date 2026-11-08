@@ -29,6 +29,11 @@ TOUCH_EVERY = timedelta(minutes=1)
 # Session.info key: the request's user hasn't confirmed their email, so it can't queue work (contract v38)
 UNVERIFIED = "unverified"
 UNVERIFIED_MSG = "Confirm your email to start creating"
+# Session.info key: the request's user is on hold (contract v42), so it can't queue work either
+BLOCKED = "blocked"
+SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
+# what an account on hold may still POST: signing out, and saying it has read the notice
+BLOCKED_ALLOWED = ("/api/auth/logout", "/api/account/notices")
 
 _hasher = PasswordHasher()
 
@@ -193,6 +198,8 @@ def authenticate(db: Session, request: Request) -> CurrentUser:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid, expired or revoked API token",
                                 headers={"WWW-Authenticate": "Bearer"})
         check_scope(cur, required_scope(request))
+        # a token stops working while its owner is on hold; it isn't revoked, so it works again after
+        check_not_blocked(cur.user)
         # whatever this request creates is stamped via_api (models._stamp_via_api)
         db.info[VIA_API] = True
         return cur
@@ -200,8 +207,21 @@ def authenticate(db: Session, request: Request) -> CurrentUser:
     if not cur:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not signed in")
     cur.via = request.query_params.get("via")
+    if (cur.user.blocked_at is not None and request.method.upper() not in SAFE_METHODS
+            and not request.url.path.startswith(BLOCKED_ALLOWED)):
+        check_not_blocked(cur.user)
     bind_session(db, cur)
     return cur
+
+
+def blocked_message(user: User) -> str:
+    reason = (user.blocked_reason or "").strip()
+    return f"Your account is on hold: {reason}" if reason else "Your account is on hold"
+
+
+def check_not_blocked(user: User) -> None:
+    if user.blocked_at is not None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, blocked_message(user))
 
 
 def session_user(db: Session, request: Request) -> CurrentUser | None:
@@ -230,12 +250,20 @@ def bind_session(db: Session, cur: CurrentUser) -> None:
         db.info.pop(UNVERIFIED, None)
     else:
         db.info[UNVERIFIED] = True
+    if cur.user.blocked_at is not None:
+        db.info[BLOCKED] = blocked_message(cur.user)
+    else:
+        db.info.pop(BLOCKED, None)
 
 
 @event.listens_for(Session, "before_flush")
 def _gate_unverified(session, _ctx, _instances):
     # every route, token call and MCP tool that starts work adds a Job, so one check here covers them all
-    if session.info.get(UNVERIFIED) and any(isinstance(o, Job) for o in session.new):
+    if not any(isinstance(o, Job) for o in session.new):
+        return
+    if session.info.get(BLOCKED):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, session.info[BLOCKED])
+    if session.info.get(UNVERIFIED):
         raise HTTPException(status.HTTP_403_FORBIDDEN, UNVERIFIED_MSG)
 
 
@@ -260,6 +288,44 @@ def require_admin(cur: CurrentUser = Depends(get_current_user)) -> CurrentUser:
     if not is_admin(cur):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not Found")
     return cur
+
+
+# ---------------------------------------------------------------- staff and rights (contract v42)
+
+def staff_of(user: User) -> str | None:
+    if user.is_admin:
+        return "admin"
+    return "manager" if user.staff_role == "manager" else None
+
+
+def is_moderator(cur: CurrentUser) -> bool:
+    return staff_of(cur.user) is not None
+
+
+def require_moderator(cur: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+    # same as require_admin: anyone else gets a 404
+    if not is_moderator(cur):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not Found")
+    return cur
+
+
+def require_feature(key: str, *, hide: bool = False):
+    """Router guard for a studio. By default only changes are refused, so someone whose plan lost a studio can
+    still open and download what they made there. hide=True refuses everything with a 404, for studios that
+    aren't advertised at all (Print)."""
+    def guard(request: Request, cur: CurrentUser = Depends(get_current_user),
+              db: Session = Depends(get_db)) -> CurrentUser:
+        if not hide and request.method.upper() in SAFE_METHODS:
+            return cur
+        from app import rights
+
+        r = rights.effective(db, cur.user)
+        if r.allows(key):
+            return cur
+        if hide:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Not Found")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, r.refusal(key))
+    return guard
 
 
 def can_use_api(cur: CurrentUser) -> bool:
@@ -287,6 +353,7 @@ def _hidden(request: Request, db: Session) -> CurrentUser:
 
 def require_api_access(request: Request, db: Session = Depends(get_db)) -> CurrentUser:
     cur = _hidden(request, db)
+    # a plan without the API still lists its tokens; using one is refused (quota.check_job)
     if not can_use_api(cur):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not Found")
     return cur

@@ -15,10 +15,10 @@ from app.podcast import video as vd
 from app.podcast.schemas import (Ad, EditIn, EpisodeIn, EpisodeOut, EpisodePatch, EpisodeSummary, InsertIn,
                                  OutputsOut, PublishIn, RecordIn, ScriptTextIn, ShowIn, ShowOut, ShowPatch, VideoIn)
 from app.schemas import JobOut
-from app.security import CurrentUser, get_current_user, require_editor
+from app.security import CurrentUser, get_current_user, require_editor, require_feature
 from app.services import get_owned, job_out
 
-router = APIRouter(prefix="/podcast", tags=["podcast"])
+router = APIRouter(prefix="/podcast", tags=["podcast"], dependencies=[Depends(require_feature("podcast"))])
 MAX_DOCS = 10
 
 

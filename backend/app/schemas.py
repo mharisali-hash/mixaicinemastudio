@@ -71,6 +71,14 @@ class UserOut(Out):
     verified: bool = True
     # M22: Implant Preview in the rail (admins, and accounts an admin switched it on for)
     implant: bool = False
+    # contract v42: "admin", "manager" or null; and the hold an account is under, shown as a banner
+    staff: str | None = None
+    blocked: "BlockedOut | None" = None
+
+
+class BlockedOut(Out):
+    reason: str
+    at: datetime
 
 
 # accounts (contract v38)
@@ -118,6 +126,10 @@ class AdminUserOut(BaseModel):
     subscription_ends_at: Utc | None = None
     gpu_min_day_limit: float | None = None
     implant_access: bool = False
+    # contract v42
+    staff_role: str | None = None
+    blocked_at: Utc | None = None
+    blocked_reason: str = ""
 
 
 class AdminUserPatch(BaseModel):

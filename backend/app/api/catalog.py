@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app import estimate as est
 from app import models_catalog as mc
+from app import rights
 from app import upscale
 from app.config import get_settings
 from app.db import get_db
@@ -30,7 +31,10 @@ async def list_models(type: Literal["image", "edit", "video", "upscale", "audio"
                       db: Session = Depends(get_db), cur: CurrentUser = Depends(get_current_user)):
     s = get_settings()
     info, error = (None, None) if s.gen_driver == "mock" else await upscale.fetch_object_info()
-    return mc.catalog(type, info, driver=s.gen_driver, error=error, measured=measured(db, cur.workspace_id))
+    rows = mc.catalog(type, info, driver=s.gen_driver, error=error, measured=measured(db, cur.workspace_id))
+    r = rights.effective(db, cur.user)
+    # what this person's plan doesn't have isn't offered at all (Auto stays: it only picks from what they have)
+    return rows if r.admin else [row for row in rows if row.get("auto") or r.model_ok(row["id"])]
 
 
 @router.get("/estimate")

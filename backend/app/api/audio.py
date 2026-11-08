@@ -12,6 +12,7 @@ from app import song_voice
 from app import voices
 from app import library as lib
 from app import models_catalog as mc
+from app import rights
 from app.config import get_settings
 from app.db import get_db
 from app.llm import LLMError, chat
@@ -55,7 +56,7 @@ def generate_audio(body: AudioGenerateIn, db: Session = Depends(get_db), cur: Cu
     from app.api.library import generate_into
 
     into = generate_into(db, cur.workspace_id, body.folder_id, "audio")
-    m, chosen = mc.choose(body.model, "audio", prompt, kind=body.kind)
+    m, chosen = rights.choose(db, body.model, "audio", prompt, kind=body.kind)
     mc.check_audio(m, body.kind, body.duration_s)
     ref = _timbre_ref(db, cur.workspace_id, body.timbre_ref_id, m) if body.timbre_ref_id else None
 

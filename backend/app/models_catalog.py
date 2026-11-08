@@ -6,6 +6,7 @@ comfy driver's routing. Availability comes from check_template against a cached 
 import re
 import statistics
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from fastapi import HTTPException
@@ -362,7 +363,8 @@ def _confirmed(model_id: str) -> bool:
 
 
 def resolve_auto(type_: str, prompt: str = "", *, count: int = 1, refs: int = 0,
-                 quality: str | None = None, kind: str | None = None, cap: str | None = None) -> tuple[Model, str]:
+                 quality: str | None = None, kind: str | None = None, cap: str | None = None,
+                 allowed: Callable[[str], bool] | None = None) -> tuple[Model, str]:
     """(model, why) for the catalog's "auto" entry. Skips a pick the last /object_info says is broken, and
     with `cap` (img2img asks for "i2i") a pick that can't do it."""
     if type_ == "image":
@@ -391,6 +393,14 @@ def resolve_auto(type_: str, prompt: str = "", *, count: int = 1, refs: int = 0,
         picks = [(m.id, f"default for {AUDIO_KIND_LABELS.get(kind or 'song', kind)}")]
     else:
         raise HTTPException(422, f"There's no auto choice for {type_} models")
+    if allowed is not None:
+        # app.rights: only what this person's plan has; failing the usual picks, any of those that fits
+        picks = [p for p in picks if allowed(p[0])] or [
+            (m.id, "in your plan") for m in MODELS.values()
+            if m.type == type_ and allowed(m.id) and not hidden(m)
+            and (type_ != "audio" or (kind or "song") in m.capabilities)]
+        if not picks:
+            raise HTTPException(403, f"No {type_} model is part of your plan")
     for mid, why in picks:
         if _usable(mid):
             return MODELS[mid], why
@@ -399,11 +409,13 @@ def resolve_auto(type_: str, prompt: str = "", *, count: int = 1, refs: int = 0,
     return get(mid, type_), why
 
 
-def choose(model_id: str | None, type_: str, prompt: str = "", **kw) -> tuple[Model, dict]:
-    """Route helper: the model plus what goes into params (model_resolved, and the reason when auto)."""
+def choose(model_id: str | None, type_: str, prompt: str = "", *, allowed: Callable[[str], bool] | None = None,
+           **kw) -> tuple[Model, dict]:
+    """Route helper: the model plus what goes into params (model_resolved, and the reason when auto).
+    `allowed` narrows Auto to what the person may use (app.rights.choose passes it)."""
     # audio has a default per kind, so leaving the model out means auto there
     if model_id == AUTO or (type_ == "audio" and not model_id):
-        m, why = resolve_auto(type_, prompt, **kw)
+        m, why = resolve_auto(type_, prompt, allowed=allowed, **kw)
         return m, {"model_requested": AUTO, "model_resolved": m.id, "model_auto_reason": why}
     m = get(model_id, type_)
     return m, {"model_resolved": m.id}

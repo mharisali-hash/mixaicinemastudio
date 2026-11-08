@@ -105,7 +105,8 @@ def _users_out(db: Session, users: list[User]) -> list[AdminUserOut]:
             package_id=p.id if p and not u.is_admin else None,
             package_name="Unlimited" if u.is_admin else (p.name if p else "Free"),
             subscription_ends_at=sub.ends_at if sub else None, gpu_min_day_limit=day_limit(u, p),
-            implant_access=bool(u.implant_access)))
+            implant_access=bool(u.implant_access), staff_role=u.staff_role, blocked_at=u.blocked_at,
+            blocked_reason=u.blocked_reason or ""))
     return out
 
 

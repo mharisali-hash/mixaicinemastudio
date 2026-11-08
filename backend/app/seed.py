@@ -7,6 +7,7 @@ from app.accounts import create_account
 from app.config import get_settings
 from app.models import User
 from app.packages import ensure_defaults as ensure_packages
+from app.rights import ensure_baseline as ensure_rights
 from app.security import hash_password
 
 log = logging.getLogger(__name__)
@@ -17,6 +18,7 @@ def seed(db: Session) -> None:
 
     ensure_builtins(db)
     ensure_packages(db)
+    ensure_rights(db)
     db.commit()
     if db.scalar(select(func.count()).select_from(User)):
         return

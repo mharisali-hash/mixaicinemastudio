@@ -10,6 +10,7 @@ from app import mentions as mn
 from app import library as lib
 from app import longtake
 from app import models_catalog as mc
+from app import rights
 from app import prompt_enhance
 from app.config import get_settings
 from app.db import get_db
@@ -63,7 +64,7 @@ def generate_video(body: VideoGenerateIn, db: Session = Depends(get_db), cur: Cu
     # the video models take no reference pictures: mentions become names plus a short description
     mentioned = mn.resolve(db, cur.workspace_id, prompt, budget=0)
     prompt = mentioned.prompt
-    m, chosen = mc.choose(body.model, "video", prompt, quality=body.quality)
+    m, chosen = rights.choose(db, body.model, "video", prompt, quality=body.quality)
     mc.check_video(m, has_image=bool(body.image_id or body.end_image_id), duration_s=body.duration_s,
                    smooth_motion=body.smooth_motion)
     if body.end_image_id:

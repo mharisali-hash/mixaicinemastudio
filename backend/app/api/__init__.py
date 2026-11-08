@@ -17,6 +17,7 @@ from app.api import model3d
 from app.api import admin
 from app.api import admin_panel
 from app.api import bulk
+from app.api import rights_admin
 from app.api import account
 from app.api import print as print_studio
 from app.api import implant
@@ -42,6 +43,7 @@ router.include_router(tokens.router, include_in_schema=False)
 router.include_router(admin.router, include_in_schema=False)
 router.include_router(admin_panel.router, include_in_schema=False)
 router.include_router(bulk.router, include_in_schema=False)
+router.include_router(rights_admin.router, include_in_schema=False)
 # contract v41: admins only, so not in the API document either
 router.include_router(print_studio.router, include_in_schema=False)
 router.include_router(account.router, include_in_schema=False)

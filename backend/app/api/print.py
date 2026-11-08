@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.limits import PROMPT_MAX
 from app import brand as br
 from app import models_catalog as mc
+from app import rights
 from app import visibility as vis
 from app.ads import service as ads
 from app.api.ads import _kit, _products
@@ -26,10 +27,10 @@ from app.print_studio import layout as pl
 from app.print_studio import service as ps
 from app.print_studio import sizes as sz
 from app.schemas import JobOut
-from app.security import CurrentUser, require_admin, session_only
+from app.security import CurrentUser, require_editor, require_feature, session_only
 from app.services import generation_file, get_owned, job_out
 
-router = APIRouter(prefix="/print", tags=["print"], dependencies=[Depends(require_admin)])
+router = APIRouter(prefix="/print", tags=["print"], dependencies=[Depends(require_feature("print", hide=True))])
 
 Job_ = Literal["sign", "board", "flyer", "sticker"]
 Distance = Literal["near", "street", "road"]
@@ -176,11 +177,12 @@ def _preset_ok(p: str | None, kit) -> None:
 
 @router.get("/options")
 @session_only
-def options(kit_id: str | None = None, db: Session = Depends(get_db), cur: CurrentUser = Depends(require_admin)):
+def options(kit_id: str | None = None, db: Session = Depends(get_db), cur: CurrentUser = Depends(require_editor)):
     kit = br.get_kit(db, cur.workspace_id, kit_id) if kit_id else None
+    allowed = rights.effective(db, cur.user).model_ok
     models = [{"id": ads.AUTO_MODEL, "label": "Auto (photoreal)", "default": True}]
     models += [{"id": m, "label": mc.MODELS[m].label, "default": False}
-               for m in ads.IMAGE_MODELS if m in mc.MODELS and not mc.hidden(mc.MODELS[m])]
+               for m in ads.IMAGE_MODELS if m in mc.MODELS and not mc.hidden(mc.MODELS[m]) and allowed(m)]
     return {"jobs": [{"id": j, "label": sz.JOB_LABELS[j], "dpi": sz.DEFAULT_DPI[j],
                       "distance": sz.DEFAULT_DISTANCE[j]} for j in sz.JOBS],
             "presets": list(sz.PRESETS), "dpis": list(sz.DPIS), "bleed_mm": sz.DEFAULT_BLEED_MM, "max_mp": sz.MAX_MP,
@@ -201,14 +203,14 @@ def options(kit_id: str | None = None, db: Session = Depends(get_db), cur: Curre
 
 @router.post("", status_code=201)
 @session_only
-def create_job(body: CreateIn, db: Session = Depends(get_db), cur: CurrentUser = Depends(require_admin)):
+def create_job(body: CreateIn, db: Session = Depends(get_db), cur: CurrentUser = Depends(require_editor)):
     kit = _kit(db, cur.workspace_id, body.brand_kit_id)
     _preset_ok(body.font_preset, kit)
     _products(db, cur.workspace_id, body.product_media_ids + body.photo_media_ids)
     if body.product_media_ids:
         mc.get(mc.AUTO, "edit")
     else:
-        mc.get(body.image_model, "image")
+        rights.get(db, body.image_model, "image")
     data = body.model_dump()
     data["dpi"] = body.dpi or sz.DEFAULT_DPI[body.job]
     data["viewing_distance"] = body.viewing_distance or sz.DEFAULT_DISTANCE[body.job]
@@ -221,7 +223,7 @@ def create_job(body: CreateIn, db: Session = Depends(get_db), cur: CurrentUser =
 
 @router.get("")
 @session_only
-def list_jobs(db: Session = Depends(get_db), cur: CurrentUser = Depends(require_admin)):
+def list_jobs(db: Session = Depends(get_db), cur: CurrentUser = Depends(require_editor)):
     rows = db.scalars(select(AdCampaign).where(AdCampaign.workspace_id == cur.workspace_id,
                                                AdCampaign.kind == ps.KIND, *vis.where(AdCampaign, vis.wanted(cur)))
                       .order_by(AdCampaign.updated_at.desc()).limit(200)).all()
@@ -230,13 +232,13 @@ def list_jobs(db: Session = Depends(get_db), cur: CurrentUser = Depends(require_
 
 @router.get("/{job_id}")
 @session_only
-def get_job(job_id: str, db: Session = Depends(get_db), cur: CurrentUser = Depends(require_admin)):
+def get_job(job_id: str, db: Session = Depends(get_db), cur: CurrentUser = Depends(require_editor)):
     return ps.campaign_out(db, _job(db, cur, job_id))
 
 
 @router.delete("/{job_id}", status_code=204)
 @session_only
-def delete_job(job_id: str, db: Session = Depends(get_db), cur: CurrentUser = Depends(require_admin)):
+def delete_job(job_id: str, db: Session = Depends(get_db), cur: CurrentUser = Depends(require_editor)):
     c = _job(db, cur, job_id)
     ads.ensure_idle(db, c)
     db.delete(c)
@@ -246,7 +248,7 @@ def delete_job(job_id: str, db: Session = Depends(get_db), cur: CurrentUser = De
 
 @router.post("/{job_id}/continue", response_model=JobOut, status_code=202)
 @session_only
-def continue_job(job_id: str, db: Session = Depends(get_db), cur: CurrentUser = Depends(require_admin)):
+def continue_job(job_id: str, db: Session = Depends(get_db), cur: CurrentUser = Depends(require_editor)):
     c = _job(db, cur, job_id)
     if c.concepts and not any(x.get("approved") for x in c.concepts):
         raise HTTPException(422, "Tick at least one option to make")
@@ -265,7 +267,7 @@ def continue_job(job_id: str, db: Session = Depends(get_db), cur: CurrentUser = 
 @router.patch("/{job_id}/concepts/{concept_id}")
 @session_only
 def patch_concept(job_id: str, concept_id: str, body: ConceptPatch, db: Session = Depends(get_db),
-                  cur: CurrentUser = Depends(require_admin)):
+                  cur: CurrentUser = Depends(require_editor)):
     c = _job(db, cur, job_id)
     ads.ensure_idle(db, c)
     con = ads.concept(c, concept_id)
@@ -288,7 +290,7 @@ def patch_concept(job_id: str, concept_id: str, body: ConceptPatch, db: Session 
 @router.post("/{job_id}/concepts/{concept_id}/regenerate")
 @session_only
 def regenerate(job_id: str, concept_id: str, body: RegenerateIn, db: Session = Depends(get_db),
-               cur: CurrentUser = Depends(require_admin)):
+               cur: CurrentUser = Depends(require_editor)):
     c = _job(db, cur, job_id)
     ads.ensure_idle(db, c)
     con = ads.concept(c, concept_id)
@@ -341,7 +343,7 @@ def _check_patch(c: AdCampaign, body: DesignPatch, kit) -> None:
 @router.patch("/{job_id}/designs/{design_id}")
 @session_only
 def patch_design(job_id: str, design_id: str, body: DesignPatch, db: Session = Depends(get_db),
-                 cur: CurrentUser = Depends(require_admin)):
+                 cur: CurrentUser = Depends(require_editor)):
     c = _job(db, cur, job_id)
     ads.ensure_idle(db, c)
     rec = ps.design(c, design_id)
@@ -358,7 +360,7 @@ def patch_design(job_id: str, design_id: str, body: DesignPatch, db: Session = D
 @router.post("/{job_id}/designs/{design_id}/preview", response_class=Response)
 @session_only
 def preview_design(job_id: str, design_id: str, body: DesignPatch, db: Session = Depends(get_db),
-                   cur: CurrentUser = Depends(require_admin)):
+                   cur: CurrentUser = Depends(require_editor)):
     c = _job(db, cur, job_id)
     rec = ps.design(c, design_id)
     con = ads.concept(c, rec["concept_id"])
@@ -374,7 +376,7 @@ def preview_design(job_id: str, design_id: str, body: DesignPatch, db: Session =
 
 @router.post("/{job_id}/files", response_model=JobOut, status_code=202)
 @session_only
-def make_files(job_id: str, body: FilesIn, db: Session = Depends(get_db), cur: CurrentUser = Depends(require_admin)):
+def make_files(job_id: str, body: FilesIn, db: Session = Depends(get_db), cur: CurrentUser = Depends(require_editor)):
     c = _job(db, cur, job_id)
     ready = [a["id"] for a in c.ads or [] if a.get("status") == "ready"]
     want = body.design_ids or ready
@@ -397,7 +399,7 @@ def _filename(c: AdCampaign, g: Generation) -> str:
 @router.get("/{job_id}/designs/{design_id}/files/{fmt}")
 @session_only
 def download(job_id: str, design_id: str, fmt: Literal["pdf", "png", "jpg", "svg", "zip"],
-             db: Session = Depends(get_db), cur: CurrentUser = Depends(require_admin)):
+             db: Session = Depends(get_db), cur: CurrentUser = Depends(require_editor)):
     c = _job(db, cur, job_id)
     rec = ps.design(c, design_id)
     g = db.get(Generation, ((rec.get("files") or {}).get("ids") or {}).get(fmt) or "")
@@ -411,7 +413,7 @@ def download(job_id: str, design_id: str, fmt: Literal["pdf", "png", "jpg", "svg
 @router.post("/{job_id}/designs/{design_id}/resize", status_code=201)
 @session_only
 def other_size(job_id: str, design_id: str, body: ResizeIn, db: Session = Depends(get_db),
-               cur: CurrentUser = Depends(require_admin)):
+               cur: CurrentUser = Depends(require_editor)):
     c = _job(db, cur, job_id)
     return resize(db, cur, c, design_id, body)
 

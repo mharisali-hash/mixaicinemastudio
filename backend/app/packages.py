@@ -12,7 +12,8 @@ PERIODS = ("day", "week", "month", "year", "none")
 KINDS = ("standard", "demo", "custom")
 STATUSES = ("active", "expired", "cancelled", "pending_payment")
 SOURCES = ("admin", "demo", "payment", "signup_default")
-# what package.features can switch off; anything a package doesn't name stays on
+# what package.features can switch off; anything a package doesn't name stays on once it's released
+# (app.rights: a studio nobody has released yet is admin-only, whatever the package says)
 FEATURES = {
     "image": "Image studio",
     "video": "Video studio",
@@ -25,6 +26,11 @@ FEATURES = {
     "stories": "Stories",
     "3d": "3D Studio",
     "api": "API and MCP",
+    "song_voices": "Song voices",
+    "presenter": "Presenter Video",
+    "print": "Print Studio",
+    "implant": "Implant Preview",
+    "bulk_edit": "Bulk edit",
 }
 # the fallback when the Free row is missing (a fresh test database before seeding, or one deleted by hand)
 FREE_FALLBACK = dict(gpu_min_day=30.0, gpu_min_month=None, max_queued=2)

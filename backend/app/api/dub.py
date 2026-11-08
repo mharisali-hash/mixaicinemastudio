@@ -13,10 +13,10 @@ from app.db import get_db
 from app.dub import project as pj
 from app.dub.schemas import DubExportIn, DubIn, DubOut, DubPatch, MergeIn, RegenIn, SplitIn
 from app.models import DubProject, Generation, Job, new_id
-from app.security import CurrentUser, get_current_user, require_editor
+from app.security import CurrentUser, get_current_user, require_editor, require_feature
 from app.services import get_owned, job_out, new_seed, next_version
 
-router = APIRouter(prefix="/dubs", tags=["dub"])
+router = APIRouter(prefix="/dubs", tags=["dub"], dependencies=[Depends(require_feature("dub"))])
 
 
 def _owned(db: Session, cur: CurrentUser, dub_id: str) -> DubProject:

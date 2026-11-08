@@ -10,16 +10,17 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.limits import PROMPT_MAX
 from app import visibility as vis
 from app import models_catalog as mc
+from app import rights
 from app import song_voice
 from app.db import get_db
 from app.models import Character, Generation, PoetryShort
 from app.poetry import service as svc
 from app.poetry import timing as tm
 from app.schemas import JobOut
-from app.security import CurrentUser, get_current_user, require_editor
+from app.security import CurrentUser, get_current_user, require_editor, require_feature
 from app.services import get_owned, job_out
 
-router = APIRouter(prefix="/poetry", tags=["poetry"])
+router = APIRouter(prefix="/poetry", tags=["poetry"], dependencies=[Depends(require_feature("poetry"))])
 
 Lang = Field("ur", min_length=2, max_length=12, pattern=r"^[a-z]{2,3}(-[a-z]{2,4})?$")
 
@@ -121,7 +122,12 @@ def create_short(body: CreateIn, db: Session = Depends(get_db), cur: CurrentUser
 
             if finished_picture(db, c, body.look_id) is None:
                 raise HTTPException(422, "That look isn't this character's, or its picture isn't ready yet")
-    mc.get(body.image_model, "image")  # 422 when it isn't an image model or isn't installed
+    rights.get(db, body.image_model, "image")  # 422 when it isn't an image model or isn't installed
+    if body.vocal in song_voice.VOCALS:
+        # the song is a child job in the poetry pipeline, which quota doesn't see; so it's asked here
+        r = rights.effective(db, cur.user)
+        if not r.allows("song_voices"):
+            raise HTTPException(403, r.refusal("song_voices"))
     if body.vocal in song_voice.VOCALS and not song_voice.enabled():
         raise HTTPException(422, "Children's voices aren't set up on this server yet")
     if body.vocal == "voice" or (body.vocal == "lead_group" and body.lead_voice == "voice"):

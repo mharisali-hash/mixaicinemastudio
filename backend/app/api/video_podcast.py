@@ -13,10 +13,10 @@ from app.podcast import video as vd
 from app.podcast import video_stages as vs
 from app.podcast import vplan
 from app.schemas import GenerationOut, JobOut
-from app.security import CurrentUser, get_current_user, require_editor
+from app.security import CurrentUser, get_current_user, require_editor, require_feature
 from app.services import enqueue_generation, gen_out, get_owned, job_out, new_seed
 
-router = APIRouter(prefix="/podcast", tags=["podcast"])
+router = APIRouter(prefix="/podcast", tags=["podcast"], dependencies=[Depends(require_feature("podcast"))])
 
 Aspect = Literal["16:9", "9:16", "1:1"]
 Quality = Literal["draft", "final"]

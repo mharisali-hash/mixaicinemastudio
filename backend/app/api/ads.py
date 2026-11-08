@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.limits import PROMPT_MAX
 from app import brand as br
 from app import models_catalog as mc
+from app import rights
 from app import visibility as vis
 from app.ads import fonts as fz
 from app.ads import layout as lay
@@ -21,10 +22,10 @@ from app.db import get_db
 from app.llm.prompts import AD_LAYOUTS
 from app.models import AdCampaign, BrandKit, Generation
 from app.schemas import JobOut
-from app.security import CurrentUser, get_current_user, require_editor
+from app.security import CurrentUser, get_current_user, require_editor, require_feature
 from app.services import generation_file, get_owned, job_out
 
-router = APIRouter(prefix="/ads", tags=["ads"])
+router = APIRouter(prefix="/ads", tags=["ads"], dependencies=[Depends(require_feature("ads"))])
 
 Format = Literal["4:5", "9:16", "1:1", "16:9", "1.91:1", "2:3", "yt"]
 ContactKey = Literal["phone", "whatsapp", "email", "website", "booking_url", "location", "opening_hours"]
@@ -203,9 +204,10 @@ def _products(db: Session, ws: str, ids: list[str]) -> None:
 @router.get("/options", summary="What the brief form and the ad editor offer")
 def options(kit_id: str | None = None, db: Session = Depends(get_db), cur: CurrentUser = Depends(get_current_user)):
     kit = br.get_kit(db, cur.workspace_id, kit_id) if kit_id else None
+    allowed = rights.effective(db, cur.user).model_ok
     models = [{"id": svc.AUTO_MODEL, "label": "Auto (photoreal, per concept)", "default": True}]
     models += [{"id": m, "label": mc.MODELS[m].label, "default": False}
-               for m in svc.IMAGE_MODELS if m in mc.MODELS and not mc.hidden(mc.MODELS[m])]
+               for m in svc.IMAGE_MODELS if m in mc.MODELS and not mc.hidden(mc.MODELS[m]) and allowed(m)]
     return {"formats": [{"id": f, "label": lay.FORMAT_LABELS[f], "width": w, "height": h}
                         for f, (w, h) in lay.FORMATS.items()],
             "styles": [{"id": s, "label": lay.STYLE_LABELS[s], "needs": lay.STYLE_NEEDS.get(s)} for s in lay.STYLES],
@@ -226,7 +228,7 @@ def create_campaign(body: CreateIn, db: Session = Depends(get_db), cur: CurrentU
     if body.product_media_ids:
         mc.get(mc.AUTO, "edit")
     else:
-        mc.get(body.image_model, "image")  # 422 when it isn't an image model here
+        rights.get(db, body.image_model, "image")  # 422 when it isn't an image model here
     c = svc.create(db, cur, body.model_dump(), kit)
     svc.queue(db, c)
     db.commit()

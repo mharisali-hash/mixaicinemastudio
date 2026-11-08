@@ -21,6 +21,7 @@ from app import brand as br
 from app import brand_templates as bt
 from app import library as lib
 from app import models_catalog as mc
+from app import rights
 from app import styles as st
 from app.ads import colours as col
 from app.ads import layout as lay
@@ -506,7 +507,7 @@ class Run:
         """The user's model when they picked one; on auto, the photoreal engine the concept asked for."""
         want = self.b["image_model"] or svc.AUTO_MODEL
         if want != svc.AUTO_MODEL:
-            return mc.choose(want, "image", scene)
+            return rights.choose(self.db, want, "image", scene)
         pick = con.get("photo_model") if con.get("photo_model") in AD_PHOTO_MODELS else svc.DEFAULT_MODEL
         m = mc.MODELS.get(pick)
         if m is None or mc.hidden(m) or mc.known_unavailable(m):

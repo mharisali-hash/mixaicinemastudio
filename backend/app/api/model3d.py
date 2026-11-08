@@ -12,16 +12,17 @@ from app import library as lib
 from app import model3d as m3
 from app import model3d_logo as ml
 from app import models_catalog as mc
+from app import rights
 from app.api.library import _edit_source, _new_image_item, generate_into
 from app.config import get_settings
 from app.db import get_db
 from app.models import Character, Generation, Job, MediaItem, new_id
 from app.openapi import multipart
 from app.schemas import MediaItemOut, Model3DIn, Model3DLogo, Model3DOut, Shots3DOut, Turntable3DOut
-from app.security import CurrentUser, get_current_user, require_editor
+from app.security import CurrentUser, get_current_user, require_editor, require_feature
 from app.services import READY_STATES, enqueue_generation, get_owned, job_out, new_seed, next_version
 
-router = APIRouter(tags=["3d"])
+router = APIRouter(tags=["3d"], dependencies=[Depends(require_feature("3d"))])
 
 NO_ALPHA = "The picture has no transparent background, so the background was removed anyway."
 NO_ALPHA_VIEWS = "Not every view has a transparent background, so the backgrounds were removed anyway."
@@ -141,7 +142,7 @@ def make_3d(body: Model3DIn, db: Session = Depends(get_db), cur: CurrentUser = D
         why = mc.capability_unavailable(mc.MODELS["pixal3d"], "multiview")
         if why:
             raise HTTPException(422, f"Pixal3D multi-view isn't available right now: {why}")
-    engine, chosen = mc.choose(engine_id, "model3d")
+    engine, chosen = rights.choose(db, engine_id, "model3d")
 
     remove_bg = body.remove_background
     if views is not None:
@@ -282,7 +283,7 @@ def _queue_cutout(db: Session, cur: CurrentUser, src: Generation, title: str):
 def _queue_picture(db: Session, cur: CurrentUser, body: Model3DIn, prompt: str):
     """The picture a text start is made from: an ordinary image generation on the default (or chosen) image
     model, kept as a working part of the 3D Studio. Package gates and quota see it like any other image."""
-    model, chosen = mc.choose(body.image_model, "image", body.prompt or "")
+    model, chosen = rights.choose(db, body.image_model, "image", body.prompt or "")
     speed = mc.speed_of(model, None) if model.speeds else None
     w, h = lib.size_for_aspect("1:1")
     # off unless asked: an enhanced prompt likes to add a scene around the object

@@ -17,6 +17,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app import brand as br
 from app import library as lib
 from app import models_catalog as mc
+from app import rights
 from app import styles as st
 from app.ads import colours as col
 from app.ads import copy as cp
@@ -232,7 +233,8 @@ class PrintRun(Run):
             return text, {**base, "aspect": aspect, "width": w, "height": h, "instruction": text,
                           "reference_ids": refs, "model": m.id, **chosen}
         want = b.get("image_model") or ads.AUTO_MODEL
-        m, chosen = mc.choose(ads.DEFAULT_MODEL if want == ads.AUTO_MODEL else want, "image", scene)
+        m, chosen = rights.choose(self.db, ads.DEFAULT_MODEL if want == ads.AUTO_MODEL else want, "image",
+                                   scene)
         speed = mc.speed_of(m, None) if m.speeds else None
         params = {**base, "aspect": aspect, "width": w, "height": h, "model": m.id, "style": None,
                   "user_prompt": scene, **chosen}

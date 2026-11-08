@@ -380,6 +380,9 @@ def handle_generate(ctx: JobContext) -> dict:
     # starts from the person's own negative, so the safety words add to it rather than replace it
     safety = {k: v for k, v in (gen.params or {}).items() if k in ("negative", "negative_prompt") and v}
     content_policy.check_before(ctx, gen, safety)
+    from app import rights
+
+    rights.check_render(ctx, gen)
 
     driver = ctx.driver_factory()
     job.gpu = job.gpu or getattr(driver, "name", None)

@@ -10,6 +10,7 @@ from app import library as lib
 from app import longtake
 from app import mentions as mn
 from app import models_catalog as mc
+from app import rights
 from app import montage as mt
 from app import storyboard as sb
 from app.drivers.comfy import HQ_SIZES, VIDEO_SIZES
@@ -103,7 +104,7 @@ def keyframe_request(db, ps: PoetryShort, sc: dict) -> tuple[str, dict]:
                   f"clothing exactly. {body} {anchor} {LOOK}")
     else:
         model_id = st.get("image_model") or svc.DEFAULTS["image_model"]
-        m, chosen = mc.choose(model_id, "image", body)
+        m, chosen = rights.choose(db, model_id, "image", body)
         params.update(model=m.id, **chosen)
         prompt = f"{body} {anchor} {LOOK}"
     return " ".join(prompt.split()), params

@@ -116,8 +116,11 @@ def _child_payload(payload: dict | None) -> bool:
 
 def usage(db: Session, user: User, now: datetime | None = None) -> dict:
     """GET /account/usage, and the admin's view of one user."""
+    from app import rights
+
     now = now or utcnow()
     lim = limits_for(db, user, now)
+    r = rights.effective(db, user, lim)
     sub = lim.subscription
     pkg = lim.package
     return {
@@ -137,8 +140,8 @@ def usage(db: Session, user: User, now: datetime | None = None) -> dict:
         "subscription": None if sub is None else {"id": sub.id, "status": pk.status_of(sub, now),
                                                   "starts_at": _iso(sub.starts_at), "ends_at": _iso(sub.ends_at),
                                                   "source": sub.source},
-        "features": {k: lim.allows(k) for k in pk.FEATURES},
-        "models": lim.models,
+        "features": dict(r.features) if not r.admin else {k: True for k in pk.FEATURES},
+        "models": r.models(),
     }
 
 
@@ -175,7 +178,7 @@ def check_minutes(db: Session, user: User, lim: Limits, now: datetime) -> None:
 _PREFIX_FEATURE = (("ad_", "ads"), ("poetry_", "poetry"), ("podcast_", "podcast"), ("video_podcast", "podcast"),
                    ("dub_", "dub"), ("story_", "stories"), ("character_", "character"),
                    ("ai_character", "character"), ("autopilot", "video"), ("reel_", "video"),
-                   ("upscale", "video"))
+                   ("upscale", "video"), ("presenter", "presenter"))
 
 
 def _gen(db: Session, gen_id: str | None) -> Generation | None:
@@ -195,6 +198,10 @@ def features_of(db: Session, job: Job) -> set[str]:
             out.add("character")
         if gen.target_type == "ad_photo":
             out.add("ads")
+        if (gen.target_type or "").startswith("implant_"):
+            out.add("implant")
+        if (gen.params or {}).get("sing_as"):
+            out.add("song_voices")
         if gen.kind in IMAGE_KINDS:
             out.add("image")
         elif gen.kind in VIDEO_KINDS:
@@ -208,21 +215,29 @@ def features_of(db: Session, job: Job) -> set[str]:
     return out
 
 
-def check_job(db: Session, lim: Limits, job: Job, channel: str | None) -> None:
+def check_job(db: Session, lim: Limits, job: Job, channel: str | None, r=None) -> None:
+    """The studios and the model a new job needs, against what this person may use (app.rights)."""
     if lim.unlimited:
         return
-    name = lim.package.name if lim.package else "Your"
-    if channel == "api" and not lim.allows("api"):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, f"The {name} package doesn't include the API or MCP")
+    if r is None:
+        from app import rights
+
+        r = rights.effective(db, db.get(User, job.user_id), lim) if job.user_id else None
+    if r is None:
+        return
+    if channel == "api" and not r.allows("api"):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, r.refusal("api") if "api" in r.feature_why
+                            else "API and MCP aren't part of your plan")
     for f in sorted(features_of(db, job)):
-        if not lim.allows(f):
-            raise HTTPException(status.HTTP_403_FORBIDDEN, f"The {name} package doesn't include {pk.FEATURES[f]}")
-    if lim.models is not None and job.generation_id:
+        if not r.allows(f):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, r.refusal(f))
+    if job.generation_id:
         gen = _gen(db, job.generation_id)
         model = (gen.params or {}).get("model_resolved") if gen else None
-        if model and model not in lim.models:
-            raise HTTPException(status.HTTP_403_FORBIDDEN,
-                                f"The {name} package doesn't include the model '{model}'. Choose another one.")
+        if model:
+            from app import rights
+
+            rights.check_model(r, model)
 
 
 @event.listens_for(Session, "before_flush")
@@ -238,10 +253,13 @@ def _check_new_jobs(session, _ctx, _instances):
         user = session.get(User, uid)
         if user is None or user.is_admin:
             return
+        from app import rights
+
         now = utcnow()
         lim = limits_for(session, user, now)
+        r = rights.effective(session, user, lim)
         for job in jobs:
-            check_job(session, lim, job, session.info.get(QUOTA_CHANNEL))
+            check_job(session, lim, job, session.info.get(QUOTA_CHANNEL), r)
         if not session.info.get(_PASSED):
             check_minutes(session, user, lim, now)
             session.info[_PASSED] = True

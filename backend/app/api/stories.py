@@ -10,10 +10,10 @@ from app import stories
 from app.db import get_db, release
 from app.models import Job
 from app.schemas import JobOut
-from app.security import CurrentUser, get_current_user, require_editor
+from app.security import CurrentUser, get_current_user, require_editor, require_feature
 from app.services import job_out
 
-router = APIRouter(prefix="/stories", tags=["stories"])
+router = APIRouter(prefix="/stories", tags=["stories"], dependencies=[Depends(require_feature("stories"))])
 
 Key = Field(min_length=1, max_length=60, pattern=r"^[A-Za-z0-9_-]+$")
 MEDIA_TYPES = {".mp3": "audio/mpeg", ".mp4": "video/mp4", ".srt": "application/x-subrip"}

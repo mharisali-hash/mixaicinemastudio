@@ -45,7 +45,8 @@ from app.schemas import (AudioGenerateIn, CharacterCreate, CharacterPatch, Gener
                          ImageGenerateIn, JobOut, MediaItemOut, Model3DIn, Model3DLogo, Model3DViews, SheetIn,
                          SpeakDesignIn, SpeakIn, UpscaleIn,
                          VideoAspect, VideoGenerateIn, _iso)
-from app.security import CurrentUser, bearer_token, resolve_token
+from app import rights
+from app.security import CurrentUser, bearer_token, blocked_message, resolve_token
 from app.services import READY_STATES, job_out
 from app.transcripts import TRANSCRIBE_JOB
 
@@ -66,6 +67,16 @@ server = MCPServer("mixai", title="Jafat AI Studio", instructions=INSTRUCTIONS, 
 
 # tool name -> the token scope it needs; tools/list leaves out what the caller's token can't use
 TOOL_SCOPE: dict[str, str] = {}
+# tool name -> the studio it belongs to (app.rights); a tool whose studio is off is hidden and refused as unknown
+TOOL_FEATURE: dict[str, str] = {
+    "generate_image": "image", "edit_image": "image", "make_3d_model": "3d", "generate_video": "video",
+    "create_project_from_idea": "video", "make_song": "audio", "make_music": "audio", "make_sfx": "audio",
+    "speak": "audio", "separate_stems": "audio", "create_character": "character", "make_look_pack": "character",
+    "make_character_sheet": "character", "set_character_voice": "character", "write_podcast_episode": "podcast",
+    "render_podcast": "podcast", "make_ad_campaign": "ads", "make_print_design": "print",
+    "get_print_design": "print", "print_other_size": "print", "make_poetry_short": "poetry",
+    "continue_poetry_short": "poetry", "get_poetry_short": "poetry",
+}
 
 
 def tool(scope: str, **kw):
@@ -98,6 +109,8 @@ def acting(ctx: Context, scope: str, err: type[Exception] = ToolError) -> Iterat
         cur = resolve_token(db, raw) if raw else None
         if cur is None:
             raise err("Invalid, expired or revoked API token")
+        if cur.user.blocked_at is not None:
+            raise err(blocked_message(cur.user))
         if not allowed(cur.scopes, cur.role, scope):
             raise err(f"This token can't do that: it needs the '{scope}' scope"
                             + (" and an editor role" if cur.role == "viewer" and scope != "read" else ""))
@@ -660,12 +673,9 @@ def make_ad_campaign(
 
 from app.api.print import LinesIn as PrintLines  # noqa: E402
 
-# hidden from everyone else's tools/list, and refused with the answer an unknown tool gets
-ADMIN_TOOLS = {"make_print_design", "get_print_design", "print_other_size"}
-
-
-def _admin_only(cur: CurrentUser, name: str) -> None:
-    if not cur.user.is_admin:
+def _admin_only(db: Session, cur: CurrentUser, name: str) -> None:
+    # Print is admin-only until it's released or switched on for someone (app.rights); scope_filter hides it too
+    if not rights.effective(db, cur.user).allows("print"):
         raise ToolError(f"Unknown tool: {name}")
 
 
@@ -698,7 +708,7 @@ def make_print_design(
     from app.api.print import CreateIn, create_job
 
     with acting(ctx, "generate") as (db, cur):
-        _admin_only(cur, "make_print_design")
+        _admin_only(db, cur, "make_print_design")
         try:
             body = CreateIn(width_cm=width_cm, height_cm=height_cm, lines=lines, job=job, dpi=dpi, bleed_mm=bleed_mm,
                             viewing_distance=viewing_distance, shape=shape, business_type=business_type,
@@ -746,7 +756,7 @@ def get_print_design(ctx: Context, design_id: str) -> dict:
     """A Print Studio job: its stages, and per option the preview and the PDF/PNG/JPG/SVG/ZIP download links
     (ten minutes each; ask again for fresh ones)."""
     with acting(ctx, "read") as (db, cur):
-        _admin_only(cur, "get_print_design")
+        _admin_only(db, cur, "get_print_design")
         return _print_report(db, cur, design_id, _origin(ctx))
 
 
@@ -765,7 +775,7 @@ def print_other_size(
     from app.api.print import ResizeIn, _job as print_job, resize
 
     with acting(ctx, "generate") as (db, cur):
-        _admin_only(cur, "print_other_size")
+        _admin_only(db, cur, "print_other_size")
         c = print_job(db, cur, design_id)
         cons = {x["id"]: x.get("n") for x in c.concepts or []}
         d = next((a for a in c.ads or [] if cons.get(a["concept_id"]) == option), None)
@@ -1072,10 +1082,11 @@ async def scope_filter(ctx, call_next):
     """Hide what the token can't use. tools/call checks again in acting(), so hiding is only cosmetic."""
     req = ctx.request
     scopes, role, *rest = (req.scope.get(STATE_KEY) if isinstance(req, Request) else None) or (None, "viewer")
-    admin = bool(rest and rest[0])
+    # the studios this user may not use, worked out once per request in _check_token
+    denied = rest[1] if len(rest) > 1 else frozenset(TOOL_FEATURE)
     name = (ctx.params or {}).get("name") if ctx.method == "tools/call" else None
-    if name in ADMIN_TOOLS and not admin:
-        # before argument checks, so a bad call can't tell an admin tool from a missing one either
+    if name in denied:
+        # before argument checks, so a bad call can't tell a switched-off tool from a missing one either
         return {"content": [{"type": "text", "text": f"Unknown tool: {name}"}], "isError": True}
     res = await call_next(ctx)
     key = LISTINGS.get(ctx.method)
@@ -1084,7 +1095,7 @@ async def scope_filter(ctx, call_next):
     data = res.model_dump(by_alias=True, exclude_none=True) if isinstance(res, BaseModel) else dict(res)
     if key == "tools":
         data["tools"] = [t for t in data.get("tools", []) if allowed(scopes, role, TOOL_SCOPE.get(t["name"], "manage"))
-                         and (admin or t["name"] not in ADMIN_TOOLS)]
+                         and t["name"] not in denied]
     elif not allowed(scopes, role, "read"):
         data[key] = []
     return data
@@ -1093,11 +1104,17 @@ async def scope_filter(ctx, call_next):
 server.middleware.append(scope_filter)
 
 
-def _check_token(raw: str) -> tuple[frozenset[str] | None, str, bool] | None:
+def _check_token(raw: str) -> tuple | str | None:
+    """(scopes, role, admin, tools whose studio is off), a block message for an account on hold, or None."""
     with SessionLocal() as db:
         cur = resolve_token(db, raw)
-        # whether the token's user is an admin, for the admin-only tools
-        return (cur.scopes, cur.role, bool(cur.user.is_admin)) if cur else None
+        if cur is None:
+            return None
+        if cur.user.blocked_at is not None:
+            return blocked_message(cur.user)
+        r = rights.effective(db, cur.user)
+        denied = frozenset(name for name, key in TOOL_FEATURE.items() if not r.allows(key))
+        return cur.scopes, cur.role, bool(cur.user.is_admin), denied
 
 
 class Endpoint:
@@ -1115,6 +1132,9 @@ class Endpoint:
             # no cookie fallback here: an MCP client always sends its token
             msg = "Invalid, expired or revoked API token" if raw else "Send Authorization: Bearer <API token>"
             await JSONResponse({"detail": msg}, 401, headers={"WWW-Authenticate": "Bearer"})(scope, receive, send)
+            return
+        if isinstance(found, str):
+            await JSONResponse({"detail": found}, 403)(scope, receive, send)
             return
         if request.method == "GET":
             # stateless: there's no server-to-client stream to open, and an idle one would only hold a connection

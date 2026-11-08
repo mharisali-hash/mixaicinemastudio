@@ -10,7 +10,7 @@ from app.db import get_db
 from app.implant.guard import has_access as has_implant_access
 from app.models import User, utcnow
 from app.ratelimit import SlidingWindow
-from app.schemas import EmailIn, LoginIn, PasswordChangeIn, ProfilePatch, ResetIn, SignupIn, UserOut
+from app.schemas import BlockedOut, EmailIn, LoginIn, PasswordChangeIn, ProfilePatch, ResetIn, SignupIn, UserOut
 from app.security import (
     COOKIE_NAME,
     SESSION_MAX_AGE,
@@ -25,6 +25,7 @@ from app.security import (
     make_session_token,
     session_only,
     session_user,
+    staff_of,
     verify_password,
 )
 
@@ -59,7 +60,8 @@ def _user_out(cur: CurrentUser) -> UserOut:
     u = cur.user
     return UserOut(id=u.id, email=u.email, display_name=u.display_name, workspace_id=cur.workspace_id, role=cur.role,
                    api_access=can_use_api(cur), api_docs=can_read_docs(cur), admin=is_admin(cur),
-                   verified=is_verified(u), implant=has_implant_access(cur))
+                   verified=is_verified(u), implant=has_implant_access(cur), staff=staff_of(u),
+                   blocked=BlockedOut(reason=u.blocked_reason or "", at=u.blocked_at) if u.blocked_at else None)
 
 
 def _set_cookie(response: Response, user: User) -> None:

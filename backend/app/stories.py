@@ -29,6 +29,7 @@ from app import dialogue as dl
 from app import library as lib
 from app import montage as mt
 from app import models_catalog as mc
+from app import rights
 from app import subtitles as st
 from app import speech, speech_language, venv_runner, voice_instruct, voices
 from app.config import get_settings
@@ -145,7 +146,7 @@ def _queue_music(db: Session, cur, music: dict) -> Generation:
 
     model_id, kind = MUSIC_MODELS[music["model"]]
     prompt = " ".join(music["prompt"].split())
-    m, chosen = mc.choose(model_id, "audio", prompt, kind=kind)
+    m, chosen = rights.choose(db, model_id, "audio", prompt, kind=kind)
     secs = min(MUSIC_SECONDS, m.max_duration_s or MUSIC_SECONDS)
     mc.check_audio(m, kind, secs)
     params = {"kind": kind, "model": m.id, "duration_s": secs, "user_prompt": prompt,
