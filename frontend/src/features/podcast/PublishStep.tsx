@@ -14,7 +14,7 @@ import { AiVideoEntry } from './video/AiVideoEntry'
 type Fmt = 'mp3' | 'm4a'
 type Aspect = '16:9' | '1:1'
 
-export function PublishStep({ ep }: { ep: Episode }) {
+export function PublishStep({ ep, onVideo }: { ep: Episode; onVideo: () => void }) {
   const uid = useId()
   const patch = usePatchEpisode(ep.id)
   const publish = usePublish(ep.id)
@@ -178,7 +178,7 @@ export function PublishStep({ ep }: { ep: Episode }) {
         )}
       </section>
 
-      <AiVideoEntry ep={ep} />
+      {ep.medium === 'audio' && <AiVideoEntry ep={ep} onVideo={onVideo} />}
 
       <MediaPicker
         open={pickCover}

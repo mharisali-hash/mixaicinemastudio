@@ -11,9 +11,9 @@ import { changedLines, progressOf, type Script, type ScriptLine } from '@/lib/di
 import { ROLE_LABEL, recordingLines, type Episode } from '@/lib/podcast'
 import { acceptFor } from '@/lib/upload'
 import { announce } from '@/stores/ui'
-import { StatusPill } from '../dialogue/LineList'
-import { togglePlay, useTrack } from '../sharedAudio'
-import { Recorder, type RecordLimits } from '../voice/Recorder'
+import { StatusPill } from '@/features/audio/dialogue/LineList'
+import { togglePlay, useTrack } from '@/features/audio/sharedAudio'
+import { Recorder, type RecordLimits } from '@/features/audio/voice/Recorder'
 
 // a podcast line, not a voice reference: short is fine, long is fine
 const LINE_LIMITS: RecordLimits = { min: 0.5, max: 180, goodMin: 2, goodMax: 60 }

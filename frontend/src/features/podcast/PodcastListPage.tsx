@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router'
-import { Plus, Podcast, Radio } from 'lucide-react'
+import { Link, useNavigate, useSearchParams } from 'react-router'
+import { AudioLines, Clapperboard, Plus, Podcast, Radio } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -9,17 +9,35 @@ import { Textarea } from '@/components/ui/textarea'
 import { EmptyState, ErrorState } from '@/components/studio/states'
 import { useCreateEpisode, useCreateShow, useEpisodes, useShows } from '@/hooks/usePodcast'
 import { useVoiceEngines } from '@/hooks/useVoices'
-import { FORMATS, STEPS, newHost, type EpisodeSummary, type Format, type Host, type Show } from '@/lib/podcast'
+import { FORMATS, newHost, type EpisodeSummary, type Format, type Host, type Medium, type Show } from '@/lib/podcast'
 import { allLanguages, languageName } from '@/lib/voice'
 import { cn } from '@/lib/utils'
-import { SELECT } from '../voice/AddVoiceDialog'
+import { SELECT } from '@/features/audio/voice/AddVoiceDialog'
+import { MediumBadge } from './EpisodePage'
+import { stepsFor } from './steps'
 
 export function PodcastListPage() {
   const shows = useShows()
   const episodes = useEpisodes()
   const { engines } = useVoiceEngines()
-  const [newEpisode, setNewEpisode] = useState<{ showId: string | null } | null>(null)
+  const [newEpisode, setNewEpisode] = useState<{ showId: string | null; medium?: Medium } | null>(null)
   const [newShow, setNewShow] = useState(false)
+  // the rail menu's "New audio / video podcast" links
+  const [params, setParams] = useSearchParams()
+  const asked = params.get('new')
+  const fromLink = asked === 'audio' || asked === 'video' ? asked : null
+  const dialog = newEpisode ?? (fromLink ? { showId: null, medium: fromLink } : null)
+  const closeDialog = () => {
+    setNewEpisode(null)
+    if (fromLink)
+      setParams(
+        (p) => {
+          p.delete('new')
+          return p
+        },
+        { replace: true },
+      )
+  }
   const showList = shows.data ?? []
   const list = episodes.data ?? []
   const showName = (id: string | null) => showList.find((s) => s.id === id)?.name ?? null
@@ -30,9 +48,9 @@ export function PodcastListPage() {
         <header className="flex flex-wrap items-end gap-3">
           <div className="min-w-0 flex-1">
             <h1 id="podcast-title" className="font-display text-title font-semibold">
-              Podcast
+              Podcast Studio
             </h1>
-            <p className="text-small text-studio-muted">From a topic, an article or your own script to a finished episode: hosts, music, chapters and a video version.</p>
+            <p className="text-small text-studio-muted">From a topic, an article or your own script to a finished episode: hosts, music and chapters, as audio or with your hosts on camera.</p>
           </div>
           <Button type="button" onClick={() => setNewShow(true)}>
             <Radio aria-hidden />
@@ -91,7 +109,7 @@ export function PodcastListPage() {
           )}
         </section>
       </div>
-      <NewEpisodeDialog open={!!newEpisode} onOpenChange={(o) => !o && setNewEpisode(null)} shows={showList} showId={newEpisode?.showId ?? null} />
+      <NewEpisodeDialog open={!!dialog} onOpenChange={(o) => !o && closeDialog()} shows={showList} showId={dialog?.showId ?? null} medium={dialog?.medium ?? 'audio'} />
       <NewShowDialog open={newShow} onOpenChange={setNewShow} />
     </main>
   )
@@ -123,19 +141,21 @@ function ShowCard({ show, language, onNew }: { show: Show; language: string; onN
 }
 
 function EpisodeRow({ ep, show, language }: { ep: EpisodeSummary; show: string | null; language: string }) {
-  const step = STEPS.find((s) => s.n === ep.step) ?? STEPS[0]
+  const steps = stepsFor(ep.medium)
+  const step = steps.find((s) => s.n === ep.step) ?? steps[0]
   const format = FORMATS.find((f) => f.id === ep.format)?.label ?? ep.format
   return (
     <li className="flex items-center gap-3 px-3 py-2.5">
-      <Podcast aria-hidden className="size-4 shrink-0 text-studio-muted" />
+      {ep.medium === 'video' ? <Clapperboard aria-hidden className="size-4 shrink-0 text-studio-muted" /> : <Podcast aria-hidden className="size-4 shrink-0 text-studio-muted" />}
       <div className="min-w-0 flex-1">
-        <Link to={`/audio/podcast/${ep.id}`} className="block truncate text-body font-medium hover:underline">
+        <Link to={`/podcast/${ep.id}`} className="block truncate text-body font-medium hover:underline">
           {ep.title}
         </Link>
         <p className="text-[11px] text-studio-muted">
           {[show, format, language, ep.minutes ? `≈ ${ep.minutes} min written` : `${ep.target_minutes} min planned`].filter(Boolean).join(' · ')}
         </p>
       </div>
+      <MediumBadge medium={ep.medium} />
       <span className={cn('shrink-0 rounded-[4px] border px-1.5 text-[11px] leading-5', ep.published ? 'border-studio-success text-studio-success' : 'border-studio-border text-studio-muted')}>
         {ep.published ? 'Published' : `Step ${step.n}: ${step.label}`}
       </span>
@@ -148,15 +168,20 @@ const LANGS_FALLBACK = [
   { code: 'ur', name: 'Urdu' },
 ]
 
-function NewEpisodeDialog({ open, onOpenChange, shows, showId }: { open: boolean; onOpenChange: (o: boolean) => void; shows: Show[]; showId: string | null }) {
+function NewEpisodeDialog({ open, onOpenChange, shows, showId, medium }: { open: boolean; onOpenChange: (o: boolean) => void; shows: Show[]; showId: string | null; medium: Medium }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">{open && <NewEpisodeForm shows={shows} showId={showId} onDone={() => onOpenChange(false)} />}</DialogContent>
+      <DialogContent className="max-w-lg">{open && <NewEpisodeForm key={medium} shows={shows} showId={showId} medium={medium} onDone={() => onOpenChange(false)} />}</DialogContent>
     </Dialog>
   )
 }
 
-function NewEpisodeForm({ shows, showId, onDone }: { shows: Show[]; showId: string | null; onDone: () => void }) {
+const MEDIA: { id: Medium; label: string; hint: string; icon: typeof Podcast }[] = [
+  { id: 'audio', label: 'Audio podcast', hint: 'A mixed episode to listen to', icon: AudioLines },
+  { id: 'video', label: 'Video podcast', hint: 'The same episode, then your hosts on camera', icon: Clapperboard },
+]
+
+function NewEpisodeForm({ shows, showId, medium: start, onDone }: { shows: Show[]; showId: string | null; medium: Medium; onDone: () => void }) {
   const create = useCreateEpisode()
   const navigate = useNavigate()
   const { engines } = useVoiceEngines()
@@ -168,6 +193,7 @@ function NewEpisodeForm({ shows, showId, onDone }: { shows: Show[]; showId: stri
   const [format, setFormat] = useState<Format>('conversation')
   const [language, setLanguage] = useState(picked?.language ?? 'en')
   const [minutes, setMinutes] = useState(5)
+  const [medium, setMedium] = useState<Medium>(start)
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -179,11 +205,11 @@ function NewEpisodeForm({ shows, showId, onDone }: { shows: Show[]; showId: stri
       for (let i = 0; i < n; i++) hosts.push(newHost(hosts))
     }
     create.mutate(
-      { title: title.trim() || 'New episode', topic: topic.trim(), format, language, target_minutes: minutes, show_id: show || null, hosts },
+      { title: title.trim() || 'New episode', topic: topic.trim(), format, medium, language, target_minutes: minutes, show_id: show || null, hosts },
       {
         onSuccess: (ep) => {
           onDone()
-          navigate(`/audio/podcast/${ep.id}`)
+          navigate(`/podcast/${ep.id}`)
         },
       },
     )
@@ -195,6 +221,27 @@ function NewEpisodeForm({ shows, showId, onDone }: { shows: Show[]; showId: stri
         <DialogTitle>New episode</DialogTitle>
         <DialogDescription>A topic is enough to start; you can bring material or your own script in the next step.</DialogDescription>
       </DialogHeader>
+      <fieldset className="flex flex-col gap-1">
+        <legend className="section-label mb-1">Kind of podcast</legend>
+        <div className="grid grid-cols-2 gap-2">
+          {MEDIA.map((m) => (
+            <label
+              key={m.id}
+              className={cn(
+                'flex cursor-pointer items-start gap-2 rounded-[6px] border p-2.5 text-small has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-1 has-[:focus-visible]:outline-studio-accent',
+                medium === m.id ? 'border-studio-accent bg-studio-accent-soft' : 'border-studio-border-strong hover:bg-studio-panel-hover',
+              )}
+            >
+              <input type="radio" name="medium" value={m.id} checked={medium === m.id} onChange={() => setMedium(m.id)} className="sr-only" />
+              <m.icon aria-hidden className="mt-0.5 size-4 shrink-0 text-studio-accent" />
+              <span className="flex flex-col">
+                <span className="font-medium text-studio-text">{m.label}</span>
+                <span className="text-[11px] text-studio-muted">{m.hint}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
       <label className="flex flex-col gap-1 text-small">
         <span className="section-label">Topic</span>
         <Textarea value={topic} onChange={(e) => setTopic(e.target.value)} rows={2} placeholder="Why Lahore's old city is getting its gates back" dir="auto" />

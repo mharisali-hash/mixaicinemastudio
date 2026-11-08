@@ -58,3 +58,5 @@ export const looksApi = {
 }
 
 export const lookBusy = (l: CharacterLook) => !!l.picture && ['queued', 'generating'].includes(l.picture.status)
+
+export const defaultLook = (looks: CharacterLook[] | undefined) => looks?.find((l) => l.is_default) ?? looks?.[0] ?? null

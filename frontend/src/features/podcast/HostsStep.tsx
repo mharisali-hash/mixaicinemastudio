@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useId, useState } from 'react'
-import { Mic, Plus, Save, Trash2 } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
+import { Mic, Plus, Save, Trash2, UserRound, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useVoiceChoices } from '@/hooks/useGallery'
 import { usePatchEpisode, useUpdateShow } from '@/hooks/usePodcast'
 import { useVoiceEngines } from '@/hooks/useVoices'
+import { defaultLook, looksApi } from '@/lib/looks'
 import { MAX_HOSTS, ROLE_LABEL, hostProblem, newHost, type Episode, type Host, type HostRole } from '@/lib/podcast'
-import type { Voice, VoiceEngine } from '@/lib/types'
+import type { Character, Voice, VoiceEngine } from '@/lib/types'
 import { announce } from '@/stores/ui'
-import { SELECT } from '../voice/AddVoiceDialog'
-import { VoiceChip } from '../voice/VoiceChips'
+import { SELECT } from '@/features/audio/voice/AddVoiceDialog'
+import { VoiceChip } from '@/features/audio/voice/VoiceChips'
+import { LookSelect, StudioCharacterPicker } from './StudioCharacterPicker'
 
 const SAVE_AFTER_MS = 600
 
@@ -47,7 +50,11 @@ export function HostsStep({ ep }: { ep: Episode }) {
     setHosts(next)
     setVer((v) => v + 1)
   }
-  const change = (id: string, p: Partial<Host>) => edit(hosts.map((h) => (h.id === id ? { ...h, ...p } : h)))
+  // functional: a host card can still be filling itself in (a character's default look) after a later render
+  const change = (id: string, p: Partial<Host>) => {
+    setHosts((list) => list.map((h) => (h.id === id ? { ...h, ...p } : h)))
+    setVer((v) => v + 1)
+  }
   const add = () => {
     const h = newHost(hosts)
     edit([...hosts, h])
@@ -62,11 +69,24 @@ export function HostsStep({ ep }: { ep: Episode }) {
     <>
       <div>
         <h2 className="font-display text-title font-semibold">Hosts</h2>
-        <p className="text-small text-studio-muted">One to four voices. The persona shapes how the writer has them talk; pick a voice from the Gallery or your own, or record a host yourself.</p>
+        <p className="text-small text-studio-muted">
+          One to four voices. The persona shapes how the writer has them talk; pick a voice from the Gallery or your own, or record a host yourself. A host can also be one of your
+          Character Studio characters{ep.medium === 'video' ? ', wearing one of their looks on camera' : ''}.
+        </p>
       </div>
       <ul aria-label="Hosts" className="grid gap-3 md:grid-cols-2">
         {hosts.map((h, i) => (
-          <HostCard key={h.id} host={h} n={i + 1} voices={voices} engines={engines} language={ep.language} onChange={(p) => change(h.id, p)} onRemove={hosts.length > 1 ? () => remove(h) : undefined} />
+          <HostCard
+            key={h.id}
+            host={h}
+            n={i + 1}
+            video={ep.medium === 'video'}
+            voices={voices}
+            engines={engines}
+            language={ep.language}
+            onChange={(p) => change(h.id, p)}
+            onRemove={hosts.length > 1 ? () => remove(h) : undefined}
+          />
         ))}
       </ul>
       <div className="flex flex-wrap items-center gap-2">
@@ -102,6 +122,7 @@ export function HostsStep({ ep }: { ep: Episode }) {
 function HostCard({
   host,
   n,
+  video,
   voices,
   engines,
   language,
@@ -110,6 +131,7 @@ function HostCard({
 }: {
   host: Host
   n: number
+  video: boolean
   voices: Voice[]
   engines: VoiceEngine[]
   language: string
@@ -117,6 +139,30 @@ function HostCard({
   onRemove?: () => void
 }) {
   const uid = useId()
+  const qc = useQueryClient()
+  const [picking, setPicking] = useState(false)
+  const label = host.name || `host ${n}`
+
+  const link = (c: Character) => {
+    setPicking(false)
+    onChange({
+      character_id: c.id,
+      look_id: null,
+      name: c.name.slice(0, 80),
+      persona: host.persona.trim() ? host.persona : c.description.slice(0, 400),
+      // their own voice, when the character has one; still changeable below
+      ...(c.voice_id ? { voice_id: c.voice_id, me: false } : {}),
+    })
+    announce(`${c.name} is host ${n}${c.voice_id ? ', with their voice' : ''}.`)
+    // the character's default look, once we know it's drawn
+    qc.fetchQuery({ queryKey: ['character-looks', c.id], queryFn: () => looksApi.list(c.id) })
+      .then((r) => {
+        const d = defaultLook(r.looks)
+        if (d?.picture && ['ready', 'approved'].includes(d.picture.status)) onChange({ look_id: d.id })
+      })
+      .catch(() => {})
+  }
+
   return (
     <li className="flex flex-col gap-2 rounded-[6px] border border-studio-border-strong bg-studio-panel p-3 shadow-card">
       <div className="flex items-end gap-2">
@@ -139,6 +185,37 @@ function HostCard({
             <Trash2 aria-hidden />
           </Button>
         )}
+      </div>
+      <div className="flex flex-col gap-2 rounded-[4px] border border-studio-border bg-studio-raised p-2">
+        {host.character_id ? (
+          <>
+            <div className="flex flex-wrap items-center gap-2 text-small">
+              <UserRound aria-hidden className="size-3.5 text-studio-muted" />
+              <span className="mr-auto">From Character Studio</span>
+              <Button type="button" size="sm" variant="ghost" aria-label={`Change the character for ${label}`} onClick={() => setPicking(true)}>
+                Change
+              </Button>
+              <Button type="button" size="sm" variant="ghost" aria-label={`Remove character from ${label}`} onClick={() => onChange({ character_id: null, look_id: null })}>
+                <X aria-hidden />
+                Remove character
+              </Button>
+            </div>
+            {video && (
+              <LookSelect
+                characterId={host.character_id}
+                value={host.look_id ?? null}
+                label={`Look on camera for ${label}`}
+                onChange={(lookId) => onChange({ character_id: host.character_id, look_id: lookId })}
+              />
+            )}
+          </>
+        ) : (
+          <Button type="button" size="sm" variant="ghost" className="self-start" aria-label={`Use a character for ${label}`} onClick={() => setPicking(true)}>
+            <UserRound aria-hidden />
+            Use a character
+          </Button>
+        )}
+        <StudioCharacterPicker hostName={label} open={picking} onOpenChange={setPicking} onPick={link} />
       </div>
       <label className="flex flex-col gap-1 text-small">
         <span className="section-label">Persona</span>

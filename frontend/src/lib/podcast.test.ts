@@ -61,6 +61,7 @@ const episode = (over: Partial<Episode> = {}): Episode => ({
   show_name: null,
   title: 'Bridge day',
   format: 'conversation',
+  medium: 'audio',
   language: 'en',
   target_minutes: 5,
   step: 1,

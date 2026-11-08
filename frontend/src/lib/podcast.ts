@@ -10,6 +10,8 @@ export type Format = 'interview' | 'conversation' | 'debate' | 'solo' | 'news' |
 export type HostRole = 'host' | 'cohost' | 'guest' | 'narrator'
 export type EditOp = 'rewrite_chapter' | 'shorter' | 'livelier'
 export type Loudness = 'stereo' | 'mono' | 'none'
+// audio or video podcast; `format` is the conversation style
+export type Medium = 'audio' | 'video'
 
 export const FORMATS: { id: Format; label: string; hint: string; hosts: number }[] = [
   { id: 'conversation', label: 'Conversation', hint: 'Hosts riff on a topic together', hosts: 2 },
@@ -46,6 +48,9 @@ export interface Host {
   persona: string
   voice_id: string | null
   me: boolean
+  // a Character Studio character, and the look it wears on camera
+  character_id?: string | null
+  look_id?: string | null
 }
 
 export interface Ad {
@@ -170,6 +175,7 @@ export interface Episode {
   show_name: string | null
   title: string
   format: Format
+  medium: Medium
   language: string
   target_minutes: number
   step: number
@@ -195,6 +201,7 @@ export interface EpisodeSummary {
   show_id: string | null
   title: string
   format: Format
+  medium: Medium
   language: string
   target_minutes: number
   step: number
@@ -209,6 +216,7 @@ export interface EpisodeCreate {
   title?: string
   show_id?: string | null
   format?: Format
+  medium?: Medium
   language?: string
   target_minutes?: number
   hosts?: Partial<Host>[]
@@ -219,6 +227,7 @@ export interface EpisodePatch {
   title?: string
   show_id?: string | null
   format?: Format
+  medium?: Medium
   language?: string
   target_minutes?: number
   step?: number

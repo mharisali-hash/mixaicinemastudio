@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { jobRunning, useApproveAiVideoGeneration, usePatchAiVideo, useRegenerateAiVideo } from '@/hooks/useVideoPodcast'
 import type { VideoPodcast, VPHost, VPHostChoice, VPHostSource } from '@/lib/types'
 import { announce } from '@/stores/ui'
+import { LookSelect, StudioCharacterPicker } from '../StudioCharacterPicker'
 import { CharacterPicker } from './CharacterPicker'
 import { ConsentFields } from './ConsentFields'
 import { GenActions, GenFrame } from './GenFrame'
@@ -13,6 +14,7 @@ import { LIKENESS_STATEMENT, picture } from './vp'
 
 const SOURCES: { value: VPHostSource; label: string }[] = [
   { value: 'persona', label: 'From persona' },
+  { value: 'studio', label: 'From Character Studio' },
   { value: 'photo', label: 'Upload photo' },
   { value: 'existing', label: 'Use existing character' },
 ]
@@ -49,6 +51,11 @@ function HostCard({ vp, host }: { vp: VideoPodcast; host: VPHost }) {
   const [agreed, setAgreed] = useState(false)
   const [asIs, setAsIs] = useState(!!host.photo_as_is)
   const [picking, setPicking] = useState(false)
+  const [studioPicking, setStudioPicking] = useState(false)
+  const [studio, setStudio] = useState<{ id: string; name: string } | null>(
+    host.source === 'studio' && host.from_character_id ? { id: host.from_character_id, name: host.name } : null,
+  )
+  const [look, setLook] = useState<string | null>(host.source === 'studio' ? (host.look_id ?? null) : null)
   const locked = jobRunning(vp)
 
   const choose = (choice: VPHostChoice, done: string) =>
@@ -156,6 +163,42 @@ function HostCard({ vp, host }: { vp: VideoPodcast; host: VPHost }) {
               {photoBlocked ?? 'Ready.'}
             </span>
           </div>
+        </div>
+      )}
+
+      {source === 'studio' && (
+        <div className="flex flex-col gap-2">
+          {host.source === 'studio' && <p className="text-small text-studio-muted">Wearing a look from Character Studio. Change it here, or in the episode's Hosts step.</p>}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" size="sm" disabled={locked} onClick={() => setStudioPicking(true)}>
+              <Users aria-hidden />
+              {studio ? `Character: ${studio.name}` : 'Pick a character'}
+            </Button>
+          </div>
+          {studio && <LookSelect characterId={studio.id} value={look} label={`Look for ${host.name}`} onChange={setLook} />}
+          {studio && (
+            <Button
+              type="button"
+              size="sm"
+              variant="primary"
+              className="self-start"
+              disabled={locked}
+              loading={patch.isPending}
+              onClick={() => choose({ source: 'studio', character_id: studio.id, look_id: look }, `${host.name} will wear that look.`)}
+            >
+              Use this look
+            </Button>
+          )}
+          <StudioCharacterPicker
+            hostName={host.name}
+            open={studioPicking}
+            onOpenChange={setStudioPicking}
+            onPick={(c) => {
+              setStudioPicking(false)
+              setStudio({ id: c.id, name: c.name })
+              setLook(null)
+            }}
+          />
         </div>
       )}
 

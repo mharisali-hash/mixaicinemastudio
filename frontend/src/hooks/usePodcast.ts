@@ -30,6 +30,9 @@ export function useEpisode(id: string | undefined) {
 function put(qc: QueryClient, ep: Episode) {
   qc.setQueryData(qk.podcastEpisode(ep.id), ep)
   qc.invalidateQueries({ queryKey: qk.podcastEpisodes })
+  // hosts and the medium reach the AI video on the server (its cast, or the record itself)
+  qc.invalidateQueries({ queryKey: qk.episodeAiVideo(ep.id) })
+  qc.invalidateQueries({ queryKey: ['podcast', 'ai-video'] })
   // the script under it may have changed (hosts → cast, pasted lines, recordings)
   if (ep.script_id) qc.invalidateQueries({ queryKey: qk.script(ep.script_id) })
 }

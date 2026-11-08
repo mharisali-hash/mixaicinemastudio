@@ -7,7 +7,7 @@ export type VPStepId = 'hosts' | 'set' | 'look' | 'cameras' | 'render' | 'result
 export type VPStepState = 'done' | 'todo' | 'busy' | 'review'
 
 export const VP_STEPS: { id: VPStepId; label: string; stage: VPStageKey }[] = [
-  { id: 'hosts', label: 'Hosts', stage: 'cast' },
+  { id: 'hosts', label: 'Cast', stage: 'cast' },
   { id: 'set', label: 'Set', stage: 'set' },
   { id: 'look', label: 'Look', stage: 'keyframes' },
   { id: 'cameras', label: 'Cameras & cut', stage: 'plan' },

@@ -7,13 +7,13 @@ import type { Episode, EpisodeSettings } from '@/lib/podcast'
 import { stubMedia } from '@/test/audio-fixtures'
 import { T, job, mockApi, renderAt } from '@/test/media-fixtures'
 import { ENGINES, VOICES } from '@/test/voice-fixtures'
-import { resetPlayer } from '../sharedAudio'
+import { resetPlayer } from '@/features/audio/sharedAudio'
 import { EpisodePage } from './EpisodePage'
 import { PodcastListPage } from './PodcastListPage'
 
 const routes = [
-  { path: '/audio/podcast', element: <PodcastListPage /> },
-  { path: '/audio/podcast/:id', element: <EpisodePage /> },
+  { path: '/podcast', element: <PodcastListPage /> },
+  { path: '/podcast/:id', element: <EpisodePage /> },
 ]
 
 const SETTINGS: EpisodeSettings = {
@@ -81,6 +81,7 @@ const episode = (extra: Partial<Episode> = {}): Episode => ({
   show_name: null,
   title: 'Bridge day',
   format: 'conversation',
+  medium: 'audio',
   language: 'en',
   target_minutes: 5,
   step: 1,
@@ -156,8 +157,18 @@ function api(initial: Episode, s: Script = script()) {
     if (path.startsWith('/favourites')) return { refs: [] }
     if (path === '/media') return { items: [] }
     if (path === '/podcast/shows') return method === 'GET' ? [] : { id: 'sh1' }
+    if (path === '/characters') return [{ id: 'ch1', project_id: null, name: 'Ayesha', description: 'a calm presenter', source: 'user', locked: false, voice_id: 'gallery:ur-dadi' }]
+    if (path === '/characters/ch1/looks')
+      return {
+        looks: [{ id: 'lk1', character_id: 'ch1', name: 'Office', outfit: '', setting: '', pose: '', prompt: '', is_default: true, sort: 0, picture: { id: 'lp1', status: 'ready', thumb_url: '/m/lp1.png' }, created_at: T }],
+        packs: [],
+      }
+    if (path === '/podcast/episodes/e1/ai-video') return new Response('{"detail": "Not found"}', { status: 404, headers: { 'Content-Type': 'application/json' } })
     if (method === 'GET' && path === '/podcast/episodes')
-      return [{ id: 'e1', show_id: null, title: 'Bridge day', format: 'conversation', language: 'en', target_minutes: 5, step: 3, minutes: 0.1, has_mix: false, published: false, created_at: T, updated_at: T }]
+      return [
+        { id: 'e1', show_id: null, title: 'Bridge day', format: 'conversation', medium: 'audio', language: 'en', target_minutes: 5, step: 3, minutes: 0.1, has_mix: false, published: false, created_at: T, updated_at: T },
+        { id: 'e2', show_id: null, title: 'On camera', format: 'conversation', medium: 'video', language: 'en', target_minutes: 5, step: 8, minutes: 0.1, has_mix: true, published: false, created_at: T, updated_at: T },
+      ]
     if (method === 'POST' && path === '/podcast/episodes') return episode({ id: 'e9', title: (b.title as string) ?? 'New episode' })
     if (method === 'GET' && path === '/podcast/episodes/e1') return ep
     if (method === 'PATCH' && path === '/podcast/episodes/e1') {
@@ -192,24 +203,59 @@ afterEach(() => {
 describe('Podcast', { timeout: 20_000 }, () => {
   it('lists episodes and starts a new one with hosts for its format', async () => {
     const calls = api(episode())
-    renderAt('/audio/podcast', routes)
+    renderAt('/podcast', routes)
     const user = userEvent.setup()
-    expect(await screen.findByRole('link', { name: 'Bridge day' })).toHaveAttribute('href', '/audio/podcast/e1')
+    expect(await screen.findByRole('link', { name: 'Bridge day' })).toHaveAttribute('href', '/podcast/e1')
     expect(screen.getByText('Step 3: Script')).toBeInTheDocument()
+    // a video episode's step counts on into the video steps
+    const video = screen.getByRole('link', { name: 'On camera' }).closest('li')!
+    expect(within(video).getByText('Video')).toBeInTheDocument()
+    expect(within(video).getByText('Step 8: Set')).toBeInTheDocument()
+    expect(within(screen.getByRole('link', { name: 'Bridge day' }).closest('li')!).getByText('Audio')).toBeInTheDocument()
     await user.click(screen.getAllByRole('button', { name: 'New episode' })[0])
     const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByRole('radio', { name: /Audio podcast/ })).toBeChecked()
+    await user.click(within(dialog).getByRole('radio', { name: /Video podcast/ }))
     await user.type(within(dialog).getByRole('textbox', { name: 'Topic' }), 'Lahore gates')
     await user.selectOptions(within(dialog).getByRole('combobox', { name: 'Format' }), 'interview')
     await user.click(within(dialog).getByRole('button', { name: 'Create episode' }))
-    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/audio/podcast/e9'))
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/podcast/e9'))
     const body = sent(calls, 'POST', '/podcast/episodes')[0] as Record<string, unknown>
-    expect(body).toMatchObject({ topic: 'Lahore gates', format: 'interview', title: 'New episode', target_minutes: 5, show_id: null })
+    expect(body).toMatchObject({ topic: 'Lahore gates', format: 'interview', medium: 'video', title: 'New episode', target_minutes: 5, show_id: null })
     expect((body.hosts as { role: string }[]).map((h) => h.role)).toEqual(['host', 'cohost'])
+  })
+
+  it('opens the new-episode dialog from the menu link, already set to video', async () => {
+    api(episode())
+    renderAt('/podcast?new=video', routes)
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByRole('radio', { name: /Video podcast/ })).toBeChecked()
+  })
+
+  it('makes a host one of your Character Studio characters, with their voice and look', async () => {
+    const calls = api(episode({ step: 2, medium: 'video' }))
+    renderAt('/podcast/e1', routes)
+    const user = userEvent.setup()
+    await screen.findByRole('heading', { name: 'Hosts' })
+    await user.click(screen.getByRole('button', { name: 'Use a character for Ali' }))
+    await user.click(await within(screen.getByRole('dialog')).findByRole('button', { name: /Ayesha/ }))
+    expect(screen.getByRole('textbox', { name: 'Host 1 name' })).toHaveValue('Ayesha')
+    // the default look comes along once it's known to be drawn
+    await waitFor(() => {
+      const last = sent(calls, 'PATCH', '/podcast/episodes/e1').at(-1) as { hosts?: Record<string, unknown>[] }
+      expect(last?.hosts?.[0]).toMatchObject({ name: 'Ayesha', character_id: 'ch1', look_id: 'lk1', voice_id: 'gallery:ur-dadi', persona: 'curious' })
+    })
+    expect(screen.getByRole('combobox', { name: 'Look on camera for Ayesha' })).toHaveValue('lk1')
+    await user.click(screen.getByRole('button', { name: /Remove character from Ayesha/ }))
+    await waitFor(() => {
+      const last = sent(calls, 'PATCH', '/podcast/episodes/e1').at(-1) as { hosts?: Record<string, unknown>[] }
+      expect(last?.hosts?.[0]).toMatchObject({ character_id: null, look_id: null, voice_id: 'gallery:ur-dadi' })
+    })
   })
 
   it('moves through the steps with the keyboard and remembers the step', async () => {
     const calls = api(episode())
-    renderAt('/audio/podcast/e1', routes)
+    renderAt('/podcast/e1', routes)
     const user = userEvent.setup()
     const source = await screen.findByRole('tab', { name: /Source/ })
     expect(source).toHaveAttribute('aria-selected', 'true')
@@ -227,7 +273,7 @@ describe('Podcast', { timeout: 20_000 }, () => {
 
   it('picks host voices from the gallery and a host who records', async () => {
     const calls = api(episode({ step: 2 }))
-    renderAt('/audio/podcast/e1', routes)
+    renderAt('/podcast/e1', routes)
     const user = userEvent.setup()
     await screen.findByRole('heading', { name: 'Hosts' })
     // Sara records her own lines, so she has no voice picker
@@ -246,7 +292,7 @@ describe('Podcast', { timeout: 20_000 }, () => {
 
   it('shows chapters and sends picked lines to the writer', async () => {
     const calls = api(episode({ step: 3 }))
-    renderAt('/audio/podcast/e1', routes)
+    renderAt('/podcast/e1', routes)
     const user = userEvent.setup()
     expect(await screen.findByRole('heading', { name: 'Hello' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'The news' })).toBeInTheDocument()
@@ -265,7 +311,7 @@ describe('Podcast', { timeout: 20_000 }, () => {
 
   it('renders only changed AI lines and offers a recorder for the host who records', async () => {
     const calls = api(episode({ step: 4 }))
-    renderAt('/audio/podcast/e1', routes)
+    renderAt('/podcast/e1', routes)
     const user = userEvent.setup()
     const btn = await screen.findByRole('button', { name: 'Render 2 changed' })
     await user.click(btn)
@@ -279,7 +325,7 @@ describe('Podcast', { timeout: 20_000 }, () => {
 
   it('sets produce options, inserts a pause and waits for every line before mixing', async () => {
     const calls = api(episode({ step: 5 }))
-    renderAt('/audio/podcast/e1', routes)
+    renderAt('/podcast/e1', routes)
     const user = userEvent.setup()
     await screen.findByRole('heading', { name: 'Produce' })
     expect(screen.getByText('3 lines to voice or record first (step 4)')).toBeInTheDocument()
@@ -297,7 +343,7 @@ describe('Podcast', { timeout: 20_000 }, () => {
   it('mixes once every line is ready', async () => {
     const ready = { lines: 4, ready: 4, stale: 0, empty: 0, rendering: 0, failed: 0 }
     const calls = api(episode({ step: 5, counts: ready }))
-    renderAt('/audio/podcast/e1', routes)
+    renderAt('/podcast/e1', routes)
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Mix the episode' }))
     await waitFor(() => expect(sent(calls, 'POST', '/podcast/episodes/e1/mix')).toHaveLength(1))
@@ -305,7 +351,7 @@ describe('Podcast', { timeout: 20_000 }, () => {
 
   it('publishes the audio, the subtitles and the audiogram', async () => {
     const calls = api(episode({ step: 6, outputs: { mix: MIXED, publish: null, video: null } }))
-    renderAt('/audio/podcast/e1', routes)
+    renderAt('/podcast/e1', routes)
     const user = userEvent.setup()
     await screen.findByRole('heading', { name: 'Publish' })
     expect(screen.getByRole('list', { name: 'Chapters' })).toHaveTextContent('00:30The news')
@@ -330,7 +376,7 @@ describe('Podcast', { timeout: 20_000 }, () => {
 
   it("won't publish before there's a mix", async () => {
     const calls = api(episode({ step: 6 }))
-    renderAt('/audio/podcast/e1', routes)
+    renderAt('/podcast/e1', routes)
     const user = userEvent.setup()
     expect(await screen.findByText(/Mix the episode first \(step 5\)/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Publish MP3' }))

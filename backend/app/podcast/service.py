@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app import dialogue as dl
 from app import library as lib
-from app.models import (Generation, Job, MediaItem, PodcastEpisode, PodcastShow, VoiceScript, new_id)
+from app.models import (Character, CharacterLook, Generation, Job, MediaItem, PodcastEpisode, PodcastShow, VideoPodcast, VoiceScript, new_id)
 from app.services import job_out, media_url, new_seed, next_version
 
 WRITE_JOB = "podcast_write"
@@ -59,8 +59,26 @@ def clean_hosts(hosts: list[dict] | None) -> list[dict]:
         me = bool(h.get("me"))
         out.append({"id": hid, "name": " ".join(str(h.get("name") or "").split())[:80] or "Host", "role": role,
                     "persona": " ".join(str(h.get("persona") or "").split())[:400],
-                    "voice_id": None if me else (h.get("voice_id") or None), "me": me})
+                    "voice_id": None if me else (h.get("voice_id") or None), "me": me,
+                    "character_id": h.get("character_id") or None,
+                    "look_id": (h.get("look_id") or None) if h.get("character_id") else None})
     return out
+
+
+def check_hosts(db: Session, workspace_id: str, hosts: list[dict]) -> None:
+    """A host linked to a character must point at a Character Studio one of this workspace, in one of its looks."""
+    for h in hosts:
+        if not h.get("character_id"):
+            continue
+        c = db.get(Character, h["character_id"])
+        if c is None or c.workspace_id != workspace_id:
+            raise HTTPException(404, f"{h['name']}: that character doesn't exist")
+        if c.project_id is not None:
+            raise HTTPException(422, f"{h['name']}: pick a character from Character Studio")
+        if h.get("look_id"):
+            look = db.get(CharacterLook, h["look_id"])
+            if look is None or look.character_id != c.id:
+                raise HTTPException(422, f"{h['name']}: that look isn't one of {c.name}'s")
 
 
 def clean_chapters(chapters: list[dict] | None) -> list[dict]:
@@ -241,6 +259,17 @@ def sources_out(ep: PodcastEpisode, s: VoiceScript | None) -> dict:
             "has_script": bool(s is not None and s.lines)}
 
 
+def medium_of(ep: PodcastEpisode, has_video: bool) -> str:
+    # an audio episode someone already made an AI video of (before Podcast Studio) counts as video
+    return "video" if has_video or (ep.settings or {}).get("medium") == "video" else "audio"
+
+
+def with_video(db: Session, ids: list[str]) -> set[str]:
+    if not ids:
+        return set()
+    return set(db.scalars(select(VideoPodcast.episode_id).where(VideoPodcast.episode_id.in_(ids))).all())
+
+
 def episode_out(db: Session, ep: PodcastEpisode) -> dict:
     from app.podcast import produce
 
@@ -257,8 +286,8 @@ def episode_out(db: Session, ep: PodcastEpisode) -> dict:
         mix["stale"] = basis != mix.get("basis") or bool(dl.not_ready(lines))
     show = db.get(PodcastShow, ep.show_id) if ep.show_id else None
     return {"id": ep.id, "show_id": ep.show_id, "show_name": show.name if show else None, "title": ep.title,
-            "format": ep.format, "language": ep.language, "target_minutes": ep.target_minutes, "step": ep.step,
-            "cover_media_id": ep.cover_media_id, "cover_url": item_url(db, ep.cover_media_id),
+            "format": ep.format, "medium": medium_of(ep, bool(with_video(db, [ep.id]))), "language": ep.language,
+            "target_minutes": ep.target_minutes, "step": ep.step, "cover_media_id": ep.cover_media_id, "cover_url": item_url(db, ep.cover_media_id),
             "sources": sources_out(ep, s), "hosts": ep.hosts or [], "chapters": ep.chapters or [],
             "script_id": ep.script_id, "settings": settings_of(ep), "notes": ep.notes,
             "outputs": {"mix": mix, "publish": _output(db, outs.get("publish")),
@@ -267,10 +296,11 @@ def episode_out(db: Session, ep: PodcastEpisode) -> dict:
             "counts": dl.counts(lines), "created_at": ep.created_at, "updated_at": ep.updated_at}
 
 
-def episode_summary(db: Session, ep: PodcastEpisode) -> dict:
+def episode_summary(db: Session, ep: PodcastEpisode, has_video: bool = False) -> dict:
     s = db.get(VoiceScript, ep.script_id or "") if ep.script_id else None
     words = word_count(s.lines or []) if s is not None else 0
-    return {"id": ep.id, "show_id": ep.show_id, "title": ep.title, "format": ep.format, "language": ep.language,
+    return {"id": ep.id, "show_id": ep.show_id, "title": ep.title, "format": ep.format,
+            "medium": medium_of(ep, has_video), "language": ep.language,
             "target_minutes": ep.target_minutes, "step": ep.step, "minutes": round(words / WPM, 1),
             "has_mix": bool((ep.outputs or {}).get("mix")), "published": bool((ep.outputs or {}).get("publish")),
             "created_at": ep.created_at, "updated_at": ep.updated_at}

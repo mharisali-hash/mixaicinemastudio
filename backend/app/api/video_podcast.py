@@ -32,9 +32,11 @@ class Consent(BaseModel):
 
 
 class HostChoice(BaseModel):
-    source: Literal["persona", "photo", "existing"]
+    source: Literal["persona", "photo", "existing", "studio"]
     media_id: str | None = None
     character_id: str | None = None
+    # studio only: wear this look instead of the plain portrait
+    look_id: str | None = None
     consent: Consent | None = None
     # photo only: use the photo itself as the approved portrait instead of a studio edit of it
     as_is: bool = False
@@ -188,6 +190,8 @@ def continue_ai_video(vp_id: str, db: Session = Depends(get_db), cur: CurrentUse
     ep = vd.episode_of(db, vp)
     vd.ensure_idle(db, vp)
     vd.sync_hosts(db, vp, ep)
+    if vd.apply_linked_hosts(db, vp, ep):
+        vd.reset_from(vp, "cast")
     if all(vd.stage(vp, k).get("status") == "done" for k in vd.CONTINUE_STAGES):
         key = vd.stale_from(db, vp, ep)
         if key is None:
@@ -213,7 +217,7 @@ def regenerate(vp_id: str, body: RegenerateIn, db: Session = Depends(get_db), cu
         entry = (vp.hosts or {}).get(body.key or "")
         if not entry:
             raise HTTPException(404, "No such host")
-        if entry.get("source") == "existing":
+        if entry.get("source") in ("existing", "studio"):
             raise HTTPException(409, "This host is a copied character; pick another source to make a new portrait")
         base = vd.current_portrait(db, entry)
     elif body.what == "set":

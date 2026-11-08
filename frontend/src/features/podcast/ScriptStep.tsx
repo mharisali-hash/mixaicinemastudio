@@ -13,7 +13,7 @@ import { joinLines, splitLines } from '@/lib/aerab'
 import { blankLine, moveLine, type Script } from '@/lib/dialogue'
 import { WPM, busy, byChapter, minutesFor, wordCount, writeBlockedReason, type EditOp, type Episode } from '@/lib/podcast'
 import { announce } from '@/stores/ui'
-import { LineList, type LineActions } from '../dialogue/LineList'
+import { LineList, type LineActions } from '@/features/audio/dialogue/LineList'
 import { useScriptDraft } from './useScriptDraft'
 
 const noop = () => {}

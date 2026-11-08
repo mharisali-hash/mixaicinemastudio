@@ -9,7 +9,6 @@ import {
   MessagesSquare,
   Music,
   Music4,
-  Podcast,
   Scissors,
   Sparkles,
   SquareSplitHorizontal,
@@ -62,7 +61,6 @@ export const AUDIO_GROUPS: AudioGroup[] = [
     label: 'Story',
     pages: [
       { id: 'dialogue', label: 'Dialogue', to: '/audio/dialogue', icon: MessagesSquare },
-      { id: 'podcast', label: 'Podcast', to: '/audio/podcast', icon: Podcast },
     ],
   },
   {

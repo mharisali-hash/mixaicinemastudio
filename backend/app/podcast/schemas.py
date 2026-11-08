@@ -9,6 +9,8 @@ from app.schemas import JobOut, LangCode, Utc
 
 Format = Literal["interview", "conversation", "debate", "solo", "news", "storytelling", "qa"]
 Role = Literal["host", "cohost", "guest", "narrator"]
+# not `format`: an episode already has one (conversation, interview…)
+Medium = Literal["audio", "video"]
 
 
 class Host(BaseModel):
@@ -18,6 +20,9 @@ class Host(BaseModel):
     persona: str = Field("", max_length=PROMPT_MAX)
     voice_id: str | None = Field(None, max_length=120)
     me: bool = False
+    # a Character Studio character, and which of its looks it wears on camera
+    character_id: str | None = Field(None, max_length=40)
+    look_id: str | None = Field(None, max_length=40)
 
 
 class HostOut(Host):
@@ -185,6 +190,7 @@ class EpisodeOut(BaseModel):
     show_name: str | None = None
     title: str
     format: str
+    medium: Medium = "audio"
     language: str
     target_minutes: float
     step: int
@@ -210,6 +216,7 @@ class EpisodeSummary(BaseModel):
     show_id: str | None = None
     title: str
     format: str
+    medium: Medium = "audio"
     language: str
     target_minutes: float
     step: int
@@ -224,6 +231,7 @@ class EpisodeIn(BaseModel):
     title: str = Field("New episode", min_length=1, max_length=200)
     show_id: str | None = None
     format: Format = "conversation"
+    medium: Medium = "audio"
     language: LangCode | None = None
     target_minutes: float = Field(5.0, ge=0.5, le=120)
     hosts: list[Host] | None = Field(None, max_length=4)
@@ -234,9 +242,12 @@ class EpisodePatch(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=200)
     show_id: str | None = None
     format: Format | None = None
+    # one way only: an audio episode can become a video podcast
+    medium: Literal["video"] | None = None
     language: LangCode | None = None
     target_minutes: float | None = Field(None, ge=0.5, le=120)
-    step: int | None = Field(None, ge=1, le=6)
+    # a video episode's stepper runs on into the video steps
+    step: int | None = Field(None, ge=1, le=12)
     cover_media_id: str | None = None
     sources: SourcesPatch | None = None
     hosts: list[Host] | None = Field(None, max_length=4)

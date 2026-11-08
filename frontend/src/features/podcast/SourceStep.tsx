@@ -11,7 +11,7 @@ import { FORMATS, type Episode, type Format } from '@/lib/podcast'
 import { allLanguages } from '@/lib/voice'
 import { cn } from '@/lib/utils'
 import { announce } from '@/stores/ui'
-import { SELECT } from '../voice/AddVoiceDialog'
+import { SELECT } from '@/features/audio/voice/AddVoiceDialog'
 
 type Mode = 'topic' | 'paste' | 'upload' | 'script'
 

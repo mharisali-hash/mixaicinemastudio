@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -13,7 +13,10 @@ afterEach(() => vi.unstubAllGlobals())
 
 // the workspace route is lazy and pulls in most of the studio; a cold import of it can take
 // several seconds on a busy run, so pay for it here rather than inside a test's findBy wait
-beforeAll(() => import('@/features/workspace/WorkspacePage'), 30_000)
+beforeAll(
+  () => Promise.all([import('@/features/workspace/WorkspacePage'), import('@/features/podcast/PodcastFrame'), import('@/features/podcast/PodcastListPage')]),
+  30_000,
+)
 
 const project: Project = {
   id: 'p1',
@@ -40,6 +43,7 @@ function renderApp(path: string) {
     if (p === '/media') return { items: [] }
     if (p === '/quick/recent') return []
     if (p === '/prompt-templates') return []
+    if (p === '/podcast/shows' || p === '/podcast/episodes' || p === '/voices/engines') return []
   })
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
   qc.setQueryData(qk.jobs, [])
@@ -59,11 +63,22 @@ describe('app shell', () => {
   it.each([
     ['/image/templates', '/image/prompt-templates', 'Image prompt templates'],
     ['/video/templates', '/video/prompt-templates', 'Video prompt templates'],
+    // Podcast Studio left Audio for a rail entry of its own
+    ['/audio/podcast', '/podcast', 'Podcast Studio'],
   ])('the old %s address lands on %s', async (from, to, title) => {
     const { router } = renderApp(from)
     expect(await screen.findByRole('heading', { name: title }, { timeout: 5000 })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe(to)
     expect(screen.getAllByTestId('page-title')[0]).toHaveTextContent(title)
+  })
+
+  it.each([
+    ['/audio/podcast/e1', '/podcast/e1'],
+    ['/audio/podcast/e1/video', '/podcast/e1'],
+    ['/podcast/e1/video', '/podcast/e1'],
+  ])('the old episode address %s lands on %s', async (from, to) => {
+    const { router } = renderApp(from)
+    await waitFor(() => expect(router.state.location.pathname).toBe(to), { timeout: 5000 })
   })
 
   it('outside a project the top bar shows the page title and the page’s own actions', async () => {

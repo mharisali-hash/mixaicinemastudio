@@ -83,7 +83,7 @@ export interface MenuSection {
   modelsNote?: string
 }
 
-export type RailId = 'home' | 'assets' | 'brand' | 'photos' | 'image' | 'video' | 'characters' | '3d' | 'audio' | 'upscale' | 'queue' | 'settings' | 'admin' | 'print' | 'implant'
+export type RailId = 'home' | 'assets' | 'brand' | 'photos' | 'image' | 'video' | 'characters' | '3d' | 'audio' | 'podcast' | 'upscale' | 'queue' | 'settings' | 'admin' | 'print' | 'implant'
 
 export interface RailItem {
   id: RailId
@@ -145,7 +145,6 @@ const AUDIO_MENU: MenuSection = {
     { id: 'gallery', title: 'Voice gallery', description: 'Ready-made voices, Urdu and more', to: '/audio/gallery', icon: LibraryBig },
     { id: 'design', title: 'Design a voice', description: 'Describe a voice, keep its seed', to: '/audio/design', icon: Sparkles },
     { id: 'dialogue', title: 'Dialogue', description: 'A cast of voices, line by line', to: '/audio/dialogue', icon: MessagesSquare },
-    { id: 'podcast', title: 'Podcast', description: 'Topic or article to a finished episode', to: '/audio/podcast', icon: Podcast },
     { id: 'editor', title: 'Editor', description: 'Trim, fade, effects, loudness', to: '/audio/edit', icon: Scissors },
     { id: 'score', title: 'Score a Clip', description: 'Mix music and effects under a video', to: '/audio/score', icon: AudioWaveform },
     { id: 'stems', title: 'Split a song', description: 'Upload a song: get the vocals and the music as separate tracks', to: '/audio/stems', icon: SquareSplitHorizontal },
@@ -153,6 +152,17 @@ const AUDIO_MENU: MenuSection = {
     { id: 'dub', title: 'Dub a video', description: 'Translate and re-voice, Urdu and more', to: '/audio/dub', icon: Languages },
     { id: 'templates', title: 'Prompt templates', description: 'Qawwali, tense score, rain…', to: '/audio/prompt-templates', icon: LayoutTemplate },
     { id: 'library', title: 'Library', description: 'Every song, cue and effect', to: '/audio/library', icon: Library },
+  ],
+  models: [],
+}
+
+// Phase 4: a studio of its own; every episode is audio or video from the start
+const PODCAST_MENU: MenuSection = {
+  title: 'Podcast Studio',
+  features: [
+    { id: 'episodes', title: 'Episodes', description: 'Your shows and episodes', to: '/podcast', icon: Podcast },
+    { id: 'new-audio', title: 'New audio podcast', description: 'Hosts, script, voices, a mixed episode', to: '/podcast?new=audio', icon: Mic },
+    { id: 'new-video', title: 'New video podcast', description: 'The same, then your hosts on camera', to: '/podcast?new=video', icon: Video },
   ],
   models: [],
 }
@@ -192,6 +202,7 @@ export const RAIL_ITEMS: RailItem[] = [
   { id: 'image', label: 'Image', icon: ImageIcon, to: '/image/generate', menu: IMAGE_MENU },
   { id: 'video', label: 'Video', icon: Clapperboard, to: '/video/quick', menu: VIDEO_MENU },
   { id: 'audio', label: 'Audio', icon: Music, to: '/audio/song', menu: AUDIO_MENU },
+  { id: 'podcast', label: 'Podcast Studio', icon: Podcast, to: '/podcast', menu: PODCAST_MENU },
   // contract-v25: a studio of its own, not a menu under Video
   { id: 'characters', label: 'Characters', icon: UsersRound, to: '/characters' },
   // contract v40: picture to 3D model, a studio of its own
@@ -232,7 +243,7 @@ const engineListed = (m: Model, upscale: ModelInfo[]) => {
 }
 
 export type Catalog = Record<ModelType, ModelInfo[]>
-export type MenuId = 'image' | 'video' | 'audio' | 'upscale' | 'assets'
+export type MenuId = 'image' | 'video' | 'audio' | 'podcast' | 'upscale' | 'assets'
 
 /** The Models columns, from the catalog: generation models first, then the upscale engines. Available only. */
 export function menusFrom(catalog: Catalog): Record<MenuId, MenuSection> {
@@ -242,6 +253,7 @@ export function menusFrom(catalog: Catalog): Record<MenuId, MenuSection> {
     image: { ...IMAGE_MENU, models: [...gen('image', 'edit'), ...engines(IMAGE_MENU)] },
     video: { ...VIDEO_MENU, models: [...gen('video'), ...engines(VIDEO_MENU)] },
     audio: { ...AUDIO_MENU, models: gen('audio') },
+    podcast: PODCAST_MENU,
     upscale: { ...UPSCALE_MENU, models: engines(UPSCALE_MENU) },
     assets: ASSETS_MENU,
   }
@@ -257,6 +269,7 @@ export function activeRail(pathname: string): RailId | null {
   if (p.startsWith('/image')) return 'image'
   if (p.startsWith('/video') || p.startsWith('/projects') || p === '/create' || p.startsWith('/quick')) return 'video'
   if (p.startsWith('/audio')) return 'audio'
+  if (p === '/podcast' || p.startsWith('/podcast/')) return 'podcast'
   if (p.startsWith('/characters')) return 'characters'
   if (p === '/3d' || p.startsWith('/3d/')) return '3d'
   if (p.startsWith('/assets')) return 'assets'
@@ -300,6 +313,7 @@ const TITLES: [RegExp, string][] = [
   [/^\/image\/img2img/, 'Image to image'],
   [/^\/image\/control/, 'Sketch, depth and pose to image'],
   [/^\/video\/img2vid/, 'Image to video'],
+  [/^\/podcast(\/|$)/, 'Podcast Studio'],
   [/^\/audio\/song/, 'Song'],
   [/^\/audio\/music/, 'Music & score'],
   [/^\/audio\/sfx/, 'Sound effects'],

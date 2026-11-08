@@ -6,6 +6,7 @@ import { RequireAuth } from '@/features/auth/RequireAuth'
 import { AppShell } from '@/components/shell/AppShell'
 import { ProjectsPage } from '@/features/projects/ProjectsPage'
 import { NotFound } from '@/features/stages/NotFound'
+import { MovedEpisode } from '@/features/podcast/MovedEpisode'
 
 const page = (path: string, load: () => Promise<React.ReactElement>): RouteObject => ({
   path,
@@ -162,18 +163,10 @@ export const shellRoutes: RouteObject[] = [
         const { DialogueEditorPage } = await import('@/features/audio/dialogue/DialogueEditorPage')
         return <DialogueEditorPage />
       }),
-      page('podcast', async () => {
-        const { PodcastListPage } = await import('@/features/audio/podcast/PodcastListPage')
-        return <PodcastListPage />
-      }),
-      page('podcast/:id', async () => {
-        const { EpisodePage } = await import('@/features/audio/podcast/EpisodePage')
-        return <EpisodePage />
-      }),
-      page('podcast/:id/video', async () => {
-        const { VideoPodcastPage } = await import('@/features/audio/podcast/video/VideoPodcastPage')
-        return <VideoPodcastPage />
-      }),
+      // Podcast Studio moved out to /podcast (Phase 4); old bookmarks follow it
+      { path: 'podcast', element: <Navigate to="/podcast" replace /> },
+      { path: 'podcast/:id', element: <MovedEpisode /> },
+      { path: 'podcast/:id/video', element: <MovedEpisode video /> },
       page('edit', async () => {
         const { EditPickPage } = await import('@/features/audio/editor/EditPickPage')
         return <EditPickPage />
@@ -212,6 +205,23 @@ export const shellRoutes: RouteObject[] = [
         const { LibraryPage } = await import('@/features/library/LibraryPage')
         return <LibraryPage kind="audio" />
       }),
+    ],
+  },
+
+  // Phase 4: Podcast Studio, audio or video episodes; the frame keeps the audio transport for the voice steps
+  {
+    path: 'podcast',
+    lazy: async () => ({ Component: (await import('@/features/podcast/PodcastFrame')).PodcastFrame }),
+    children: [
+      {
+        index: true,
+        lazy: async () => ({ Component: (await import('@/features/podcast/PodcastListPage')).PodcastListPage }),
+      },
+      page(':id', async () => {
+        const { EpisodePage } = await import('@/features/podcast/EpisodePage')
+        return <EpisodePage />
+      }),
+      { path: ':id/video', element: <MovedEpisode video /> },
     ],
   },
 

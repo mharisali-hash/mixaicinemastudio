@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from app import audio_analysis as aa
+from app import character_looks as looks
 from app import character_sheet as cs
 from app import dialogue as dl
 from app import estimate as est
@@ -174,6 +175,7 @@ def create(db: Session, ep: PodcastEpisode, aspect: str | None) -> tuple[VideoPo
     db.add(vp)
     db.flush()
     sync_hosts(db, vp, ep)
+    apply_linked_hosts(db, vp, ep)
     return vp, True
 
 
@@ -276,13 +278,22 @@ def choose_host(db: Session, cur, vp: VideoPodcast, ep: PodcastEpisode, host_id:
             cs.add_own(db, c, cs.open_picture(g), params={"from_photo": item.id, "vp": vp.id, "vp_rev": rev,
                                                           "consent": new["consent"]})
             new["as_is"] = True
-    elif src == "existing":
+    elif src in ("existing", "studio"):
         other = db.get(Character, choice.get("character_id") or "")
         if other is None or other.workspace_id != vp.workspace_id:
             raise HTTPException(404, "That character doesn't exist")
         if other.project_id == vp.project_id:
             raise HTTPException(422, "Pick a character from another project")
-        og = sb.approved(db, "character", other.id, "portrait") or next(
+        og = None
+        if src == "studio":
+            if other.project_id is not None:
+                raise HTTPException(422, "Pick a character from Character Studio")
+            if choice.get("look_id"):
+                og = looks.finished_picture(db, other, choice["look_id"])
+                if og is None:
+                    raise HTTPException(409, f"That look of {other.name} has no finished picture yet")
+                new["look_id"] = choice["look_id"]
+        og = og or sb.approved(db, "character", other.id, "portrait") or next(
             (g for g in portraits(db, other.id) if g.status == "ready" and g.file_path), None)
         if og is None:
             raise HTTPException(409, f"{other.name} has no portrait yet")
@@ -300,6 +311,33 @@ def choose_host(db: Session, cur, vp: VideoPodcast, ep: PodcastEpisode, host_id:
     else:
         raise HTTPException(422, "A host is made from its persona, a photo or an existing character")
     put_host(vp, host_id, new)
+
+
+def apply_linked_hosts(db: Session, vp: VideoPodcast, ep: PodcastEpisode) -> bool:
+    """Episode hosts that are Character Studio characters take that character's look as their portrait. A host
+    given a photo by hand in the video's Hosts step keeps it. True when a portrait changed (cast needs redoing)."""
+    changed = False
+    for h in ep.hosts or []:
+        entry = (vp.hosts or {}).get(h["id"])
+        if not entry or entry.get("source") == "photo":
+            continue
+        cid, lid = h.get("character_id"), h.get("look_id")
+        if not cid:
+            if entry.get("source") == "studio":
+                # unlinked in the episode: back to a face from the persona
+                choose_host(db, None, vp, ep, h["id"], {"source": "persona"})
+                changed = True
+            continue
+        if entry.get("source") == "studio" and entry.get("from_character_id") == cid and entry.get("look_id") == lid:
+            continue
+        try:
+            choose_host(db, None, vp, ep, h["id"], {"source": "studio", "character_id": cid, "look_id": lid})
+        except HTTPException as e:
+            # a look still being drawn, or a character with no portrait yet: the next continue tries again
+            log.info("host %s not linked yet: %s", h["id"], e.detail)
+            continue
+        changed = True
+    return changed
 
 
 # ---------------------------------------------------------------- the set and the angle library
@@ -983,7 +1021,8 @@ def hosts_out(db: Session, vp: VideoPodcast, ep: PodcastEpisode) -> list[dict]:
                     "photo_media_id": entry.get("photo_media_id"),
                     "photo_as_is": bool(entry.get("as_is")),
                     "photo_url": sv.item_url(db, photo.id) if photo else None,
-                    "from_character_id": entry.get("from_character_id"), "consent": entry.get("consent"),
+                    "from_character_id": entry.get("from_character_id"), "look_id": entry.get("look_id"),
+                    "consent": entry.get("consent"),
                     "portrait": _gen(current_portrait(db, entry, show=True)), "sheet_views": sheets})
     return out
 

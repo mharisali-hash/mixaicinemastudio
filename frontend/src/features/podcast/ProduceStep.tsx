@@ -15,8 +15,8 @@ import type { ScriptLine } from '@/lib/dialogue'
 import { LOUDNESS, busy, insertPoints, stamp, structure, totalSeconds, type Block, type Episode, type EpisodeSettings, type Loudness } from '@/lib/podcast'
 import { cn } from '@/lib/utils'
 import { announce } from '@/stores/ui'
-import { togglePlay, useTrack } from '../sharedAudio'
-import { SELECT } from '../voice/AddVoiceDialog'
+import { togglePlay, useTrack } from '@/features/audio/sharedAudio'
+import { SELECT } from '@/features/audio/voice/AddVoiceDialog'
 
 type Slot = 'intro' | 'bed' | 'outro'
 

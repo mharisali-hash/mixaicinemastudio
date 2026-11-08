@@ -5,13 +5,9 @@ import type { Episode } from '@/lib/podcast'
 import type { Generation, VideoPodcast, VPPlan, VPStageKey, VPStageStatus, VPTrack } from '@/lib/types'
 import { T, job, media, mockApi, renderAt } from '@/test/media-fixtures'
 import { EpisodePage } from './EpisodePage'
-import { VideoPodcastPage } from './video/VideoPodcastPage'
 import { LIKENESS_STATEMENT } from './video/vp'
 
-const routes = [
-  { path: '/audio/podcast/:id', element: <EpisodePage /> },
-  { path: '/audio/podcast/:id/video', element: <VideoPodcastPage /> },
-]
+const routes = [{ path: '/podcast/:id', element: <EpisodePage /> }]
 
 const MIX = {
   media_id: 'mx',
@@ -30,6 +26,7 @@ const episode = (extra: Partial<Episode> = {}): Episode => ({
   show_name: null,
   title: 'Bridge day',
   format: 'conversation',
+  medium: 'video',
   language: 'en',
   target_minutes: 5,
   step: 6,
@@ -169,9 +166,14 @@ const vpOf = (stage: VPStageKey, extra: Partial<VideoPodcast> = {}): VideoPodcas
 
 const NOT_FOUND = () => new Response(JSON.stringify({ detail: 'Not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } })
 
-function api(vp: VideoPodcast | null, ep: Episode = episode()) {
-  return mockApi((method, path) => {
+function api(vp: VideoPodcast | null, start: Episode = episode()) {
+  let ep = start
+  return mockApi((method, path, _q, body) => {
     if (path === '/jobs') return []
+    if (path === '/characters') return [{ id: 's1', project_id: null, name: 'Ayesha', description: 'short dark hair', source: 'user', locked: false, voice_id: 'gallery:af_bella' }]
+    if (path === '/characters/s1/looks')
+      return { looks: [{ id: 'lk1', character_id: 's1', name: 'Office', outfit: '', setting: '', pose: '', prompt: '', is_default: true, sort: 0, picture: gen('lp1'), created_at: T }], packs: [] }
+    if (method === 'PATCH' && path === '/podcast/episodes/e1') return (ep = { ...ep, ...(body as Partial<Episode>) })
     if (path.startsWith('/favourites')) return { refs: [] }
     if (path === '/media') return { items: [media('p1', { title: 'Ali at the desk' })] }
     if (path === '/podcast/episodes/e1') return ep
@@ -202,12 +204,13 @@ afterEach(() => {
 describe('AI video podcast', { timeout: 20_000 }, () => {
   it('moves through the steps with the keyboard and starts the stage', async () => {
     const calls = api(vpOf('cast'))
-    renderAt('/audio/podcast/e1/video', routes)
+    renderAt('/podcast/e1?step=cast', routes)
     const user = userEvent.setup()
-    const hosts = await screen.findByRole('tab', { name: /Hosts/ })
+    const hosts = await screen.findByRole('tab', { name: /^Cast, video step/ })
     expect(hosts).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByRole('link', { name: /Back to the episode/ })).toHaveAttribute('href', '/audio/podcast/e1')
-    expect(screen.getByRole('list', { name: 'Progress' })).toHaveTextContent('Hosts')
+    // the episode's six steps, then the video's six in the same row
+    expect(screen.getAllByRole('tab')).toHaveLength(12)
+    expect(await screen.findByRole('list', { name: 'Progress' })).toHaveTextContent('Hosts')
     hosts.focus()
     await user.keyboard('{ArrowRight}')
     const set = screen.getByRole('tab', { name: /Set/ })
@@ -218,7 +221,12 @@ describe('AI video podcast', { timeout: 20_000 }, () => {
     expect(screen.getByRole('tab', { name: /Result/ })).toHaveFocus()
     expect(screen.getByText('Nothing cut yet')).toBeInTheDocument()
     await user.keyboard('{Home}')
-    expect(screen.getByRole('tab', { name: /Hosts/ })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: /^Source/ })).toHaveFocus()
+    // from the episode's last step straight on into the video's first
+    await user.click(screen.getByRole('tab', { name: /^Publish/ }))
+    screen.getByRole('tab', { name: /^Publish/ }).focus()
+    await user.keyboard('{ArrowRight}')
+    expect(screen.getByRole('tab', { name: /^Cast/ })).toHaveAttribute('aria-selected', 'true')
     await user.click(screen.getByRole('button', { name: /Make the portraits/ }))
     await waitFor(() => expect(sent(calls, 'POST', '/podcast/ai-video/v1/continue')).toHaveLength(1))
   })
@@ -227,7 +235,7 @@ describe('AI video podcast', { timeout: 20_000 }, () => {
     const vp = vpOf('cast', { review: 'hosts', status: 'review' })
     vp.stages[0].status = 'review'
     const calls = api(vp)
-    renderAt('/audio/podcast/e1/video', routes)
+    renderAt('/podcast/e1?step=cast', routes)
     const user = userEvent.setup()
     const banner = await screen.findByRole('region', { name: 'Waiting for your review' })
     expect(screen.queryByRole('button', { name: /Make the portraits/ })).not.toBeInTheDocument()
@@ -239,9 +247,9 @@ describe('AI video podcast', { timeout: 20_000 }, () => {
     const vp = vpOf('cast', { review: 'hosts', status: 'review' })
     vp.stages[0].status = 'review'
     const calls = api(vp)
-    renderAt('/audio/podcast/e1/video', routes)
+    renderAt('/podcast/e1?step=cast', routes)
     const user = userEvent.setup()
-    expect(await screen.findByRole('tab', { name: /Hosts, needs your OK/ })).toBeInTheDocument()
+    expect(await screen.findByRole('tab', { name: /Cast, video step, needs your OK/ })).toBeInTheDocument()
 
     // looking ahead at the set: it explains the wait and offers the approval right there
     await user.click(screen.getByRole('tab', { name: /^Set/ }))
@@ -250,7 +258,7 @@ describe('AI video podcast', { timeout: 20_000 }, () => {
     await user.click(within(gate).getByRole('button', { name: 'Approve the host portraits and continue' }))
     await waitFor(() => expect(sent(calls, 'POST', '/podcast/ai-video/v1/continue')).toHaveLength(1))
 
-    await user.click(screen.getByRole('tab', { name: /^Hosts/ }))
+    await user.click(screen.getByRole('tab', { name: /^Cast/ }))
     await user.click(screen.getByRole('button', { name: 'Approve and continue to Set' }))
     await waitFor(() => expect(sent(calls, 'POST', '/podcast/ai-video/v1/continue')).toHaveLength(2))
     expect(screen.getByRole('tab', { name: /^Set/ })).toHaveAttribute('aria-selected', 'true')
@@ -258,18 +266,18 @@ describe('AI video podcast', { timeout: 20_000 }, () => {
 
   it('points a later step back to where to start', async () => {
     api(vpOf('cast'))
-    renderAt('/audio/podcast/e1/video', routes)
+    renderAt('/podcast/e1?step=cast', routes)
     const user = userEvent.setup()
     await user.click(await screen.findByRole('tab', { name: /^Look/ }))
     const gate = screen.getByRole('region', { name: 'What this step is waiting for' })
     expect(gate).toHaveTextContent('The camera angles come after the host portraits. Start there.')
-    await user.click(within(gate).getByRole('button', { name: 'Go to Hosts' }))
-    expect(screen.getByRole('tab', { name: /^Hosts/ })).toHaveAttribute('aria-selected', 'true')
+    await user.click(within(gate).getByRole('button', { name: 'Go to Cast' }))
+    expect(screen.getByRole('tab', { name: /^Cast/ })).toHaveAttribute('aria-selected', 'true')
   })
 
   it('needs a name and the consent tick before a photo is used', async () => {
     const calls = api(vpOf('cast'))
-    renderAt('/audio/podcast/e1/video', routes)
+    renderAt('/podcast/e1?step=cast', routes)
     const user = userEvent.setup()
     const ali = (await screen.findByRole('heading', { name: 'Ali' })).closest('li')!
     await user.click(within(ali).getByRole('radio', { name: 'Upload photo' }))
@@ -297,7 +305,7 @@ describe('AI video podcast', { timeout: 20_000 }, () => {
 
   it('uses an existing character, regenerates and approves a portrait', async () => {
     const calls = api(vpOf('cast'))
-    renderAt('/audio/podcast/e1/video', routes)
+    renderAt('/podcast/e1?step=cast', routes)
     const user = userEvent.setup()
     const sara = (await screen.findByRole('heading', { name: 'Sara' })).closest('li')!
     await user.click(within(sara).getByRole('radio', { name: 'Use existing character' }))
@@ -324,9 +332,24 @@ describe('AI video podcast', { timeout: 20_000 }, () => {
     expect(within(sara).getByText('Not made yet: press Make the portraits above.')).toBeInTheDocument()
   })
 
+  it('dresses a host in a Character Studio look', async () => {
+    const calls = api(vpOf('cast'))
+    renderAt('/podcast/e1?step=cast', routes)
+    const user = userEvent.setup()
+    const ali = (await screen.findByRole('heading', { name: 'Ali' })).closest('li')!
+    await user.click(within(ali).getByRole('radio', { name: 'From Character Studio' }))
+    await user.click(within(ali).getByRole('button', { name: 'Pick a character' }))
+    await user.click(await within(screen.getByRole('dialog')).findByRole('button', { name: /Ayesha/ }))
+    const look = await within(ali).findByRole('combobox', { name: 'Look for Ali' })
+    await waitFor(() => expect(within(look).getByRole('option', { name: 'Office' })).toBeEnabled())
+    await user.selectOptions(look, 'lk1')
+    await user.click(within(ali).getByRole('button', { name: 'Use this look' }))
+    await waitFor(() => expect(sent(calls, 'PATCH', '/podcast/ai-video/v1')).toEqual([{ hosts: { h1: { source: 'studio', character_id: 's1', look_id: 'lk1' } } }]))
+  })
+
   it('sets the set preset and the shape', async () => {
     const calls = api(vpOf('set'))
-    renderAt('/audio/podcast/e1/video', routes)
+    renderAt('/podcast/e1?step=set', routes)
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Desi baithak' }))
     await user.click(screen.getByRole('radio', { name: /9:16/ }))
@@ -338,7 +361,7 @@ describe('AI video podcast', { timeout: 20_000 }, () => {
 
   it('shows the camera tracks per segment and edits the cut on the timeline', async () => {
     const calls = api(vpOf('render'))
-    renderAt('/audio/podcast/e1/video', routes)
+    renderAt('/podcast/e1?step=render', routes)
     const user = userEvent.setup()
     await user.click(await screen.findByRole('tab', { name: /Cameras & cut/ }))
     expect(screen.getByRole('heading', { name: 'Cameras & cut', level: 2 })).toBeInTheDocument()
@@ -377,7 +400,7 @@ describe('AI video podcast', { timeout: 20_000 }, () => {
 
   it('shows the estimate before rendering, then renders and re-renders one track', async () => {
     const calls = api(vpOf('render'))
-    renderAt('/audio/podcast/e1/video', routes)
+    renderAt('/podcast/e1?step=render', routes)
     const user = userEvent.setup()
     expect(await screen.findByText('≈ 0.8 h on the video GPU')).toBeInTheDocument()
     expect(screen.getByText(/3 takes in 5 pieces/)).toBeInTheDocument()
@@ -398,7 +421,7 @@ describe('AI video podcast', { timeout: 20_000 }, () => {
       progress: { draft: { pieces: 5, done: 1, current: 2, failed: null, status: 'generating' }, final: null },
     })
     const calls = api(vpOf('render', { plan: plan([t1, track('t2', 'h2', 0, 12), track('t3', 'wide', 0, 3)]) }))
-    renderAt('/audio/podcast/e1/video', routes)
+    renderAt('/podcast/e1?step=render', routes)
     const user = userEvent.setup()
     expect(await screen.findByText('piece 2 of 5')).toBeInTheDocument()
     const from = screen.getByRole('spinbutton', { name: 'Ali, segment 1: re-render from piece' })
@@ -410,7 +433,7 @@ describe('AI video podcast', { timeout: 20_000 }, () => {
 
   it('locks the actions while a job runs', async () => {
     api(vpOf('render', { status: 'running', job: job('j9', { type: 'video_podcast', status: 'running', message: 'Rendering shot 2 of 3' }) }))
-    renderAt('/audio/podcast/e1/video', routes)
+    renderAt('/podcast/e1?step=render', routes)
     expect(await screen.findByText('Rendering shot 2 of 3')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Render draft' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Re-render Ali, segment 1' })).toBeDisabled()
@@ -433,7 +456,7 @@ describe('AI video podcast', { timeout: 20_000 }, () => {
     }
     const vp = vpOf('assemble', { stage: 'done', outputs: { draft: out, final: null } })
     const calls = api(vp)
-    renderAt('/audio/podcast/e1/video', routes)
+    renderAt('/podcast/e1?step=result', routes)
     const user = userEvent.setup()
     expect(await screen.findByLabelText('Bridge day, draft')).toHaveAttribute('src', '/m/draft.mp4')
     expect(screen.getByRole('link', { name: 'Open in Library' })).toHaveAttribute('href', '/video/library?open=mv')
@@ -449,34 +472,24 @@ describe('AI video podcast', { timeout: 20_000 }, () => {
   })
 })
 
-describe('Publish: AI video entry', { timeout: 20_000 }, () => {
-  it('makes the AI video and opens it', async () => {
-    const calls = api(null)
-    renderAt('/audio/podcast/e1', routes)
+describe('Publish: turning an audio episode into a video podcast', { timeout: 20_000 }, () => {
+  it('becomes a video podcast and carries on to the cast', async () => {
+    const calls = api(vpOf('cast'), episode({ medium: 'audio' }))
+    renderAt('/podcast/e1', routes)
     const user = userEvent.setup()
-    await user.click(await screen.findByRole('button', { name: 'Make an AI video' }))
-    await waitFor(() => expect(sent(calls, 'POST', '/podcast/episodes/e1/ai-video')).toEqual([{}]))
-    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/audio/podcast/e1/video'))
-    expect(await screen.findByRole('tab', { name: /Hosts/ })).toBeInTheDocument()
+    // an audio episode stops at Publish
+    expect(await screen.findAllByRole('tab')).toHaveLength(6)
+    await user.click(await screen.findByRole('button', { name: 'Turn into a video podcast' }))
+    await waitFor(() => expect(sent(calls, 'PATCH', '/podcast/episodes/e1')).toContainEqual({ medium: 'video' }))
+    expect(await screen.findByRole('tab', { name: /^Cast/ })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getAllByRole('tab')).toHaveLength(12)
   })
 
-  it('opens the one there is', async () => {
-    const calls = api(vpOf('plan'))
-    renderAt('/audio/podcast/e1', routes)
-    const user = userEvent.setup()
-    await user.click(await screen.findByRole('button', { name: 'Open AI video' }))
-    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/audio/podcast/e1/video'))
-    expect(sent(calls, 'POST', '/podcast/episodes/e1/ai-video')).toEqual([])
-  })
-
-  it('waits for the mix', async () => {
-    const calls = api(null, episode({ outputs: { mix: null, publish: null, video: null } }))
-    renderAt('/audio/podcast/e1', routes)
-    const user = userEvent.setup()
-    const make = await screen.findByRole('button', { name: 'Make an AI video' })
-    expect(make).toHaveAttribute('aria-disabled', 'true')
-    expect(make).toHaveAccessibleDescription('Mix the episode first (step 5).')
-    await user.click(make)
-    expect(sent(calls, 'POST', '/podcast/episodes/e1/ai-video')).toEqual([])
+  it('a video episode has no such button: its video steps follow Publish', async () => {
+    api(vpOf('plan'))
+    renderAt('/podcast/e1', routes)
+    expect(await screen.findByRole('tab', { name: /^Publish/ })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.queryByRole('button', { name: 'Turn into a video podcast' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Next: Cast' })).toBeInTheDocument()
   })
 })

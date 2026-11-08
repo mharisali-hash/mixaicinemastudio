@@ -419,6 +419,11 @@ describe('Audio navigation', () => {
     const ids = RAIL_ITEMS.map((r) => r.id)
     expect(ids.indexOf('audio')).toBe(ids.indexOf('video') + 1)
     expect(RAIL_ITEMS.find((r) => r.id === 'audio')?.to).toBe('/audio/song')
+    // Podcast Studio has its own rail entry right after Audio, so Audio no longer lists it
+    expect(ids.indexOf('podcast')).toBe(ids.indexOf('audio') + 1)
+    expect(menusFrom(CATALOG).podcast.features.map((f) => f.to)).toEqual(['/podcast', '/podcast?new=audio', '/podcast?new=video'])
+    expect(activeRail('/podcast/e1')).toBe('podcast')
+    expect(pageTitle('/podcast')).toBe('Podcast Studio')
 
     const menu = menusFrom(CATALOG).audio
     const live = menu.features.filter((f) => !f.disabled).map((f) => [f.title, f.to])
@@ -431,7 +436,6 @@ describe('Audio navigation', () => {
       ['Voice gallery', '/audio/gallery'],
       ['Design a voice', '/audio/design'],
       ['Dialogue', '/audio/dialogue'],
-      ['Podcast', '/audio/podcast'],
       ['Editor', '/audio/edit'],
       ['Score a Clip', '/audio/score'],
       ['Split a song', '/audio/stems'],

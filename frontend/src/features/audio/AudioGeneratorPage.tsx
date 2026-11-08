@@ -72,7 +72,7 @@ function AudioGenerator({ kind }: { kind: AudioKind }) {
   return (
     <GeneratorPage label={LABEL[kind]} targets={[]}>
       {fromEpisode && (
-        <Link to={`/audio/podcast/${fromEpisode}`} className="-mb-3 inline-flex items-center gap-1 self-start text-small text-studio-muted underline-offset-2 hover:text-studio-text hover:underline">
+        <Link to={`/podcast/${fromEpisode}`} className="-mb-3 inline-flex items-center gap-1 self-start text-small text-studio-muted underline-offset-2 hover:text-studio-text hover:underline">
           <ArrowLeft aria-hidden className="size-3.5" />
           Back to the podcast episode
           <span className="text-studio-faint">· pick this from the Library in Produce, {form.durationS} s</span>

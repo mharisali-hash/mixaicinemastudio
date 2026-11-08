@@ -11,6 +11,7 @@ from app.dialogue_schemas import RenderIn, RenderOut
 from app.models import MediaItem, PodcastEpisode, PodcastShow, VoiceScript
 from app.podcast import ingest, produce, publish
 from app.podcast import service as sv
+from app.podcast import video as vd
 from app.podcast.schemas import (Ad, EditIn, EpisodeIn, EpisodeOut, EpisodePatch, EpisodeSummary, InsertIn,
                                  OutputsOut, PublishIn, RecordIn, ScriptTextIn, ShowIn, ShowOut, ShowPatch, VideoIn)
 from app.schemas import JobOut
@@ -80,6 +81,7 @@ def create_show(body: ShowIn, db: Session = Depends(get_db), cur: CurrentUser = 
                        hosts=sv.clean_hosts([h.model_dump() for h in body.hosts]),
                        music=_music(db, cur, body.music.model_dump()),
                        ads=_ads(db, cur, [a.model_dump() for a in body.ads]))
+    sv.check_hosts(db, cur.workspace_id, show.hosts)
     db.add(show)
     db.commit()
     return ShowOut(**sv.show_out(db, show))
@@ -104,6 +106,7 @@ def patch_show(show_id: str, body: ShowPatch, db: Session = Depends(get_db),
         show.cover_media_id = _media_ok(db, cur, data["cover_media_id"], "image", "cover")
     if data.get("hosts") is not None:
         show.hosts = sv.clean_hosts(data["hosts"])
+        sv.check_hosts(db, cur.workspace_id, show.hosts)
     if data.get("music") is not None:
         show.music = _music(db, cur, data["music"])
     if data.get("ads") is not None:
@@ -151,7 +154,8 @@ def list_episodes(show_id: str | None = Query(None), db: Session = Depends(get_d
     if show_id:
         stmt = stmt.where(PodcastEpisode.show_id == show_id)
     rows = db.scalars(stmt.order_by(PodcastEpisode.updated_at.desc(), PodcastEpisode.id)).all()
-    return [EpisodeSummary(**sv.episode_summary(db, ep)) for ep in rows]
+    videos = sv.with_video(db, [ep.id for ep in rows])
+    return [EpisodeSummary(**sv.episode_summary(db, ep, ep.id in videos)) for ep in rows]
 
 
 @router.post("/episodes", response_model=EpisodeOut, status_code=201)
@@ -160,13 +164,19 @@ def create_episode(body: EpisodeIn, db: Session = Depends(get_db), cur: CurrentU
     hosts = [h.model_dump() for h in body.hosts] if body.hosts is not None else list(show.hosts or []) if show else []
     music = (show.music or {}) if show else {}
     settings = {"intro": {"media_id": music.get("intro_media_id")}, "outro": {"media_id": music.get("outro_media_id")},
-                "bed": {"media_id": music.get("bed_media_id")}}
+                "bed": {"media_id": music.get("bed_media_id")}, "medium": body.medium}
+    hosts = sv.clean_hosts(hosts)
+    sv.check_hosts(db, cur.workspace_id, hosts)
     ep = PodcastEpisode(workspace_id=cur.workspace_id, show_id=show.id if show else None, title=body.title.strip(),
                         format=body.format, language=(body.language or (show.language if show else "en")).lower(),
-                        target_minutes=body.target_minutes, hosts=sv.clean_hosts(hosts),
+                        target_minutes=body.target_minutes, hosts=hosts,
                         sources={"topic": body.topic.strip(), "text": "", "docs": []}, chapters=[],
                         settings=settings, outputs={})
     db.add(ep)
+    db.flush()
+    if body.medium == "video":
+        # its video steps follow straight on in the same stepper, so the AI video exists from the start
+        vd.create(db, ep, None)
     db.commit()
     return _out(db, ep)
 
@@ -205,6 +215,7 @@ def patch_episode(episode_id: str, body: EpisodePatch, db: Session = Depends(get
         ep.sources = src
     if data.get("hosts") is not None:
         ep.hosts = sv.clean_hosts(data["hosts"])
+        sv.check_hosts(db, cur.workspace_id, ep.hosts)
         if s is not None:
             sv.sync_cast(s, ep.hosts)
     if data.get("chapters") is not None:
@@ -213,9 +224,20 @@ def patch_episode(episode_id: str, body: EpisodePatch, db: Session = Depends(get
         st = data["settings"]
         for key in produce.MUSIC:
             st[key]["media_id"] = _media_ok(db, cur, st[key].get("media_id"), "audio", f"{key} music")
-        ep.settings = st
+        # written whole by the Produce step, which doesn't know the medium
+        ep.settings = {**st, "medium": (ep.settings or {}).get("medium", "audio")}
     if "notes" in data:
         ep.notes = data["notes"]
+    if data.get("medium") == "video":
+        ep.settings = {**(ep.settings or {}), "medium": "video"}
+    vp = vd.find(db, ep)
+    if data.get("medium") == "video" and vp is None:
+        vd.create(db, ep, None)
+    elif vp is not None and data.get("hosts") is not None and vd.busy(db, vp) is None:
+        # a running job keeps its hosts; continue picks the change up later
+        vd.sync_hosts(db, vp, ep)
+        if vd.apply_linked_hosts(db, vp, ep):
+            vd.reset_from(vp, "cast")
     if s is not None:
         dl.refresh(db, s)
     db.commit()

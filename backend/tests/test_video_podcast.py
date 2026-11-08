@@ -696,3 +696,102 @@ def test_0017_adds_the_video_podcast_table(tmp_path):
     assert "video_podcast" not in {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     con.close()
     _alembic(db, "upgrade", "head")
+
+
+# ---------------------------------------------------------------- Podcast Studio: audio or video, Character hosts
+
+def _studio_character(client, fast_driver, name="Ayesha", look=True):
+    c = ok(client.post("/api/characters", json={"name": name, "description": "short dark hair"}), 201)
+    ok(client.post("/api/generations", json={"target_type": "character", "target_id": c["id"], "kind": "portrait",
+                                             "prompt": "head and shoulders portrait"}), 201)
+    _run_all(fast_driver)
+    if not look:
+        return c, None
+    lk = ok(client.post(f"/api/characters/{c['id']}/looks", json={"name": "Office", "outfit": "a navy suit"}), 201)
+    _run_all(fast_driver)
+    return c, lk
+
+
+def test_a_video_episode_has_its_ai_video_from_the_start(client):
+    hosts = [{"name": "Ali"}, {"name": "Sara"}]
+    audio = ok(client.post("/api/podcast/episodes", json={"title": "Plain", "hosts": hosts}), 201)
+    video = ok(client.post("/api/podcast/episodes", json={"title": "On camera", "medium": "video", "hosts": hosts}), 201)
+    assert audio["medium"] == "audio" and video["medium"] == "video"
+    assert client.get(f"/api/podcast/episodes/{audio['id']}/ai-video").status_code == 404
+    vp = ok(client.get(f"/api/podcast/episodes/{video['id']}/ai-video"))
+    assert [h["name"] for h in vp["hosts"]] == ["Ali", "Sara"]
+    # the Produce step writes settings whole and knows nothing of the medium
+    st = {**video["settings"], "loudness": "none"}
+    assert ok(client.patch(f"/api/podcast/episodes/{video['id']}", json={"settings": st, "step": 9}))["medium"] == "video"
+    listed = {e["id"]: e["medium"] for e in ok(client.get("/api/podcast/episodes"))}
+    assert listed == {audio["id"]: "audio", video["id"]: "video"}
+
+    # one way only
+    assert client.patch(f"/api/podcast/episodes/{video['id']}", json={"medium": "audio"}).status_code == 422
+    turned = ok(client.patch(f"/api/podcast/episodes/{audio['id']}", json={"medium": "video"}))
+    assert turned["medium"] == "video"
+    assert ok(client.get(f"/api/podcast/episodes/{audio['id']}/ai-video"))["episode_id"] == audio["id"]
+
+
+def test_an_old_audio_episode_with_an_ai_video_counts_as_video(client, fast_driver):
+    ep = _episode(client, fast_driver, mix=False)
+    ok(client.post(f"/api/podcast/episodes/{ep['id']}/ai-video", json={}), 201)
+    assert ok(client.get(f"/api/podcast/episodes/{ep['id']}"))["medium"] == "video"
+    assert ok(client.get("/api/podcast/episodes"))[0]["medium"] == "video"
+
+
+def test_a_host_can_be_a_character_studio_character_in_one_of_its_looks(client, fast_driver):
+    c, lk = _studio_character(client, fast_driver)
+    other, other_look = _studio_character(client, fast_driver, name="Bilal")
+    host = {"name": "Ayesha", "character_id": c["id"], "look_id": lk["id"]}
+    ep = ok(client.post("/api/podcast/episodes", json={"title": "Ep", "medium": "video",
+                                                       "hosts": [host, {"name": "Sara"}]}), 201)
+    assert ep["hosts"][0]["character_id"] == c["id"] and ep["hosts"][0]["look_id"] == lk["id"]
+    # the look's picture is the host's approved portrait, copied into the video's own project
+    vp = ok(client.get(f"/api/podcast/episodes/{ep['id']}/ai-video"))
+    h = vp["hosts"][0]
+    assert h["source"] == "studio" and h["from_character_id"] == c["id"] and h["look_id"] == lk["id"]
+    assert h["portrait"]["status"] == "approved" and h["portrait"]["params"]["copied_from"] == lk["picture"]["id"]
+    assert vp["hosts"][1]["source"] == "persona"
+    assert client.post(f"/api/podcast/ai-video/{vp['id']}/regenerate",
+                       json={"what": "portrait", "key": h["host_id"]}).status_code == 409
+
+    # someone else's look, an unknown character and a project character are refused
+    bad = {**host, "look_id": other_look["id"]}
+    assert client.patch(f"/api/podcast/episodes/{ep['id']}", json={"hosts": [bad]}).status_code == 422
+    gone = {**host, "character_id": "nope"}
+    assert client.patch(f"/api/podcast/episodes/{ep['id']}", json={"hosts": [gone]}).status_code == 404
+    pr = ok(client.post("/api/projects", json={"title": "Film", "authoring_mode": "scene_by_scene"}), 201)
+    pc = ok(client.post(f"/api/projects/{pr['id']}/characters", json={"name": "Diver"}), 201)
+    assert client.patch(f"/api/podcast/episodes/{ep['id']}",
+                        json={"hosts": [{"name": "Diver", "character_id": pc["id"]}]}).status_code == 422
+
+    # switching the episode host to another character follows through to the video and redoes the cast
+    hosts = ok(client.get(f"/api/podcast/episodes/{ep['id']}"))["hosts"]
+    hosts[0] = {**hosts[0], "character_id": other["id"], "look_id": None}
+    ok(client.patch(f"/api/podcast/episodes/{ep['id']}", json={"hosts": hosts}))
+    vp = ok(client.get(f"/api/podcast/ai-video/{vp['id']}"))
+    assert vp["hosts"][0]["from_character_id"] == other["id"] and vp["hosts"][0]["look_id"] is None
+    # unlinking goes back to a face from the persona
+    hosts[0] = {**hosts[0], "character_id": None}
+    ok(client.patch(f"/api/podcast/episodes/{ep['id']}", json={"hosts": hosts}))
+    assert ok(client.get(f"/api/podcast/ai-video/{vp['id']}"))["hosts"][0]["source"] == "persona"
+
+
+def test_a_studio_host_picked_in_the_cast_step(client, fast_driver):
+    c, lk = _studio_character(client, fast_driver)
+    plain, _ = _studio_character(client, fast_driver, name="Bilal", look=False)
+    ep = _episode(client, fast_driver, mix=False)
+    vp = ok(client.post(f"/api/podcast/episodes/{ep['id']}/ai-video", json={}), 201)
+    a, b = (h["host_id"] for h in vp["hosts"])
+    vp = ok(client.patch(f"/api/podcast/ai-video/{vp['id']}", json={"hosts": {
+        a: {"source": "studio", "character_id": c["id"], "look_id": lk["id"]},
+        b: {"source": "studio", "character_id": plain["id"]}}}))
+    assert vp["hosts"][0]["portrait"]["params"]["copied_from"] == lk["picture"]["id"]
+    # no look: the character's own portrait
+    assert vp["hosts"][1]["source"] == "studio" and vp["hosts"][1]["portrait"]["status"] == "approved"
+    # a look still being drawn can't be worn yet
+    busy = ok(client.post(f"/api/characters/{c['id']}/looks", json={"name": "Garden", "outfit": "linen"}), 201)
+    r = client.patch(f"/api/podcast/ai-video/{vp['id']}", json={"hosts": {
+        a: {"source": "studio", "character_id": c["id"], "look_id": busy["id"]}}})
+    assert r.status_code == 409 and "no finished picture" in r.json()["detail"]

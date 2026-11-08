@@ -1795,7 +1795,7 @@ export type VPAspect = '16:9' | '9:16' | '1:1'
 export type VPSubtitles = 'none' | 'soft' | 'burn'
 export type VPSetPreset = 'modern_studio' | 'cosy_room' | 'news_desk' | 'rooftop' | 'desi_baithak'
 export type VPQuality = 'draft' | 'final'
-export type VPHostSource = 'persona' | 'photo' | 'existing'
+export type VPHostSource = 'persona' | 'photo' | 'existing' | 'studio'
 
 export interface VPStage {
   key: VPStageKey
@@ -1837,6 +1837,8 @@ export interface VPHost {
   photo_as_is?: boolean
   photo_url: string | null
   from_character_id: string | null
+  // studio hosts: the Character Studio look they wear
+  look_id?: string | null
   consent: VPConsent | null
   portrait: Generation | null
   sheet_views: { front?: Generation; three_quarter?: Generation }
@@ -1982,6 +1984,7 @@ export type VPHostChoice =
   | { source: 'persona' }
   | { source: 'photo'; media_id: string; consent: { name: string; statement: string }; as_is?: boolean }
   | { source: 'existing'; character_id: string }
+  | { source: 'studio'; character_id: string; look_id?: string | null }
 
 export interface VPCutEdit {
   id?: string | null
