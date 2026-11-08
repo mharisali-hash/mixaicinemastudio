@@ -183,13 +183,19 @@ def find_song(query: str):
 
     with SessionLocal() as db:
         rows = db.scalars(select(MediaItem).where(MediaItem.kind == "audio", MediaItem.title.ilike(f"%{query}%"))
-                          .order_by(MediaItem.created_at.desc()).limit(10)).all()
+                          .order_by(MediaItem.created_at.desc()).limit(10)).all() if query.strip() else []
         for item in rows:
             g = db.get(Generation, item.generation_id) if item.generation_id else None
             path = generation_file(g) if g is not None else None
             if path is not None and path.is_file():
                 return path, {"workspace_id": item.workspace_id, "title": item.title, "folder_id": item.folder_id}
-    raise SystemExit(f"No finished Library song has “{query}” in its title")
+        recent = db.scalars(select(MediaItem).where(MediaItem.kind == "audio", MediaItem.generation_id.is_not(None),
+                                                    MediaItem.title != "")
+                            .order_by(MediaItem.created_at.desc()).limit(15)).all()
+        names = "\n".join(f"  {i.title}" for i in recent) or "  (none)"
+    head = f"No finished Library song has “{query}” in its title." if query.strip() else "Which song?"
+    raise SystemExit(f"{head} The latest audio in the Library:\n{names}\n"
+                     "Run again with a few words from one of those titles, in quotes.")
 
 
 def to_library(src: dict, path: Path, label: str, tags: str) -> str:
@@ -246,7 +252,8 @@ def comfy_url() -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("song", help="a song file, or words from a Library song's title")
+    ap.add_argument("song", nargs="?", default="",
+                    help="a song file, or words from a Library song's title (leave out to list the latest)")
     ap.add_argument("--tags", default=DEFAULT_TAGS, help="style words for the new version")
     ap.add_argument("--start", type=float, default=START_S, help="where the 60 s clip starts (s)")
     ap.add_argument("--seed", type=int, default=1234)
@@ -258,7 +265,7 @@ def main() -> int:
 
     src = None
     # resolved now: reading the app's settings moves into backend/
-    path = Path(args.song).resolve()
+    path = Path(args.song).resolve() if args.song else Path("/nonexistent")
     if not path.is_file():
         path, src = find_song(args.song)
         print(f"Library song: {src['title']}  ({path})")
