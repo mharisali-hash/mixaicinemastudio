@@ -826,6 +826,47 @@ def make_poetry_short(
                 "next": "get_poetry_short until status is done, then get_media on video.media_id"}
 
 
+@tool("generate", title="Make a presenter video")
+def make_presenter_video(
+    ctx: Context,
+    character_id: Annotated[str, Field(description="A Character Studio character with a portrait and a voice")],
+    script: Annotated[str, Field(min_length=1, max_length=PROMPT_MAX, description="What they say; blank lines "
+                                                                                  "start a new scene")],
+    look_id: Annotated[str | None, Field(description="One of the character's looks (list_looks)")] = None,
+    title: Annotated[str, Field(max_length=200)] = "",
+    language: Annotated[str, Field(pattern=r"^[a-z]{2,3}(-[a-z]{2,4})?$")] = "en",
+    aspect: Literal["16:9", "9:16", "1:1"] = "16:9",
+    caption_style: Literal["classic", "pill", "highlight", "clean", "none"] = "pill",
+    background: Annotated[str, Field(max_length=600, description="studio, office, classroom, news_desk, baithak, "
+                                                                 "outdoor, plain, or your own words")] = "studio",
+) -> dict:
+    """A character presenting a script to camera: their voice, lip-synced, scene by scene, with captions, a name
+    strip and a title card. Runs straight to a draft video. Follow it with get_presenter_video."""
+    from app.api.presenter import CreateIn, SettingsIn, create_presenter
+
+    with acting(ctx, "generate") as (db, cur):
+        out = create_presenter(CreateIn(character_id=character_id, look_id=look_id, title=title, language=language,
+                                        script=script, review=False,
+                                        settings=SettingsIn(aspect=aspect, caption_style=caption_style,
+                                                            background=background)), db=db, cur=cur)
+        return {"presenter_id": out["id"], "scenes": len(out["scenes"]), "job_id": (out["job"] or {}).get("id"),
+                "next": "get_presenter_video until outputs.draft is there, then get_media on its media_id"}
+
+
+@tool("read", title="Get a presenter video")
+def get_presenter_video(ctx: Context, presenter_id: str) -> dict:
+    """A presenter video's stages, scenes and finished draft / final."""
+    from app.api.presenter import get_presenter
+
+    with acting(ctx, "read") as (db, cur):
+        out = get_presenter(presenter_id, db=db, cur=cur)
+        return {"presenter_id": out["id"], "title": out["title"],
+                "stages": {s["key"]: s["status"] for s in out["stages"]},
+                "detail": next((s.get("detail") for s in out["stages"] if s.get("detail")), None),
+                "scenes": [{"text": s["text"], "seconds": s["duration_s"]} for s in out["scenes"]],
+                "outputs": out["outputs"]}
+
+
 @tool("generate", title="Carry on a Poetry Short")
 def continue_poetry_short(ctx: Context, short_id: str) -> dict:
     """Retry a failed stage of a Poetry Short (or approve the one under review) and run on from there."""

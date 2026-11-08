@@ -217,6 +217,30 @@ class CharacterLook(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
 
+class PresenterVideo(Base):
+    """A character (in one of its looks) presenting a script to camera, scene by scene (migration 0032). Each
+    scene keeps its own voice take, frame and lip-synced take, so editing one line redoes only that scene."""
+    __tablename__ = "presenter_video"
+    id: Mapped[str] = _id()
+    workspace_id: Mapped[str] = _ws()
+    character_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("character.id", ondelete="SET NULL"),
+                                                     nullable=True)
+    look_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    title: Mapped[str] = mapped_column(String(200), default="")
+    language: Mapped[str] = mapped_column(String(12), default="en")
+    # aspect, quality, caption_style, background, lower third, title card
+    settings: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
+    # [{id, text, background, speech: {fp, gen}, frame: {fp, gen}, take: {draft|final: {fp, gen}}, duration_s}]
+    scenes: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
+    stages: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
+    # {draft|final: {media_id, generation_id, duration_s, ...}}
+    outputs: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
+    job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
 class ProjectCast(Base):
     """A studio character cast in a film. The film's own characters don't need a row."""
 

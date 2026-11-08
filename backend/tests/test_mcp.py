@@ -14,7 +14,7 @@ from tests.test_api_tokens import _mint, _user, flags, login  # noqa: F401  (fix
 
 ACCEPT = {"Accept": "application/json, text/event-stream"}
 READ_TOOLS = {"list_projects", "get_job", "wait_for_job", "search_library", "get_media", "list_voices",
-              "get_poetry_short", "list_characters", "list_looks",
+              "get_poetry_short", "list_characters", "list_looks", "get_presenter_video",
               # the test user is an admin, so the admin-only Print Studio reader is listed too (contract v41)
               "get_print_design"}
 

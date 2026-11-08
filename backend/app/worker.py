@@ -569,6 +569,12 @@ HANDLERS[poetry.JOB] = poetry_stages.handle
 HANDLERS[poetry_timing.JOB] = poetry_timing.handle
 HANDLERS[poetry.RENDER_JOB] = poetry_render.handle_render
 CPU_JOB_LEDGER.update({poetry.JOB: "autopilot", poetry.RENDER_JOB: "assembly"})
+from app.presenter import service as presenter, stages as presenter_stages  # noqa: E402
+
+# Presenter Video: the orchestrator waits on its voice takes, frames and lip-synced takes; the cut is ffmpeg
+HANDLERS[presenter.JOB] = presenter_stages.handle
+HANDLERS[presenter.ASSEMBLE_JOB] = presenter_stages.handle_assemble
+CPU_JOB_LEDGER.update({presenter.JOB: "autopilot", presenter.ASSEMBLE_JOB: "assembly"})
 from app.ads import service as ads, stages as ad_stages  # noqa: E402
 
 # Ad Studio: the orchestrator waits on its photos (they bill their own GPU time); the layout is Pillow

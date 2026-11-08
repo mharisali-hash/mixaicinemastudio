@@ -34,6 +34,14 @@ export const shellRoutes: RouteObject[] = [
     const { PoetryListPage } = await import('@/features/video/poetry/PoetryListPage')
     return <PoetryListPage />
   }),
+  page('video/presenter', async () => {
+    const { PresenterListPage } = await import('@/features/video/presenter/PresenterListPage')
+    return <PresenterListPage />
+  }),
+  page('video/presenter/:id', async () => {
+    const { PresenterPage } = await import('@/features/video/presenter/PresenterPage')
+    return <PresenterPage />
+  }),
   page('video/poetry/:id', async () => {
     const { PoetryShortPage } = await import('@/features/video/poetry/PoetryShortPage')
     return <PoetryShortPage />

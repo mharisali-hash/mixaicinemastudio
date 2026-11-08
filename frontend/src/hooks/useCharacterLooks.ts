@@ -9,6 +9,7 @@ export function useCharacterLooks(cid: string) {
   return useQuery({
     queryKey: key(cid),
     queryFn: () => looksApi.list(cid),
+    enabled: !!cid,
     refetchInterval: (q) => (q.state.data?.looks.some(lookBusy) ? POLL_MS : false),
   })
 }
