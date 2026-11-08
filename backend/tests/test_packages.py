@@ -348,8 +348,11 @@ def test_packages_crud(client):
     pid = r.json()["id"]
     r = client.patch(f"/api/admin/packages/{pid}", json={"price_pkr": 3999, "gpu_min_day": None})
     assert r.json()["price_pkr"] == 3999 and r.json()["gpu_min_day"] is None
+    # the edit form sends the whole package, name included
+    r = client.patch(f"/api/admin/packages/{pid}", json={"name": "Studio Plus", "price_pkr": 3999})
+    assert r.status_code == 200 and r.json()["name"] == "Studio Plus"
     dup = client.post(f"/api/admin/packages/{pid}/duplicate").json()
-    assert dup["name"] == "Studio (copy)" and dup["price_pkr"] == 3999 and not dup["public"]
+    assert dup["name"] == "Studio Plus (copy)" and dup["price_pkr"] == 3999 and not dup["public"]
     assert not client.post(f"/api/admin/packages/{dup['id']}/archive").json()["active"]
     assert dup["id"] not in {p["id"] for p in client.get("/api/admin/packages").json()}
     assert dup["id"] in {p["id"] for p in client.get("/api/admin/packages?archived=true").json()}

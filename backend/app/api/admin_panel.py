@@ -381,7 +381,8 @@ def patch_package(package_id: str, body: PackagePatch, db: Session = Depends(get
         raise HTTPException(422, "Free is everyone's fallback, so it can't be archived")
     for key, value in sent.items():
         setattr(pkg, key, {} if key == "features" and value is None else value)
-    audit.record(db, cur.user, "package_update", "package", pkg.id, name=pkg.name, **sent)
+    # sent may carry the new name itself
+    audit.record(db, cur.user, "package_update", "package", pkg.id, **{"name": pkg.name, **sent})
     db.commit()
     return _packages_out(db, [pkg])[0]
 
