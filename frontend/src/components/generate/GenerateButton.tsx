@@ -3,7 +3,7 @@ import { Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
 import { Tooltip } from '@/components/ui/tooltip'
-import { useMe } from '@/hooks/useAuth'
+import { useAuthConfig, useMe } from '@/hooks/useAuth'
 import { fmtClock, fmtMinutes, isLow, remainingToday, useUsage } from '@/hooks/useUsage'
 import { basisHint, estimateLabel } from '@/lib/estimate'
 import { modKey } from '@/lib/keyboard'
@@ -28,8 +28,11 @@ interface Props {
 export function GenerateButton({ verb, what, estimate, icon, blocked: why, note, pending, className }: Props) {
   const uid = useId()
   const { data: me } = useMe()
+  const byAdmin = useAuthConfig().data?.verify_by === 'admin'
   // contract v38: the server refuses new work until the email is confirmed, so say it here rather than fail later
-  const blocked = me?.verified === false ? 'Confirm your email to start creating. The link is in your inbox.' : why
+  const blocked = me?.verified === false
+      ? byAdmin ? 'Creating opens once your account is confirmed.' : 'Confirm your email to start creating. The link is in your inbox.'
+      : why
   // contract v39: say so when today's GPU minutes are nearly gone; the server's 429 has the final word
   const { data: usage } = useUsage()
   const left = isLow(usage) ? remainingToday(usage) : null

@@ -16,6 +16,29 @@ const backToSignIn = (
 )
 
 export function CheckInbox({ email }: { email: string }) {
+  const config = useAuthConfig()
+  if (config.data?.verify_by === 'admin') {
+    return (
+      <div className={CARD}>
+        <div className="flex items-start gap-3">
+          <MailCheck aria-hidden className="mt-1 size-5 shrink-0 text-studio-accent" />
+          <div>
+            <h2 className="font-display text-title font-semibold">Thanks for signing up</h2>
+            <p className="mt-1 text-body text-studio-muted">
+              We'll confirm your account shortly. You can sign in and look around now; creating opens once it's confirmed.
+            </p>
+          </div>
+        </div>
+        <Link to="/login" className={LINK}>
+          Sign in
+        </Link>
+      </div>
+    )
+  }
+  return <InboxLink email={email} />
+}
+
+function InboxLink({ email }: { email: string }) {
   const resend = useMutation({ mutationFn: () => api.auth.resendVerification(email) })
   return (
     <div className={CARD}>

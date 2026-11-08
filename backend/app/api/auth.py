@@ -90,7 +90,9 @@ def _send_verify(db: Session, user: User) -> None:
 def auth_config():
     s = get_settings()
     # google stays off until step 3 of M17 brings the sign-in flow
-    return {"signup": s.signup_mode, "google": False, "verify": s.email_verify}
+    # with no way to send mail, an admin confirms new accounts by hand from Admin > Users
+    verify_by = "email" if mailer.can_send() else "admin"
+    return {"signup": s.signup_mode, "google": False, "verify": s.email_verify, "verify_by": verify_by}
 
 
 @router.post("/login", response_model=UserOut)
@@ -168,7 +170,7 @@ def signup(body: SignupIn, request: Request, db: Session = Depends(get_db)):
     except accounts.AccountError as e:
         raise HTTPException(422, str(e)) from None
     db.commit()
-    if s.email_verify:
+    if s.email_verify and mailer.can_send():
         _send_verify(db, user)
     return {"detail": CHECK_INBOX}
 

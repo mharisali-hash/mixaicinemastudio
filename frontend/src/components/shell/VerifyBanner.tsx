@@ -3,13 +3,14 @@ import { useSearchParams } from 'react-router'
 import { useMutation } from '@tanstack/react-query'
 import { MailWarning } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useMe } from '@/hooks/useAuth'
+import { useAuthConfig, useMe } from '@/hooks/useAuth'
 import { api } from '@/lib/api'
 import { useToasts } from '@/stores/toasts'
 
 /** Across the top of the shell until the email is confirmed (contract v38); the server refuses new work till then. */
 export function VerifyBanner() {
   const { data: me } = useMe()
+  const byAdmin = useAuthConfig().data?.verify_by === 'admin'
   const [params, setParams] = useSearchParams()
   const resend = useMutation({ mutationFn: () => api.auth.resendVerification() })
 
@@ -32,17 +33,23 @@ export function VerifyBanner() {
     >
       <MailWarning aria-hidden className="size-4 shrink-0 text-studio-warning" />
       <p className="min-w-0 flex-1">
-        <span className="font-medium">Confirm your email to start creating.</span>{' '}
+        <span className="font-medium">{byAdmin ? 'Your account is waiting to be confirmed.' : 'Confirm your email to start creating.'}</span>{' '}
         <span className="text-studio-muted">
-          We sent a link to {me.email}. You can look around until then, but generating stays off.
+          {byAdmin
+            ? "We'll confirm it shortly. You can look around until then, but creating stays off."
+            : `We sent a link to ${me.email}. You can look around until then, but generating stays off.`}
         </span>
       </p>
+      {!byAdmin && (
+        <>
       <span aria-live="polite" className="text-small text-studio-muted">
         {resend.isSuccess ? 'Sent. Check your inbox.' : resend.isError ? resend.error.message : ''}
       </span>
       <Button size="sm" variant="secondary" loading={resend.isPending} disabled={resend.isSuccess} onClick={() => resend.mutate()}>
         Send the link again
       </Button>
+        </>
+      )}
     </div>
   )
 }

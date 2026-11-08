@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Archive, ArchiveRestore, Copy, PackagePlus, Pencil, Boxes } from 'lucide-react'
+import { Archive, ArchiveRestore, Copy, PackagePlus, Pencil, Boxes, UserPlus } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils'
 import { Notice } from '@/features/auth/AuthLayout'
 import { announce } from '@/stores/ui'
 import { AdminPage, PERIOD_LABEL, minutes, pkr, tableWrap, td, th, usePackages } from './shared'
+import { AssignPackageDialog } from './AssignPackageDialog'
 
 const FEATURES: { key: FeatureKey; label: string }[] = [
   { key: 'image', label: 'Image studio' },
@@ -230,6 +231,7 @@ export function PackagesPage() {
   const qc = useQueryClient()
   const [archived, setArchived] = useState(false)
   const [editing, setEditing] = useState<Package | 'new' | null>(null)
+  const [giving, setGiving] = useState<Package | null>(null)
   const packages = usePackages(archived)
   const act = useMutation({
     mutationFn: ({ id, what }: { id: string; what: 'duplicate' | 'archive' | 'restore' }) =>
@@ -269,7 +271,7 @@ export function PackagesPage() {
         </EmptyState>
       ) : (
         <div className={tableWrap}>
-          <table className="w-full min-w-[900px] border-collapse text-left text-body">
+          <table className="w-full min-w-[1000px] border-collapse text-left text-body">
             <caption className="sr-only">Packages, {rows.length} shown</caption>
             <thead className="bg-studio-panel text-small text-studio-muted">
               <tr>
@@ -304,6 +306,12 @@ export function PackagesPage() {
                   <td className={cn(td, 'text-right tabular-nums')}>{p.subscribers}</td>
                   <td className={td}>{p.public ? 'On the website' : 'Clients only'}</td>
                   <td className={cn(td, 'whitespace-nowrap text-right')}>
+                    {p.active && !p.custom_for_user_id && (
+                      <Button size="sm" variant="ghost" onClick={() => setGiving(p)} aria-label={`Give ${p.name} to someone`}>
+                        <UserPlus aria-hidden />
+                        Give to…
+                      </Button>
+                    )}
                     <Button size="sm" variant="ghost" onClick={() => setEditing(p)} aria-label={`Edit ${p.name}`}>
                       <Pencil aria-hidden />
                       Edit
@@ -331,6 +339,7 @@ export function PackagesPage() {
           </table>
         </div>
       )}
+      <AssignPackageDialog key={giving?.id} packageId={giving?.id} open={!!giving} onOpenChange={(o) => !o && setGiving(null)} />
       <Dialog open={editing !== null} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>

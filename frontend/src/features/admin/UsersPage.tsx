@@ -12,11 +12,12 @@ import { EmptyState, ErrorState } from '@/components/studio/states'
 import { qk } from '@/hooks/keys'
 import { useMe } from '@/hooks/useAuth'
 import { api } from '@/lib/api'
-import type { AdminUserPatch, AdminUserStatus } from '@/lib/types'
+import type { AdminUser, AdminUserPatch, AdminUserStatus } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { Notice } from '@/features/auth/AuthLayout'
 import { announce } from '@/stores/ui'
-import { AdminPage, minutes, td, th, usePackages, when } from './shared'
+import { AdminPage, linkButton, minutes, td, th, usePackages, when } from './shared'
+import { AssignPackageDialog } from './AssignPackageDialog'
 import { UserDrawer } from './UserDrawer'
 
 const STATUSES: { value: AdminUserStatus; label: string }[] = [
@@ -105,6 +106,7 @@ export function UsersPage() {
   const packages = usePackages()
   const [openId, setOpenId] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
+  const [assigning, setAssigning] = useState<AdminUser | null>(null)
   const query = useDeferredValue(q.trim())
   const users = useQuery({
     queryKey: qk.adminUsers(query, status, pkg),
@@ -216,9 +218,23 @@ export function UsersPage() {
                       <td className={td}>
                         <span className="whitespace-nowrap">{u.package_name || '—'}</span>
                         {u.gpu_min_day_limit != null && <span className="block text-small text-studio-muted">{minutes(u.gpu_min_day_limit)} a day</span>}
+                        {!u.is_admin && (
+                          <button type="button" className={cn(linkButton, 'block text-small')} onClick={() => setAssigning(u)} aria-label={`Change package for ${label}`}>
+                            Change
+                          </button>
+                        )}
                       </td>
                       <td className="px-3 py-1.5">
-                        {u.verified ? <Badge tone="success">Confirmed</Badge> : <Badge tone="warning">Waiting</Badge>}
+                        {u.verified ? (
+                          <Badge tone="success">Confirmed</Badge>
+                        ) : (
+                          <span className="flex flex-wrap items-center gap-2">
+                            <Badge tone="warning">Waiting</Badge>
+                            <Button size="sm" variant="secondary" onClick={() => patch.mutate({ id: u.id, body: { verified: true } })} aria-label={`Confirm ${label}`}>
+                              Confirm
+                            </Button>
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-1.5">
                         <Switch
@@ -253,6 +269,7 @@ export function UsersPage() {
         onPatch={(body) => open && patch.mutate({ id: open.id, body })}
       />
       <AddUserDialog open={adding} onOpenChange={setAdding} />
+      <AssignPackageDialog key={assigning?.id} user={assigning} open={!!assigning} onOpenChange={(o) => !o && setAssigning(null)} />
     </>
   )
 }

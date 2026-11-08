@@ -25,6 +25,7 @@ PW = "a-long-password-1"
 def mails(monkeypatch):
     sent: list[mailer.Mail] = []
     monkeypatch.setattr(mailer, "deliver", sent.append)
+    monkeypatch.setattr(mailer, "can_send", lambda: True)
     return sent
 
 
@@ -54,12 +55,24 @@ def make_user(email="ben@example.com", name="Ben", verified=True, admin=False) -
 
 # ---------------------------------------------------------------- sign-up and verification
 
-def test_config_reports_the_modes(anon, flags):  # noqa: F811
-    assert anon.get("/api/auth/config").json() == {"signup": "open", "google": False, "verify": True}
+def test_config_reports_the_modes(anon, flags, mails):  # noqa: F811
+    assert anon.get("/api/auth/config").json() == {"signup": "open", "google": False, "verify": True, "verify_by": "email"}
     flags(signup="Invite", email_verify=False)
-    assert anon.get("/api/auth/config").json() == {"signup": "invite", "google": False, "verify": False}
+    assert anon.get("/api/auth/config").json() == {"signup": "invite", "google": False, "verify": False,
+                                                   "verify_by": "email"}
     flags(signup="nonsense")
     assert anon.get("/api/auth/config").json()["signup"] == "closed"
+
+
+def test_no_mail_means_an_admin_confirms(anon, client, monkeypatch):
+    sent: list = []
+    monkeypatch.setattr(mailer, "deliver", sent.append)
+    assert anon.get("/api/auth/config").json()["verify_by"] == "admin"
+    assert signup(anon).status_code == 202 and sent == []
+    uid = next(u["id"] for u in client.get("/api/admin/users?status=unverified").json() if u["email"] == "nia@example.com")
+    assert client.patch(f"/api/admin/users/{uid}", json={"verified": True}).json()["verified"] is True
+    with SessionLocal() as db:
+        assert db.get(User, uid).email_verified_at is not None
 
 
 def test_signup_makes_a_private_studio_and_sends_a_link(anon, mails):

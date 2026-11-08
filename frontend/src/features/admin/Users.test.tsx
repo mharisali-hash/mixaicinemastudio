@@ -107,7 +107,7 @@ describe('Admin: Users', () => {
     expect(await within(drawer).findByText(/12 of 30 min today/)).toBeInTheDocument()
 
     await user.click(within(drawer).getByRole('button', { name: 'Change package' }))
-    const change = await screen.findByRole('dialog', { name: 'Change package' })
+    const change = await screen.findByRole('dialog', { name: /Change package/ })
     await user.selectOptions(within(change).getByLabelText('Package'), 'p-pro')
     await user.type(within(change).getByLabelText('Ends'), '2026-12-31')
     await user.click(within(change).getByRole('button', { name: 'Change package' }))

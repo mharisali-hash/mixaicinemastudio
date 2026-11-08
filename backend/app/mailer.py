@@ -139,6 +139,11 @@ def _smtp_send(m: Mail) -> None:
         log.exception("couldn't send '%s' to %s", m.subject, m.to)
 
 
+def can_send() -> bool:
+    # the console backend only logs; nothing reaches a real inbox
+    return get_settings().email_backend.strip().lower() == "smtp"
+
+
 def deliver(m: Mail) -> None:
     if get_settings().email_backend.strip().lower() == "smtp":
         threading.Thread(target=_smtp_send, args=(m,), name="mailer", daemon=True).start()

@@ -30,6 +30,8 @@ export interface AuthConfig {
   signup: 'open' | 'invite' | 'closed'
   google: boolean
   verify: boolean
+  // who confirms new accounts: a link by email, or an admin by hand when no email can be sent
+  verify_by?: 'email' | 'admin'
 }
 
 export type AdminUserStatus = 'all' | 'active' | 'inactive' | 'unverified' | 'admin'

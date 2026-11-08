@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/alert-dialog'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Input, fieldClass } from '@/components/ui/input'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Switch } from '@/components/ui/switch'
@@ -13,11 +13,11 @@ import { GpuMeter } from '@/components/studio/gpu-meter'
 import { qk } from '@/hooks/keys'
 import { api } from '@/lib/api'
 import type { AdminUser, AdminUserDetail, AdminUserPatch } from '@/lib/types'
-import { cn } from '@/lib/utils'
 import { Notice } from '@/features/auth/AuthLayout'
 import { announce } from '@/stores/ui'
+import { AssignPackageDialog } from './AssignPackageDialog'
 import { UserRightsSection } from './UserRightsSection'
-import { PayBadge, SubBadge, day, endOfDay, minutes, pkr, rupees, startOfDay, usePackages, when } from './shared'
+import { PayBadge, SubBadge, day, endOfDay, minutes, rupees, when } from './shared'
 
 function useAdminAction<T>(fn: (arg: T) => Promise<unknown>, done: string) {
   const qc = useQueryClient()
@@ -45,68 +45,6 @@ function Field({ id, label, hint, children }: { id: string; label: string; hint?
         </p>
       )}
     </div>
-  )
-}
-
-function AssignDialog({ user, open, onOpenChange }: { user: AdminUser; open: boolean; onOpenChange: (o: boolean) => void }) {
-  const packages = usePackages()
-  const [pkgId, setPkgId] = useState('')
-  const [start, setStart] = useState('')
-  const [end, setEnd] = useState('')
-  const [notes, setNotes] = useState('')
-  const choices = (packages.data ?? []).filter((p) => !p.custom_for_user_id || p.custom_for_user_id === user.id)
-  const chosen = pkgId || choices[0]?.id || ''
-  const assign = useAdminAction(
-    () => api.admin.assignPackage(user.id, { package_id: chosen, starts_at: startOfDay(start), ends_at: endOfDay(end), notes: notes.trim() }),
-    `Package changed for ${user.display_name || user.email}`,
-  )
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Change package</DialogTitle>
-          <DialogDescription>Starts straight away unless you pick a date. Whatever they have now ends.</DialogDescription>
-        </DialogHeader>
-        <form
-          className="flex flex-col gap-3"
-          noValidate
-          onSubmit={(e) => {
-            e.preventDefault()
-            assign.mutate(undefined, { onSuccess: () => onOpenChange(false) })
-          }}
-        >
-          {assign.isError && <Notice>{assign.error.message}</Notice>}
-          <Field id="assign-package" label="Package">
-            <select id="assign-package" className={cn(fieldClass, 'h-8')} value={chosen} onChange={(e) => setPkgId(e.target.value)}>
-              {choices.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} · {pkr(p.price_pkr)}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field id="assign-start" label="Starts">
-              <Input id="assign-start" type="date" value={start} onChange={(e) => setStart(e.target.value)} />
-            </Field>
-            <Field id="assign-end" label="Ends" hint="Empty: the package's own length.">
-              <Input id="assign-end" type="date" value={end} onChange={(e) => setEnd(e.target.value)} aria-describedby="assign-end-hint" />
-            </Field>
-          </div>
-          <Field id="assign-notes" label="Note (only admins see it)">
-            <Input id="assign-notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
-          </Field>
-          <DialogFooter>
-            <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" loading={assign.isPending} disabled={!chosen}>
-              Change package
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
   )
 }
 
@@ -383,7 +321,7 @@ function Billing({ user, detail }: { user: AdminUser; detail: AdminUserDetail })
         )}
       </Section>
 
-      <AssignDialog user={user} open={dialog === 'assign'} onOpenChange={(o) => setDialog(o ? 'assign' : null)} />
+      <AssignPackageDialog user={user} open={dialog === 'assign'} onOpenChange={(o) => setDialog(o ? 'assign' : null)} />
       <GrantDialog user={user} open={dialog === 'grant'} onOpenChange={(o) => setDialog(o ? 'grant' : null)} />
       <CustomDialog user={user} open={dialog === 'custom'} onOpenChange={(o) => setDialog(o ? 'custom' : null)} />
       {sub && (
