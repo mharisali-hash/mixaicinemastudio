@@ -14,6 +14,8 @@ interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
   kind: MediaKind
+  // more than one kind: a switch above the search flips between them (the list asks for one kind at a time)
+  kinds?: MediaKind[]
   max: number
   title: string
   description?: string
@@ -33,7 +35,10 @@ export function MediaPicker(props: Props) {
   )
 }
 
-function PickerBody({ kind, max, title, description, taken = [], confirmLabel = 'Use selected', includeHome, onConfirm, onOpenChange }: Props) {
+const KIND_LABEL: Partial<Record<MediaKind, string>> = { image: 'Pictures', video: 'Clips', audio: 'Audio' }
+
+function PickerBody({ kind: first, kinds, max, title, description, taken = [], confirmLabel = 'Use selected', includeHome, onConfirm, onOpenChange }: Props) {
+  const [kind, setKind] = useState<MediaKind>(first)
   const [q, setQ] = useState('')
   const query = useDeferredValue(q.trim())
   const [picked, setPicked] = useState<MediaItem[]>([])
@@ -55,6 +60,15 @@ function PickerBody({ kind, max, title, description, taken = [], confirmLabel = 
           {description ?? `Pick up to ${room} from your library, or upload new ones.`} {picked.length}/{room} selected.
         </DialogDescription>
       </DialogHeader>
+      {kinds && kinds.length > 1 && (
+        <div role="group" aria-label="Show" className="flex gap-1">
+          {kinds.map((k) => (
+            <Button key={k} type="button" size="sm" variant={k === kind ? 'primary' : 'ghost'} aria-pressed={k === kind} onClick={() => setKind(k)}>
+              {KIND_LABEL[k] ?? `${k}s`}
+            </Button>
+          ))}
+        </div>
+      )}
       <div className="relative">
         <Search aria-hidden className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-studio-muted" />
         <Input type="search" placeholder={`Search ${kind}s`} aria-label={`Search ${kind}s`} value={q} onChange={(e) => setQ(e.target.value)} className="pl-8" />

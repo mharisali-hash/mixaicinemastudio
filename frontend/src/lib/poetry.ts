@@ -22,6 +22,8 @@ export interface PoetrySettings {
   group_size?: 3 | 5
   length_s: number
   character_id: string | null
+  // one of that character's Looks; null draws from the character sheet
+  look_id?: string | null
   character: string
   setting: string
   aspect: PoetryAspect
@@ -255,3 +257,23 @@ export const CHILD_VOCALS: { value: PoetryVocal; label: string }[] = [
   { value: 'voice', label: 'A voice of mine' },
   { value: 'lead_group', label: "Lead child + children's group" },
 ]
+
+// past 90 s it reads better in minutes: a 4-minute Episode, not 240 s
+export const lengthLabel = (s: number) => {
+  const r = Math.round(s)
+  return r <= 90 ? `${r} s` : `${Math.floor(r / 60)} min${r % 60 ? ` ${r % 60} s` : ''}`
+}
+
+// lead_group and 'voice' only mean something with the extra fields, so they're spelled out
+export function voiceSummary(st: Pick<PoetrySettings, 'vocal' | 'lead_voice' | 'group_size'>, voiceName?: string) {
+  if (st.vocal === 'female' || st.vocal === 'male') return `${st.vocal === 'female' ? 'Female' : 'Male'} voice`
+  if (st.vocal === 'voice') return voiceName ? `Sung as ${voiceName}` : 'A voice of mine'
+  if (st.vocal === 'lead_group') {
+    const lead = st.lead_voice === 'voice' ? (voiceName ?? 'my voice') : st.lead_voice === 'boy' ? 'boy' : 'girl'
+    return `Lead ${lead} + ${st.group_size ?? 3} children`
+  }
+  return CHILD_VOCALS.find((v) => v.value === st.vocal)?.label ?? st.vocal
+}
+
+export const bookendSummary = (st: Pick<PoetrySettings, 'intro_media_id' | 'outro_media_id'>) =>
+  st.intro_media_id && st.outro_media_id ? 'intro + outro' : st.intro_media_id ? 'intro' : st.outro_media_id ? 'outro' : ''

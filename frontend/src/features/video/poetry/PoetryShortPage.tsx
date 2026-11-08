@@ -1,12 +1,15 @@
 import { useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { ArrowLeft, ArrowRight, Check, Loader2 } from 'lucide-react'
+import { CAPTION_STYLES } from '@/components/generate/CaptionStylePicker'
 import { ErrorState } from '@/components/studio/states'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { StageTimeline } from '@/features/quick/StageTimeline'
+import { useCharacterLooks } from '@/hooks/useCharacterLooks'
+import { useVoiceChoices } from '@/hooks/useGallery'
 import { useContinuePoetry, usePoetry } from '@/hooks/usePoetry'
-import { POETRY_STEPS, blockingStep, initialStep, jobBusy, stageOf, stepStates, type PoetryShort, type PoetryStageKey, type StepState } from '@/lib/poetry'
+import { POETRY_STEPS, blockingStep, bookendSummary, initialStep, jobBusy, lengthLabel, stageOf, stepStates, voiceSummary, type PoetryShort, type PoetryStageKey, type StepState } from '@/lib/poetry'
 import type { QuickStage, QuickStageKey } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { announce } from '@/stores/ui'
@@ -65,9 +68,7 @@ function Workspace({ ps }: { ps: PoetryShort }) {
         <h1 id="ps-title" className="font-display text-[18px] font-semibold" dir="auto" lang={ps.language}>
           {ps.title || 'Poetry Short'}
         </h1>
-        <span className="ml-auto text-[12px] text-studio-muted">
-          {ps.settings.aspect} · {Math.round(ps.settings.length_s)} s · {ps.settings.vocal} voice
-        </span>
+        <Summary ps={ps} />
       </header>
       <Stepper current={step} states={states} onPick={go} />
       <section role="tabpanel" id={`ps-panel-${current.id}`} aria-labelledby={`ps-tab-${current.id}`} tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto focus-visible:outline-none">
@@ -94,6 +95,33 @@ function Workspace({ ps }: { ps: PoetryShort }) {
       </footer>
     </main>
   )
+}
+
+/** The choices the Short was made with, in one line under the title on narrow screens. */
+function Summary({ ps }: { ps: PoetryShort }) {
+  const st = ps.settings
+  const voices = useVoiceChoices()
+  const voiceName = st.sing_voice_id ? voices.find((v) => v.id === st.sing_voice_id)?.name : undefined
+  const caption = CAPTION_STYLES.find((c) => c.value === (st.caption_style ?? 'classic'))?.label
+  const bits: React.ReactNode[] = [st.aspect, lengthLabel(st.length_s), voiceSummary(st, voiceName)]
+  if (st.character_id && st.look_id) bits.push(<LookName key="look" characterId={st.character_id} lookId={st.look_id} />)
+  if (caption) bits.push(`${caption} captions`)
+  if (bookendSummary(st)) bits.push(bookendSummary(st))
+  return (
+    <p className="ml-auto flex flex-wrap gap-x-1 text-[12px] text-studio-muted">
+      {bits.map((b, i) => (
+        <span key={i}>
+          {i > 0 && <span aria-hidden>· </span>}
+          {b}
+        </span>
+      ))}
+    </p>
+  )
+}
+
+function LookName({ characterId, lookId }: { characterId: string; lookId: string }) {
+  const name = useCharacterLooks(characterId).data?.looks.find((l) => l.id === lookId)?.name
+  return <>Look: {name ?? '…'}</>
 }
 
 function Progress({ ps }: { ps: PoetryShort }) {

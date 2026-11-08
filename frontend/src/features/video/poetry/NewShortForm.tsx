@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { Feather } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -12,15 +12,17 @@ import { useStudioCharacters } from '@/hooks/useCharacterStudio'
 import { useCreatePoetry } from '@/hooks/usePoetry'
 import { useSongVoices } from '@/hooks/useStems'
 import { useVoiceChoices } from '@/hooks/useGallery'
-import { CHILD_VOCALS, IMAGE_MODELS, POETRY_LANGUAGES, type PoetryAspect, type PoetryCreate, type PoetryVocal } from '@/lib/poetry'
+import { insertSection, LEAD_VOICES, PART_TAGS, type LeadVoice } from '@/lib/audio'
+import { CHILD_VOCALS, IMAGE_MODELS, POETRY_LANGUAGES, lengthLabel, type PoetryAspect, type PoetryCreate, type PoetryVocal } from '@/lib/poetry'
 import { announce } from '@/stores/ui'
+import { BookendField } from './BookendField'
+import { LookChoice } from './LookChoice'
 
 const SELECT = 'h-8 w-full rounded-[6px] border border-studio-border-strong bg-studio-raised px-2 text-body focus-visible:outline-2 focus-visible:outline-studio-accent'
 
-/** Everything a Short needs up front; only a topic or a poem is required. */
-// past 90 s it reads better in minutes: a 4-minute Episode, not 240 s
-const lengthLabel = (s: number) => (s <= 90 ? `${s} s` : `${Math.floor(s / 60)} min${s % 60 ? ` ${s % 60} s` : ''}`)
+const POEM_MAX = 4000
 
+/** Everything a Short needs up front; only a topic or a poem is required. */
 export function NewShortForm() {
   const uid = useId()
   const id = (s: string) => `${uid}-${s}`
@@ -28,6 +30,7 @@ export function NewShortForm() {
   const create = useCreatePoetry()
   const chars = useStudioCharacters()
   const [own, setOwn] = useState(false)
+  const poemBox = useRef<HTMLTextAreaElement>(null)
   const sung = useSongVoices().data?.available === true
   const voices = useVoiceChoices()
   const [f, setF] = useState({
@@ -39,10 +42,12 @@ export function NewShortForm() {
     style: '',
     vocal: 'female' as PoetryVocal,
     sing_voice_id: '',
-    lead_voice: 'girl' as 'boy' | 'girl' | 'voice',
+    lead_voice: 'girl' as LeadVoice,
     group_size: 3 as 3 | 5,
     length_s: 60,
     character_id: '',
+    // undefined until the character's looks load and the default is filled in
+    look_id: undefined as string | null | undefined,
     character: '',
     setting: '',
     aspect: '9:16' as PoetryAspect,
@@ -51,20 +56,44 @@ export function NewShortForm() {
     title_card: false,
     caption_style: 'classic' as CaptionStyle,
     review: true,
+    intro_media_id: null as string | null,
+    outro_media_id: null as string | null,
   })
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((o) => ({ ...o, [k]: v }))
-  const noVoice = (f.vocal === 'voice' || (f.vocal === 'lead_group' && f.lead_voice === 'voice')) && !f.sing_voice_id
+  const pickLook = (v: string | null) => setF((o) => ({ ...o, look_id: v }))
+  const ownVoice = f.vocal === 'voice' || (f.vocal === 'lead_group' && f.lead_voice === 'voice')
+  const noVoice = ownVoice && !f.sing_voice_id
+  const parts = f.vocal === 'lead_group'
   const missing = (own ? !f.poem.trim() : !f.topic.trim()) || noVoice
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     if (missing) return
-    const body: PoetryCreate = { ...f, sing_voice_id: f.vocal === 'voice' || (f.vocal === 'lead_group' && f.lead_voice === 'voice') ? f.sing_voice_id || null : null, character_id: f.character_id || null, topic: own ? '' : f.topic, poem: own ? f.poem : '' }
+    const body: PoetryCreate = {
+      ...f,
+      sing_voice_id: ownVoice ? f.sing_voice_id || null : null,
+      character_id: f.character_id || null,
+      look_id: f.character_id ? (f.look_id ?? null) : null,
+      topic: own ? '' : f.topic,
+      poem: own ? f.poem : '',
+    }
     create.mutate(body, {
       onSuccess: (ps) => {
         announce('Poetry Short started.')
         nav(`/video/poetry/${ps.id}`)
       },
+    })
+  }
+
+  const addPart = (tag: string) => {
+    const el = poemBox.current
+    const { text, cursor } = insertSection(f.poem, el?.selectionStart ?? f.poem.length, tag)
+    if (text.length > POEM_MAX) return announce('The poem is at the limit.')
+    set('poem', text)
+    // the caret goes under the new marker once React has the new value in
+    requestAnimationFrame(() => {
+      el?.focus()
+      el?.setSelectionRange(cursor, cursor)
     })
   }
 
@@ -84,27 +113,55 @@ export function NewShortForm() {
       </fieldset>
       {own ? (
         <div className="flex flex-col gap-1">
-          <Label htmlFor={id('poem')}>Your poem</Label>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Label htmlFor={id('poem')} className="mr-auto">
+              Your poem
+            </Label>
+            {parts && (
+              <div role="toolbar" aria-label="Who sings" className="flex flex-wrap gap-1">
+                {PART_TAGS.map((t) => (
+                  <Button key={t} type="button" size="sm" variant="ghost" onClick={() => addPart(t)} aria-label={`Insert ${t}`} className="h-6 px-1.5 font-mono text-[12px] text-studio-accent">
+                    {t}
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
           <Textarea
+            ref={poemBox}
             id={id('poem')}
             dir="auto"
             lang={f.language}
             rows={8}
-            maxLength={4000}
+            maxLength={POEM_MAX}
             value={f.poem}
             onChange={(e) => set('poem', e.target.value)}
             aria-describedby={id('poem-hint')}
             className="text-[16px] leading-relaxed"
           />
           <span id={id('poem-hint')} className="text-small text-studio-muted">
-            One line per sung line. [verse] and [chorus] markers are optional.
+            {parts
+              ? 'One line per sung line. Mark who sings each part with the buttons above; words in (brackets) are the group answering.'
+              : 'One line per sung line. [verse] and [chorus] markers are optional.'}
           </span>
-          <AerabButton text={f.poem} onText={(t) => set('poem', t)} language={f.language} max={4000} target="the poem" />
+          <AerabButton text={f.poem} onText={(t) => set('poem', t)} language={f.language} max={POEM_MAX} target="the poem" />
         </div>
       ) : (
         <div className="flex flex-col gap-1">
           <Label htmlFor={id('topic')}>What is the poem about?</Label>
-          <Input id={id('topic')} dir="auto" value={f.topic} onChange={(e) => set('topic', e.target.value)} placeholder="Coming apart slowly, like dust in the wind" />
+          <Input
+            id={id('topic')}
+            dir="auto"
+            value={f.topic}
+            onChange={(e) => set('topic', e.target.value)}
+            placeholder="Coming apart slowly, like dust in the wind"
+            aria-describedby={parts ? id('topic-hint') : undefined}
+          />
+          {parts && (
+            <span id={id('topic-hint')} className="text-small text-studio-muted">
+              The poem comes back with the lead's verses and the group's chorus already marked.
+            </span>
+          )}
         </div>
       )}
       <div className="grid gap-3 sm:grid-cols-2">
@@ -147,10 +204,12 @@ export function NewShortForm() {
           <>
             <div className="flex flex-col gap-1">
               <Label htmlFor={id('lead')}>Lead</Label>
-              <select id={id('lead')} className={SELECT} value={f.lead_voice} onChange={(e) => set('lead_voice', e.target.value as 'boy' | 'girl' | 'voice')}>
-                <option value="girl">Girl</option>
-                <option value="boy">Boy</option>
-                <option value="voice">A voice of mine</option>
+              <select id={id('lead')} className={SELECT} value={f.lead_voice} onChange={(e) => set('lead_voice', e.target.value as LeadVoice)}>
+                {LEAD_VOICES.map((v) => (
+                  <option key={v.value} value={v.value}>
+                    {v.label}
+                  </option>
+                ))}
               </select>
             </div>
             <div className="flex flex-col gap-1">
@@ -160,16 +219,12 @@ export function NewShortForm() {
                 <option value={5}>5 children</option>
               </select>
             </div>
-            <p className="text-small text-studio-muted sm:col-span-2">
-              In your poem, mark who sings: <span className="font-mono">[verse: lead]</span>, <span className="font-mono">[chorus: group]</span>,{' '}
-              <span className="font-mono">[chorus: all]</span>; words in (brackets) are the group answering.
-            </p>
           </>
         )}
-        {(f.vocal === 'voice' || (f.vocal === 'lead_group' && f.lead_voice === 'voice')) && (
+        {ownVoice && (
           <div className="flex flex-col gap-1">
             <Label htmlFor={id('singer')}>Sung in the voice of</Label>
-            <select id={id('singer')} className={SELECT} value={f.sing_voice_id} onChange={(e) => set('sing_voice_id', e.target.value)}>
+            <select id={id('singer')} className={SELECT} value={f.sing_voice_id} onChange={(e) => set('sing_voice_id', e.target.value)} aria-invalid={noVoice || undefined}>
               <option value="">Choose a voice…</option>
               {voices.map((v) => (
                 <option key={v.id} value={v.id}>
@@ -181,11 +236,21 @@ export function NewShortForm() {
         )}
         <div className="flex flex-col gap-1">
           <Label htmlFor={id('len')}>Length: {lengthLabel(f.length_s)}</Label>
-          <input id={id('len')} type="range" min={30} max={240} step={5} value={f.length_s} onChange={(e) => set('length_s', Number(e.target.value))} className="h-8 accent-studio-accent" />
+          <input
+            id={id('len')}
+            type="range"
+            min={30}
+            max={240}
+            step={5}
+            value={f.length_s}
+            aria-valuetext={lengthLabel(f.length_s)}
+            onChange={(e) => set('length_s', Number(e.target.value))}
+            className="h-8 accent-studio-accent"
+          />
         </div>
         <div className="flex flex-col gap-1">
           <Label htmlFor={id('char')}>Character</Label>
-          <select id={id('char')} className={SELECT} value={f.character_id} onChange={(e) => set('character_id', e.target.value)}>
+          <select id={id('char')} className={SELECT} value={f.character_id} onChange={(e) => setF((o) => ({ ...o, character_id: e.target.value, look_id: undefined }))}>
             <option value="">Describe one instead</option>
             {(chars.data ?? []).map((c) => (
               <option key={c.id} value={c.id}>
@@ -198,6 +263,11 @@ export function NewShortForm() {
           <Label htmlFor={id('who')}>{f.character_id ? 'Anything to add about them' : 'Who we see'}</Label>
           <Input id={id('who')} value={f.character} onChange={(e) => set('character', e.target.value)} placeholder="a woman in a hooded robe, seen from behind" />
         </div>
+        {f.character_id && (
+          <div className="sm:col-span-2">
+            <LookChoice characterId={f.character_id} value={f.look_id} onChange={pickLook} />
+          </div>
+        )}
         <div className="flex flex-col gap-1 sm:col-span-2">
           <Label htmlFor={id('set')}>Setting</Label>
           <Input id={id('set')} value={f.setting} onChange={(e) => set('setting', e.target.value)} placeholder="an old Mughal city, golden hour into lantern-lit night" />
@@ -234,6 +304,14 @@ export function NewShortForm() {
         </div>
       </div>
       <CaptionStylePicker legend="How the verses appear" value={f.caption_style} onChange={(v) => set('caption_style', v)} />
+      <fieldset className="flex flex-col gap-2" aria-describedby={id('ends-hint')}>
+        <legend className="section-label mb-1">Before and after the song (optional)</legend>
+        <BookendField which="intro" value={f.intro_media_id} onChange={(v) => set('intro_media_id', v)} />
+        <BookendField which="outro" value={f.outro_media_id} onChange={(v) => set('outro_media_id', v)} />
+        <span id={id('ends-hint')} className="text-small text-studio-muted">
+          A picture from your Library holds for a few seconds; a clip plays up to 10 s. No verses are shown on them.
+        </span>
+      </fieldset>
       <SwitchRow id={id('tc')} checked={f.title_card} onChange={(v) => set('title_card', v)} title="Title card" hint="A few seconds of the title over the first scene before the song." />
       <SwitchRow
         id={id('rv')}

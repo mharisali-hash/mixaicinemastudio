@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { blockingStep, initialStep, nudge, stepStates, tap, timingProblem, type PoetryShort, type PoetryStageKey, type PoetryStageStatus } from '@/lib/poetry'
 import type { Generation } from '@/lib/types'
-import { T, job, mockApi, renderAt } from '@/test/media-fixtures'
+import { T, job, media, mockApi, renderAt } from '@/test/media-fixtures'
 import { PoetryListPage } from './PoetryListPage'
 import { PoetryShortPage } from './PoetryShortPage'
 
@@ -251,5 +251,104 @@ describe('new Poetry Short', () => {
     const body = calls.find((c) => c.method === 'POST' && c.path === '/poetry')!.body as Record<string, unknown>
     expect(body).toMatchObject({ topic: 'dust in the wind', language: 'ur', aspect: '9:16', review: false, poem: '', caption_style: 'highlight' })
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/video/poetry/p1'))
+  })
+})
+
+const lookPic = (id: string, status: Generation['status'] = 'ready') => gen(id, { status, thumb_url: `/t/${id}.webp` })
+const LOOKS = [
+  { id: 'l1', character_id: 'c1', name: 'Office', outfit: 'a grey suit', setting: 'a glass office', pose: '', prompt: '', is_default: true, sort: 0, picture: lookPic('gl1'), created_at: T },
+  { id: 'l2', character_id: 'c1', name: 'Garden', outfit: 'a cotton kurta', setting: 'a rose garden', pose: '', prompt: '', is_default: false, sort: 1, picture: lookPic('gl2'), created_at: T },
+  { id: 'l3', character_id: 'c1', name: 'Eid', outfit: '', setting: '', pose: '', prompt: '', is_default: false, sort: 2, picture: lookPic('gl3', 'generating'), created_at: T },
+]
+const SUNG = { available: true, vocals: ['boy', 'girl', 'choir', 'voice'] }
+
+describe('new Poetry Short: looks, intro and outro', () => {
+  it('starts on the default look, offers the portrait, and sends the look picked', async () => {
+    const calls = mockApi((method, path) => {
+      if (path === '/characters') return [{ id: 'c1', name: 'Amna' }]
+      if (path === '/characters/c1/looks') return { looks: LOOKS, packs: [] }
+      if (method === 'POST' && path === '/poetry') return short({ poem: 'running' })
+      if (path === '/poetry/p1') return short({ poem: 'running' })
+      return []
+    })
+    renderAt('/video/poetry', routes)
+    const user = userEvent.setup()
+    await user.type(await screen.findByLabelText('What is the poem about?'), 'a garden at dusk')
+    await user.selectOptions(screen.getByLabelText('Character'), await screen.findByRole('option', { name: 'Amna' }))
+    expect(await screen.findByRole('radio', { name: /Office/ })).toBeChecked()
+    // a look still being drawn would be refused by the server
+    expect(screen.getByRole('radio', { name: /Eid/ })).toBeDisabled()
+    await user.click(screen.getByRole('radio', { name: /Portrait \(no look\)/ }))
+    expect(screen.getByRole('radio', { name: /Portrait/ })).toBeChecked()
+    await user.click(screen.getByRole('radio', { name: /Garden/ }))
+    await user.click(screen.getByRole('button', { name: /Make the Short/ }))
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/poetry')).toBeTruthy())
+    expect(calls.find((c) => c.method === 'POST' && c.path === '/poetry')!.body).toMatchObject({ character_id: 'c1', look_id: 'l2' })
+  })
+
+  it('picks an intro clip from the Library, and an outro that can be removed again', async () => {
+    const clip = media('v1', { kind: 'video', title: 'River', media_url: '/media/v1.mp4', thumb_url: '/t/v1.webp' })
+    const pic = media('m1', { title: 'Sunset' })
+    const calls = mockApi((method, path, query) => {
+      if (path === '/media') return { items: query.kind === 'video' ? [clip] : [pic] }
+      if (path === '/media/v1') return clip
+      if (path === '/media/m1') return pic
+      if (method === 'POST' && path === '/poetry') return short({ poem: 'running' })
+      if (path === '/poetry/p1') return short({ poem: 'running' })
+      return []
+    })
+    renderAt('/video/poetry', routes)
+    const user = userEvent.setup()
+    await user.type(await screen.findByLabelText('What is the poem about?'), 'a river')
+
+    await user.click(screen.getByRole('button', { name: 'Choose the intro' }))
+    let dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Clips' }))
+    await user.click(await within(dialog).findByRole('button', { name: /River/ }))
+    await user.click(within(dialog).getByRole('button', { name: /Use this/ }))
+    expect(await screen.findByText('River · clip')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Choose the outro' }))
+    dialog = await screen.findByRole('dialog')
+    await user.click(await within(dialog).findByRole('button', { name: /Sunset/ }))
+    await user.click(within(dialog).getByRole('button', { name: /Use this/ }))
+    expect(await screen.findByText('Sunset · picture')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Remove the outro' }))
+
+    await user.click(screen.getByRole('button', { name: /Make the Short/ }))
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/poetry')).toBeTruthy())
+    expect(calls.find((c) => c.method === 'POST' && c.path === '/poetry')!.body).toMatchObject({ intro_media_id: 'v1', outro_media_id: null, look_id: null })
+  })
+
+  it('offers who-sings markers for a lead and a group', async () => {
+    mockApi((_m, path) => (path === '/audio/song-voices' ? SUNG : []))
+    renderAt('/video/poetry', routes)
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'My own poem' }))
+    expect(screen.queryByRole('toolbar', { name: 'Who sings' })).not.toBeInTheDocument()
+    await user.selectOptions(screen.getByLabelText('Voice'), await screen.findByRole('option', { name: /Lead child/ }))
+    const poem = screen.getByLabelText('Your poem')
+    await user.type(poem, 'chaand nikla')
+    await user.click(within(screen.getByRole('toolbar', { name: 'Who sings' })).getByRole('button', { name: 'Insert [chorus: group]' }))
+    expect(poem).toHaveValue('chaand nikla\n[chorus: group]\n')
+    expect(screen.getByText(/words in \(brackets\) are the group answering/)).toBeInTheDocument()
+  })
+})
+
+describe('Poetry Short page summary', () => {
+  it('shows the voice, look, caption style and bookends it was made with', async () => {
+    const base = short({ poem: 'review' })
+    const ps: PoetryShort = {
+      ...base,
+      settings: { ...base.settings, length_s: 150, vocal: 'lead_group', lead_voice: 'boy', group_size: 5, character_id: 'c1', look_id: 'l2', caption_style: 'pill', intro_media_id: 'v1', outro_media_id: 'm1' },
+    }
+    mockApi((_m, path) => (path === '/poetry/p1' ? ps : path === '/characters/c1/looks' ? { looks: LOOKS, packs: [] } : []))
+    renderAt('/video/poetry/p1', routes)
+    const line = (await screen.findByText('Lead boy + 5 children')).closest('p')!
+    expect(line).toHaveTextContent('9:16')
+    expect(line).toHaveTextContent('2 min 30 s')
+    expect(await within(line).findByText('Look: Garden')).toBeInTheDocument()
+    expect(line).toHaveTextContent('Karaoke captions')
+    expect(line).toHaveTextContent('intro + outro')
   })
 })
