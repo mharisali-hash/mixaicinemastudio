@@ -14,7 +14,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
-WORDS = ("ace", "acestep", "ace_step")
+WORDS = ("acestep",)
 # inputs that would let a song be re-made from its own audio, or one stretch of it
 HINTS = ("src_audio", "source_audio", "reference_audio", "audio", "latent", "repaint", "noise_mask", "mask",
          "start", "end", "cover", "strength", "denoise", "retake", "variance", "edit", "audio_codes")
@@ -51,7 +51,8 @@ def main() -> int:
         return 1
     print(f"{len(info)} node types\n")
 
-    ace = {k: v for k, v in info.items() if any(w in k.lower() for w in WORDS)}
+    # "ace" alone matched replace / face / space (8 Nov); the node names spell it AceStep or ACEStep
+    ace = {k: v for k, v in info.items() if any(w in k.lower().replace("_", "") for w in WORDS)}
     print(f"ACE-Step nodes ({len(ace)}):")
     found = set()
     for name, node in sorted(ace.items()):

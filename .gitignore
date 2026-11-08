@@ -39,3 +39,5 @@ CLAUDE.md
 frontend/e2e/.auth/
 frontend/test-results/
 frontend/playwright-report/
+# scripts/try-ace15-remix.py output on the GPU box
+remix-trials/
