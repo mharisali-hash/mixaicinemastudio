@@ -1037,6 +1037,53 @@ class AdminAudit(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
 
 
+class BulkBatch(Base):
+    """An admin's bulk run (migration 0033): thousands of uploaded pictures, one action for all of them.
+    Its pictures, versions and jobs live in the hidden bulk workspace (app.bulk.service.workspace), so none
+    of it reaches anyone's Library, job tray or event stream."""
+    __tablename__ = "bulk_batch"
+    id: Mapped[str] = _id()
+    workspace_id: Mapped[str] = _ws()
+    user_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    action: Mapped[str] = mapped_column(String(20))  # cutout | edit
+    options: Mapped[dict] = mapped_column(JSON, default=dict)
+    # uploading | running | paused | done | cancelled
+    status: Mapped[str] = mapped_column(String(20), default="uploading")
+    run_job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    exports: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class BulkItem(Base):
+    __tablename__ = "bulk_item"
+    __table_args__ = (UniqueConstraint("batch_id", "filename", "size", name="uq_bulk_item_file"),
+                      Index("ix_bulk_item_batch_status", "batch_id", "status"))
+    id: Mapped[str] = _id()
+    batch_id: Mapped[str] = mapped_column(String(36), ForeignKey("bulk_batch.id", ondelete="CASCADE"), index=True)
+    seq: Mapped[int] = mapped_column(Integer, default=0)
+    # as the admin's folder had it, sub-folders included ("shoes/red/001.jpg"); the export keeps the name
+    filename: Mapped[str] = mapped_column(String(500))
+    size: Mapped[int] = mapped_column(Integer, default=0)
+    sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    media_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    source_gen_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    # from a prompts CSV; None means the batch's own instruction / keywords
+    instruction: Mapped[str | None] = mapped_column(Text, nullable=True)
+    keywords: Mapped[str | None] = mapped_column(Text, nullable=True)
+    result_gen_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    job_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    # uploaded | queued | running | done | failed | cancelled
+    status: Mapped[str] = mapped_column(String(20), default="uploaded")
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    prompt_used: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sample: Mapped[bool] = mapped_column(Boolean, default=False)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class ImplantPatient(Base):
     """M22: one surgeon's patient. Photos and results are Generation rows (implant_photo / implant_result) whose
     files live under data/clinic/, outside every workspace folder, so nothing else in the app can list or serve

@@ -70,7 +70,7 @@ export interface UploadHandle<T = MediaItem> {
 type ErrorText = (status: number, detail: string | undefined, fileName: string) => string
 
 /** XHR rather than fetch: fetch still can't report upload progress. */
-function xhrUpload<T>(path: string, file: File, onProgress: (fraction: number) => void, errorText: ErrorText, fields: Record<string, string | undefined> = {}): UploadHandle<T> {
+export function xhrUpload<T>(path: string, file: File, onProgress: (fraction: number) => void, errorText: ErrorText, fields: Record<string, string | undefined> = {}): UploadHandle<T> {
   const xhr = new XMLHttpRequest()
   const promise = new Promise<T>((resolve, reject) => {
     const form = new FormData()

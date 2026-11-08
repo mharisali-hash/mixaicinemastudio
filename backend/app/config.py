@@ -126,6 +126,11 @@ class Settings(BaseSettings):
     # the vision model looks at every finished picture (and a frame of each video) for anything nude or sexual;
     # off only while the vision model is away (app.content_policy)
     content_check_pictures: bool = True
+    # admin bulk runs: how many pictures sit on the image GPU's queue at once (more makes no batch faster, it
+    # only puts more of them ahead of a new request), the free disk an upload must leave, the ZIP upload cap
+    bulk_in_flight: int = 2
+    bulk_disk_reserve_gb: int = 20
+    bulk_zip_max_gb: int = 4
     urdu_aerab: bool = True
     aerab_languages: str = "ur,ar,fa,ps,sd,pnb"
     # whether ACE-Step sees the aerab on Urdu lyrics; the lyrics keep them either way. Off is the A/B for

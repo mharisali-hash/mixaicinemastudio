@@ -292,6 +292,14 @@ export const shellRoutes: RouteObject[] = [
         const { AuditPage } = await import('@/features/admin/AuditPage')
         return <AuditPage />
       }),
+      page('bulk', async () => {
+        const { BulkPage } = await import('@/features/admin/bulk/BulkPage')
+        return <BulkPage />
+      }),
+      page('bulk/:id', async () => {
+        const { BulkBatchPage } = await import('@/features/admin/bulk/BulkBatchPage')
+        return <BulkBatchPage />
+      }),
       // contract v41: Print Studio, inside the admin section so its guard covers it
       page('print', async () => {
         const { PrintStudioPage } = await import('@/features/print/PrintStudioPage')

@@ -590,6 +590,14 @@ from app import model3d_logo  # noqa: E402
 # a logo's badge is numpy and Pillow; only its cut-out (an ordinary generate job) uses the image GPU
 HANDLERS[model3d_logo.JOB] = model3d_logo.handle
 CPU_JOB_LEDGER[model3d_logo.JOB] = "model3d"
+from app.bulk import export as bulk_export, run as bulk_run, service as bulk  # noqa: E402
+
+# admin bulk runs: the orchestrator and the ZIP work are CPU; each picture is an ordinary generate job
+HANDLERS[bulk.RUN_JOB] = bulk_run.handle
+HANDLERS[bulk_run.UNZIP_JOB] = bulk_run.handle_unzip
+HANDLERS[bulk.EXPORT_JOB] = bulk_export.handle
+FINISHED_HOOKS.append(bulk.on_job_finished)
+CPU_JOB_LEDGER.update({bulk.RUN_JOB: "autopilot", bulk_run.UNZIP_JOB: "export", bulk.EXPORT_JOB: "export"})
 
 
 def _db_busy(e: BaseException) -> bool:

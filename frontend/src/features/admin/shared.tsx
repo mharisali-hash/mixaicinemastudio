@@ -80,6 +80,7 @@ const SECTIONS = [
   { to: '/admin/usage', label: 'Usage' },
   { to: '/admin/audit', label: 'Audit log' },
   { to: '/admin/print', label: 'Print Studio' },
+  { to: '/admin/bulk', label: 'Bulk' },
 ]
 
 /** The Admin section: its own sub-navigation over each page. Anyone not an admin is sent home. */

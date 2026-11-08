@@ -325,6 +325,7 @@ const TITLES: [RegExp, string][] = [
   [/^\/admin\/usage/, 'GPU usage'],
   [/^\/admin\/audit/, 'Audit log'],
   [/^\/admin\/print/, 'Print Studio'],
+  [/^\/admin\/bulk/, 'Bulk'],
   [/^\/clinic\/implant/, 'Implant Preview'],
   [/^\/admin$/, 'Admin'],
 ]
