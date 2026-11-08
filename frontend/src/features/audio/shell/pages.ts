@@ -10,6 +10,7 @@ import {
   Music,
   Music4,
   Scissors,
+  Shuffle,
   Sparkles,
   SquareSplitHorizontal,
   UsersRound,
@@ -69,6 +70,7 @@ export const AUDIO_GROUPS: AudioGroup[] = [
     pages: [
       { id: 'editor', label: 'Editor', to: '/audio/edit', icon: Scissors, match: /^\/audio\/edit(\/|$)/ },
       { id: 'score', label: 'Score a Clip', to: '/audio/score', icon: Clapperboard },
+      { id: 'remix', label: 'Remix', to: '/audio/remix', icon: Shuffle },
     ],
   },
   {

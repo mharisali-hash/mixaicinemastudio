@@ -77,6 +77,8 @@ describe('Audio workspace', () => {
     // contract v21
     expect(within(nav).getByRole('link', { name: /^Stems/ })).toHaveAttribute('href', '/audio/stems')
     expect(within(nav).getByRole('link', { name: 'Score a Clip' })).toHaveAttribute('href', '/audio/score')
+    // contract v43: Remix sits in the sidebar too, not only the Audio Tools menu
+    expect(within(within(nav).getByRole('list', { name: 'Edit' })).getByRole('link', { name: /^Remix/ })).toHaveAttribute('href', '/audio/remix')
     // B2: the Voice group is live
     expect(within(nav).getByRole('link', { name: 'Speak' })).toHaveAttribute('href', '/audio/speak')
     expect(within(nav).getByRole('link', { name: 'Voices' })).toHaveAttribute('href', '/audio/voices')
