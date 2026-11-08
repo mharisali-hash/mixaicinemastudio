@@ -100,6 +100,7 @@ const PRESETS: Record<AudioKind, { value: number; label: string }[]> = {
     { value: 120, label: '2 min' },
     { value: 180, label: '3 min' },
     { value: 240, label: '4 min' },
+    { value: 300, label: '5 min' },
   ],
   music: [
     { value: 10, label: '10 s' },
@@ -119,7 +120,7 @@ const PRESETS: Record<AudioKind, { value: number; label: string }[]> = {
 }
 
 // used until the catalog says otherwise; SFX stays short whatever the model allows
-const KIND_MAX: Record<AudioKind, number> = { song: 240, music: 120, sfx: 30 }
+const KIND_MAX: Record<AudioKind, number> = { song: 300, music: 120, sfx: 30 }
 const HARD_MAX = 380
 
 export function maxAudioDuration(kind: AudioKind, m: ModelInfo | undefined) {

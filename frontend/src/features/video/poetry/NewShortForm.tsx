@@ -240,7 +240,7 @@ export function NewShortForm() {
             id={id('len')}
             type="range"
             min={30}
-            max={240}
+            max={300}
             step={5}
             value={f.length_s}
             aria-valuetext={lengthLabel(f.length_s)}

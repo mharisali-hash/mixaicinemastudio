@@ -794,7 +794,7 @@ def make_poetry_short(
     lead_voice: Annotated[Literal["boy", "girl", "voice"], Field(description="vocal=lead_group: who leads")] = "girl",
     group_size: Annotated[Literal[3, 5], Field(description="vocal=lead_group: children in the group")] = 3,
     sing_voice_id: Annotated[str | None, Field(description="vocal=voice: a voice id from list_voices")] = None,
-    length_s: Annotated[float, Field(ge=30, le=240, description="Up to 240 s; about one scene every 9 s")] = 60,
+    length_s: Annotated[float, Field(ge=30, le=300, description="Up to 300 s; about one scene every 9 s")] = 60,
     character: Annotated[str, Field(max_length=500, description="Short description of the person on screen")] = "",
     character_id: str | None = None,
     look_id: Annotated[str | None, Field(description="One of the character's looks (list_looks)")] = None,
@@ -810,7 +810,7 @@ def make_poetry_short(
                                                             "song, without captions")] = None,
 ) -> dict:
     """A poem sung by ACE-Step, timed line by line and cut to slow cinematic scenes with the verses burned in.
-    Runs straight through (no review stops); takes 15-30 minutes for a minute, longer for a 4-minute Episode.
+    Runs straight through (no review stops); takes 15-30 minutes for a minute, longer for a 5-minute Episode.
     Follow it with get_poetry_short."""
     from app.api.poetry import CreateIn, create_short
 

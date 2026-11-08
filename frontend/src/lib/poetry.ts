@@ -258,7 +258,7 @@ export const CHILD_VOCALS: { value: PoetryVocal; label: string }[] = [
   { value: 'lead_group', label: "Lead child + children's group" },
 ]
 
-// past 90 s it reads better in minutes: a 4-minute Episode, not 240 s
+// past 90 s it reads better in minutes: a 5-minute Episode, not 300 s
 export const lengthLabel = (s: number) => {
   const r = Math.round(s)
   return r <= 90 ? `${r} s` : `${Math.floor(r / 60)} min${r % 60 ? ` ${r % 60} s` : ''}`

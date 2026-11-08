@@ -1,4 +1,4 @@
-"""Poetry Short Episodes (7 Nov): up to 240 s, a Library voice, an intro and outro card, more scenes."""
+"""Poetry Short Episodes (7 Nov, 5 min since 8 Nov): up to 300 s, a Library voice, an intro and outro card, more scenes."""
 import pytest
 
 from app.config import get_settings
@@ -15,9 +15,9 @@ def _upload_picture(client, name="intro.png") -> str:
     return (body.get("item") or body.get("items", [body])[0])["id"]
 
 
-def test_length_goes_to_240_and_no_further(client, llm):  # noqa: F811
-    assert client.post("/api/poetry", json={"topic": "the moon", "length_s": 240}).status_code == 201
-    assert client.post("/api/poetry", json={"topic": "the moon", "length_s": 241}).status_code == 422
+def test_length_goes_to_300_and_no_further(client, llm):  # noqa: F811
+    assert client.post("/api/poetry", json={"topic": "the moon", "length_s": 300}).status_code == 201
+    assert client.post("/api/poetry", json={"topic": "the moon", "length_s": 301}).status_code == 422
 
 
 def test_a_four_minute_episode_has_more_scenes_and_sections():
@@ -25,9 +25,12 @@ def test_a_four_minute_episode_has_more_scenes_and_sections():
     assert len(svc.group_scenes(starts, 240.0)) == 27
     assert len(svc.group_scenes(starts[:20], 60.0)) == 7  # a one-minute Short is unchanged
     assert pst.sections_for(240) == ["verse", "chorus", "verse", "chorus", "verse", "bridge", "chorus"]
-    assert pst.SONG_MAX_S == 240.0
-    # a poem too long for 4 minutes still stops at the model's limit
-    assert pst.song_seconds(["a long line of the nasheed"] * 60, "children's nasheed", 230, 240) == 240
+    assert pst.SONG_MAX_S == 300.0
+    # five minutes: one more verse and chorus, and scenes stay about 9 s
+    assert pst.sections_for(300) == ["verse", "chorus", "verse", "chorus", "verse", "chorus", "bridge", "chorus"]
+    assert len(svc.group_scenes([i * 4.0 for i in range(80)], 300.0)) == 33
+    # a poem too long for 5 minutes still stops at the model's limit
+    assert pst.song_seconds(["a long line of the nasheed"] * 80, "children's nasheed", 290, 300) == 300
 
 
 def test_a_library_voice_sings_it(client, monkeypatch):

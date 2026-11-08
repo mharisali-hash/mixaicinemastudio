@@ -46,7 +46,7 @@ class CreateIn(BaseModel):
     sing_voice_id: str | None = Field(None, max_length=80,
                                       description="vocal=voice: the Library voice (or gallery:<id>) that sings it")
     # up to the song model's own limit; scenes come about one every 9 s
-    length_s: float = Field(60, ge=30, le=240)
+    length_s: float = Field(60, ge=30, le=300)
     character_id: str | None = Field(None, max_length=64, description="A Character Studio character")
     look_id: str | None = Field(None, max_length=64, description="One of that character's looks to wear")
     character: str = Field("", max_length=PROMPT_MAX, description="Or a short description of the person")

@@ -209,7 +209,7 @@ describe('Poetry Short page', () => {
   })
 })
 
-describe('new Poetry Short: a voice of mine, up to 4 minutes', () => {
+describe('new Poetry Short: a voice of mine, up to 5 minutes', () => {
   it('needs the voice picked, then sends it with the longer length', async () => {
     const calls = mockApi((method, path) => {
       if (path === '/audio/song-voices') return { available: true, vocals: ['boy', 'girl', 'choir', 'voice'] }
@@ -226,11 +226,11 @@ describe('new Poetry Short: a voice of mine, up to 4 minutes', () => {
     expect(screen.getByText('Pick the voice to sing in.')).toBeInTheDocument()
     await user.selectOptions(screen.getByLabelText('Sung in the voice of'), await screen.findByRole('option', { name: 'Hamza' }))
     const len = screen.getByLabelText(/^Length/)
-    fireEvent.change(len, { target: { value: '240' } })
-    expect(screen.getByText('Length: 4 min')).toBeInTheDocument()
+    fireEvent.change(len, { target: { value: '300' } })
+    expect(screen.getByText('Length: 5 min')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /Make the Short/ }))
     await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.path === '/poetry')).toBeTruthy())
-    expect(calls.find((c) => c.method === 'POST' && c.path === '/poetry')!.body).toMatchObject({ vocal: 'voice', sing_voice_id: 'v9', length_s: 240 })
+    expect(calls.find((c) => c.method === 'POST' && c.path === '/poetry')!.body).toMatchObject({ vocal: 'voice', sing_voice_id: 'v9', length_s: 300 })
   })
 })
 

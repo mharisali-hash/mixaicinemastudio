@@ -29,8 +29,8 @@ IMAGE_MODELS = ("krea2_turbo", "qwen_image_2512", "zimage_turbo")
 LIVE = ("queued", "generating")
 FINISHED = ("ready", "approved")
 ATTEMPTS = 2  # first try plus one re-roll, for the song, keyframes and clips alike
-# a 4-minute Episode gets ~26 scenes; a 60 s Short still gets 7
-MIN_SCENES, MAX_SCENES, SCENE_S = 4, 28, 9.0
+# a 5-minute Episode gets ~33 scenes; a 60 s Short still gets 7
+MIN_SCENES, MAX_SCENES, SCENE_S = 4, 34, 9.0
 # an intro or outro picture holds this long; a clip plays up to BOOKEND_MAX_S of itself
 BOOKEND_S, BOOKEND_MAX_S = 4.0, 10.0
 TITLE_S = 3.0

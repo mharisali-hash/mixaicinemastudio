@@ -223,7 +223,7 @@ MODELS: dict[str, Model] = {m.id: m for m in (
     # audio est_seconds: per 30 s of output, warm (the UI scales by length; guesses until measured)
     Model("ace15_turbo", "audio", "ACE-Step 1.5", "SONG",
           "Full songs with vocals from style tags and lyrics, 50+ languages including Urdu and Hindi.",
-          ("song", "lyrics", "vocals", "timbre_ref"), "ace15_song", max_duration_s=240, est_seconds=5,
+          ("song", "lyrics", "vocals", "timbre_ref"), "ace15_song", max_duration_s=300, est_seconds=5,
           default=True, licence="MIT licence: free for commercial use"),
     Model("minimax_music3", "audio", "MiniMax-Music3", None,
           "Songs with vocals from a description and lyrics; may end a little before the length you ask for.",

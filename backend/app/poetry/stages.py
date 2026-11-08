@@ -54,13 +54,15 @@ def sections_for(length_s: float) -> list[str]:
         return ["verse", "chorus", "verse"]
     if length_s <= 190:
         return ["verse", "chorus", "verse", "chorus", "bridge", "chorus"]
-    return ["verse", "chorus", "verse", "chorus", "verse", "bridge", "chorus"]
+    if length_s <= 250:
+        return ["verse", "chorus", "verse", "chorus", "verse", "bridge", "chorus"]
+    return ["verse", "chorus", "verse", "chorus", "verse", "chorus", "bridge", "chorus"]
 
 
 SLOW_STYLES = ("ghazal", "sufi", "nazm", "kalam", "qawwali", "naat", "slow", "ballad", "lullaby", "ney", "classical")
 SONG_INTRO_S, SONG_OUTRO_S, LINE_GAP_S = 8.0, 6.0, 1.0
-# ACE-Step's own limit; a 4-minute nasheed Episode is the longest
-SONG_MAX_S = 240.0
+# ACE-Step 1.5's cap in the model catalog; a 5-minute Episode is the longest
+SONG_MAX_S = 300.0
 
 
 def song_seconds(texts: list[str], style: str, asked: float, cap: float | None = None) -> float:
