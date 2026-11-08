@@ -36,7 +36,7 @@ log = logging.getLogger("mixai.video_podcast")
 
 JOB = "video_podcast"
 ASSEMBLE_JOB = "video_podcast_assemble"
-STAGES = (("cast", "Hosts"), ("set", "Set"), ("keyframes", "Look"), ("plan", "Cameras & cut"), ("render", "Render"),
+STAGES = (("cast", "Cast"), ("set", "Set"), ("keyframes", "Look"), ("plan", "Cameras & cut"), ("render", "Render"),
           ("assemble", "Assemble"))
 CONTINUE_STAGES = ("cast", "set", "keyframes", "plan")
 QUALITIES = ("draft", "final")

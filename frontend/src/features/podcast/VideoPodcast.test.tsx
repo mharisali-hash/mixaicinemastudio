@@ -111,7 +111,7 @@ const plan = (tracks: VPTrack[] = [track('t1', 'h1', 0, 12), track('t2', 'h2', 0
 })
 
 const STAGES: [VPStageKey, string][] = [
-  ['cast', 'Hosts'],
+  ['cast', 'Cast'],
   ['set', 'Set'],
   ['keyframes', 'Look'],
   ['plan', 'Cameras & cut'],
@@ -210,7 +210,7 @@ describe('AI video podcast', { timeout: 20_000 }, () => {
     expect(hosts).toHaveAttribute('aria-selected', 'true')
     // the episode's six steps, then the video's six in the same row
     expect(screen.getAllByRole('tab')).toHaveLength(12)
-    expect(await screen.findByRole('list', { name: 'Progress' })).toHaveTextContent('Hosts')
+    expect(await screen.findByRole('list', { name: 'Progress' })).toHaveTextContent('Cast')
     hosts.focus()
     await user.keyboard('{ArrowRight}')
     const set = screen.getByRole('tab', { name: /Set/ })

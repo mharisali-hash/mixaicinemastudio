@@ -23,7 +23,7 @@ export function HostsPanel({ vp }: { vp: VideoPodcast }) {
   return (
     <>
       <div>
-        <h2 className="font-display text-title font-semibold">Hosts</h2>
+        <h2 className="font-display text-title font-semibold">Cast</h2>
         <p className="text-small text-studio-muted">Each host gets a portrait, then a front and a 3/4 view to keep the face the same in every shot.</p>
       </div>
       <StageAction vp={vp} stage="cast" label="Make the portraits" hint="Pick where each face comes from, then make the portraits." />
