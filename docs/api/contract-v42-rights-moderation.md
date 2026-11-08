@@ -3,7 +3,7 @@ title: "Contract v42: Rights and moderation"
 status: Active
 created: 2026-11-08
 extends: contract-v27 (tokens), contract-v38/v39 (accounts, packages, admin), contract-v41 (Print Studio)
-migration: 0033_rights_moderation
+migration: 0034_rights_moderation
 ---
 
 # Contract v42: Rights and moderation
@@ -30,7 +30,7 @@ Licence gating (`*_ALLOW_NONCOMMERCIAL`) still sits under all of this and never 
 song_voices, presenter, print, implant, bulk_edit`. `implant` follows `user.implant_access` (contract M22), not the
 layers above.
 
-**Release baseline.** On the first start after migration 0033 every studio that existed before, and every model in
+**Release baseline.** On the first start after migration 0034 every studio that existed before, and every model in
 the catalogue, is released, so nobody loses anything. `print`, `presenter` and `bulk_edit` start unreleased
 (admins only), as Print Studio was before.
 
@@ -115,7 +115,7 @@ Email (optional per action) goes through `app.mailer`.
 | `GET /api/account/notices` | open notices (warning, removal, unblock), newest first; the hold itself is in `/auth/me` |
 | `POST /api/account/notices/{id}/ack` | 204; allowed while on hold |
 
-## 4. Data (migration 0033)
+## 4. Data (migration 0034)
 
 - `user`: `staff_role`, `manager_scope` (default "site"), `rights` (JSON, default {}), `blocked_at`, `blocked_reason`,
   `blocked_by`.
