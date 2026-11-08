@@ -4,7 +4,8 @@
 check-ace15-remix.py showed (8 Nov) that the server has no cover node, but has everything for a latent trick:
 encode the song with the ACE-Step VAE, then let the sampler redo part of it.
   restyle  the whole clip re-sampled at a partial denoise with new style words; low denoise keeps more of the song
-  repaint  only a 15 s stretch regenerated (SetLatentNoiseMask); the rest should stay as it was
+  repaint  (off) SetLatentNoiseMask can't mask ACE-Step 1.5's 1-D latent: the 8 Nov run failed with
+           "spatial dimensions of [1, 600] ... output size [1500]". Kept for a pack that can (--repaint)
 Nothing in the app changes. Each trial is one short GPU run on a 60 s clip.
 
 Run on the GPU box, from the repo, with the backend's Python:
@@ -90,10 +91,12 @@ def repaint_graph(song, tags, bpm, key, seed, seconds, span, denoise=1.0, prefix
     return g
 
 
-def trials(song, tags, bpm, key, seed, seconds) -> list[tuple[str, dict]]:
+def trials(song, tags, bpm, key, seed, seconds, repaint=False) -> list[tuple[str, dict]]:
     out = [(f"restyle {d:.2f}", restyle_graph(song, tags, bpm, key, seed, seconds, d)) for d in (0.35, 0.5, 0.65)]
     out.append(("restyle 0.65 + own timbre", restyle_graph(song, tags, bpm, key, seed, seconds, 0.65, timbre=True)))
-    out.append((f"repaint {REPAINT[0]:g}-{REPAINT[1]:g} s", repaint_graph(song, tags, bpm, key, seed, seconds, REPAINT)))
+    if repaint:
+        out.append((f"repaint {REPAINT[0]:g}-{REPAINT[1]:g} s",
+                    repaint_graph(song, tags, bpm, key, seed, seconds, REPAINT)))
     return out
 
 
@@ -184,9 +187,10 @@ def find_song(query: str):
     with SessionLocal() as db:
         rows = db.scalars(select(MediaItem).where(MediaItem.kind == "audio", MediaItem.title.ilike(f"%{query}%"))
                           .order_by(MediaItem.created_at.desc()).limit(20)).all() if query.strip() else []
-        # the exact title first, then whole songs before their split-off vocals / instrumental
+        # the exact title first, then whole songs before their split-off stems and earlier trials
         q = query.strip().lower()
-        rows = sorted(rows, key=lambda i: ((i.title or "").strip().lower() != q, "stems" in (i.tags or [])))
+        rows = sorted(rows, key=lambda i: ((i.title or "").strip().lower() != q,
+                                           bool({"stems", "remix_trial"} & set(i.tags or []))))
         for item in rows:
             g = db.get(Generation, item.generation_id) if item.generation_id else None
             path = generation_file(g) if g is not None else None
@@ -263,6 +267,7 @@ def main() -> int:
     ap.add_argument("--url", help="ComfyUI address (default: the app's audio ComfyUI)")
     ap.add_argument("--bpm", type=int)
     ap.add_argument("--key", help='e.g. "A minor"')
+    ap.add_argument("--repaint", action="store_true", help="also try the masked repaint (fails on stock nodes)")
     ap.add_argument("--dry-run", action="store_true", help="print the graphs only")
     args = ap.parse_args()
 
@@ -287,7 +292,7 @@ def main() -> int:
 
     comfy = Comfy(args.url or comfy_url())
     song = "mixai/remix_trial_source.flac" if args.dry_run else comfy.upload(clip)
-    plans = trials(song, args.tags, bpm, key, args.seed, CLIP_S)
+    plans = trials(song, args.tags, bpm, key, args.seed, CLIP_S, args.repaint)
     if args.dry_run:
         for label, g in plans:
             print(f"\n== {label}\n{json.dumps(g, indent=1)}")
@@ -312,8 +317,7 @@ def main() -> int:
         print(results[-1])
     print(f"\nFiles: {out}")
     print("Listen to each next to original_clip.flac and paste this output back with what you hear:")
-    print("does the restyle keep the melody and vocals, which strength sounds best, and does the repaint")
-    print(f"change only {REPAINT[0]:g}-{REPAINT[1]:g} s.")
+    print("does the restyle keep the melody and the vocals, and which strength sounds best.")
     return 0
 
 
