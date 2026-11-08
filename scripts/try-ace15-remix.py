@@ -183,7 +183,10 @@ def find_song(query: str):
 
     with SessionLocal() as db:
         rows = db.scalars(select(MediaItem).where(MediaItem.kind == "audio", MediaItem.title.ilike(f"%{query}%"))
-                          .order_by(MediaItem.created_at.desc()).limit(10)).all() if query.strip() else []
+                          .order_by(MediaItem.created_at.desc()).limit(20)).all() if query.strip() else []
+        # the exact title first, then whole songs before their split-off vocals / instrumental
+        q = query.strip().lower()
+        rows = sorted(rows, key=lambda i: ((i.title or "").strip().lower() != q, "stems" in (i.tags or [])))
         for item in rows:
             g = db.get(Generation, item.generation_id) if item.generation_id else None
             path = generation_file(g) if g is not None else None
