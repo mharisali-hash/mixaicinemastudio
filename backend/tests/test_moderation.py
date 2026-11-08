@@ -96,6 +96,14 @@ def test_remove_hides_the_item_and_tells_the_owner(people):
     assert {"moderation_remove", "moderation_warning", "moderation_restore"} <= actions
 
 
+def test_uploads_wait_for_review_too(people):
+    ids, c = people
+    r = c["ben"].post("/api/media/upload", files={"file": ("brought-in.png", _png(), "image/png")})
+    assert r.status_code in (200, 201), r.text
+    queue = c["mo"].get("/api/moderation/items").json()["items"]
+    assert [(i["id"], i["origin"]) for i in queue] == [(r.json()["id"], "upload")]
+
+
 def test_reviewed_leaves_the_queue(people):
     ids, c = people
     a, b = _upload(c["ben"]), _upload(c["ben"], "b.png")

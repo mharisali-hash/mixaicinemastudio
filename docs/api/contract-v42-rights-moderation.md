@@ -77,7 +77,7 @@ Implant Preview photos and results are never MediaItems, so no moderation endpoi
 
 | Method and path | Body / query | |
 |---|---|---|
-| `GET /items` | `user, kind (image\|video\|audio), since, until, before, state (queue\|reviewed\|removed\|all), q, limit` | `{items: [...], next}`; `next` is the `before` for the next page. Queue = generated, not reviewed, not removed. Admins' items never appear |
+| `GET /items` | `user, kind (image\|video\|audio), since, until, before, state (queue\|reviewed\|removed\|all), q, limit` | `{items: [...], next}`; `next` is the `before` for the next page. Queue = not reviewed and not removed, generated and uploaded alike. Admins' items never appear |
 | `POST /items/reviewed` | `{ids}` | marks them fine; out of the queue |
 | `POST /items/{id}/remove` | `{reason, warn, email}` | soft removal (below); the owner gets a notice, which counts as a warning when `warn` |
 | `POST /items/{id}/restore` | | puts it back |

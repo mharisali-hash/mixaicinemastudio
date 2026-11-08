@@ -69,8 +69,8 @@ def list_items(db: Session, cur: CurrentUser, *, user_id: str | None = None, kin
                before=None) -> list[tuple[MediaItem, User]]:
     stmt = _owned_items(cur).where(MediaItem.kind.in_(("image", "video", "audio")))
     if state == "queue":
-        stmt = stmt.where(MediaItem.reviewed_at.is_(None), MediaItem.removed_at.is_(None),
-                          MediaItem.origin == "generated")
+        # uploads too: a picture brought in from outside can break the rules as easily as one made here
+        stmt = stmt.where(MediaItem.reviewed_at.is_(None), MediaItem.removed_at.is_(None))
     elif state == "reviewed":
         stmt = stmt.where(MediaItem.reviewed_at.is_not(None), MediaItem.removed_at.is_(None))
     elif state == "removed":
