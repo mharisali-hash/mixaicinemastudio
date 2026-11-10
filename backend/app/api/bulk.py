@@ -296,10 +296,10 @@ def item_picture(batch_id: str, item_id: str, which: Literal["source", "result"]
     src = resolve_media_path(g.file_path, b.workspace_id, data_dir) if g is not None and g.file_path else None
     if src is None:
         raise HTTPException(404, "No picture yet")
+    release(db)
     dest = src if w == 0 else (thumbs.ensure(src, g.media_type, w) if w in thumbs.SIZES else None)
     if dest is None:
         raise HTTPException(422, f"w must be 0 (full size) or one of {', '.join(map(str, thumbs.SIZES))}")
-    release(db)
     return FileResponse(dest, headers={"Cache-Control": "private, max-age=86400"})
 
 

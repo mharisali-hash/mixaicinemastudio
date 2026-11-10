@@ -150,6 +150,8 @@ def patch_media(media_id: str, body: MediaPatch, db: Session = Depends(get_db),
 @router.delete("/media/{media_id}", status_code=204)
 def delete_media(media_id: str, db: Session = Depends(get_db), cur: CurrentUser = Depends(require_editor)):
     item = _owned_item(db, media_id, cur.workspace_id)
+    if lib.in_use(db, item):
+        raise HTTPException(409, lib.IN_USE)
     lib.delete_item(db, item)
     org.forget(db, cur.workspace_id, [media_id])
     db.commit()

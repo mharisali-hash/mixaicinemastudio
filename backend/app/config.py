@@ -81,6 +81,9 @@ class Settings(BaseSettings):
     llm_api: str = "auto"
     llm_num_ctx: int = 8192
     llm_timeout_s: float = 600.0
+    # a small model to answer with when the role's model can't load (the video GPU is full) or runs out of time;
+    # empty turns the fallback off
+    llm_model_small: str = "gemma4:e4b"
     # Ollama keep_alive for the big one-shot models (aerab marks, TranslateGemma): Ollama's 5 min default
     # leaves ~17 GB on a card ComfyUI needs. Empty: Ollama's default
     ollama_keep_alive_big: str = "30s"

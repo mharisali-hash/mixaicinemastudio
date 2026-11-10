@@ -5,6 +5,7 @@ are read through: finished renders (newest per title) and approved stills are tu
 MediaItem shape on the fly, keyed by their generation id, so nothing is copied or kept in sync.
 """
 import base64
+import json
 import logging
 import math
 from dataclasses import dataclass
@@ -412,6 +413,22 @@ def detail(db: Session, workspace_id: str, id_: str) -> MediaDetailOut | None:
 
 def touch(item: MediaItem) -> None:
     item.updated_at = utcnow()
+
+
+IN_USE = "Something still being made uses this picture. Delete it once that has finished, or cancel it first"
+
+
+def in_use(db: Session, item: MediaItem) -> bool:
+    """True while a queued or running job was made from one of this item's versions (an edit, a video from a
+    picture). Deleting it then made those jobs fail with "referenced generation doesn't exist"."""
+    ids = set(db.scalars(select(Generation.id).where(Generation.target_type == "media",
+                                                     Generation.target_id == item.id)))
+    if not ids:
+        return False
+    live = db.scalars(select(Generation.params).join(Job, Job.generation_id == Generation.id).where(
+        Job.workspace_id == item.workspace_id, Job.status.in_(("queued", "running")),
+        Generation.target_id != item.id))
+    return any(i in json.dumps(p or {}) for p in live for i in ids)
 
 
 def delete_item(db: Session, item: MediaItem) -> None:

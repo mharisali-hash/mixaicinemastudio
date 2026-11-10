@@ -226,6 +226,9 @@ def media_batch(body: BatchIn, db: Session = Depends(get_db), cur: CurrentUser =
             if not r.standalone:
                 out.skipped.append({"ref": r.ref, "reason": project_only})
                 continue
+            if lib.in_use(db, r.item):
+                out.skipped.append({"ref": r.ref, "reason": lib.IN_USE})
+                continue
             lib.delete_item(db, r.item)
             gone.append(r.ref)
         org.forget(db, cur.workspace_id, gone)

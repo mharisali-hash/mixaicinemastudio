@@ -10,7 +10,10 @@ class Base(DeclarativeBase):
 
 def make_engine(url: str):
     if url.startswith("sqlite"):
-        eng = create_engine(url, connect_args={"check_same_thread": False, "timeout": 30})
+        # a SQLite connection is just an open file, so the pool can match the API's 40 request threads; at the
+        # default 5 + 10, a Library page of video thumbs left nothing for anyone else (QueuePool timeouts)
+        eng = create_engine(url, connect_args={"check_same_thread": False, "timeout": 30},
+                            pool_size=20, max_overflow=30)
 
         @event.listens_for(eng, "connect")
         def _pragmas(dbapi_conn, _record):

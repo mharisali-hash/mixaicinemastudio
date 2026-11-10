@@ -45,6 +45,8 @@ def get_thumb(gen_id: str, w: int = Query(thumbs.DEFAULT), db: Session = Depends
         raise HTTPException(404, "Not found")
     data_dir = get_settings().data_dir
     src = resolve_media_path(g.file_path, cur.workspace_id, data_dir)
+    # making a thumb (a video frame, a 4K decode) can take seconds: don't hold a pooled connection meanwhile
+    release(db)
     dest = thumbs.ensure(src, g.media_type, w) if src is not None else None
     if dest is None and src is not None and (g.media_type or "").startswith("model/") and thumbs.model_thumbs(g):
         dest = thumbs.ensure(src, g.media_type, w)
@@ -52,7 +54,6 @@ def get_thumb(gen_id: str, w: int = Query(thumbs.DEFAULT), db: Session = Depends
         raise HTTPException(404, "No preview for this file")
     # a generation's file never changes, so neither does its thumb
     kind = "image/png" if dest.suffix == ".png" else "image/webp"  # audio: the waveform
-    release(db)
     return FileResponse(dest, media_type=kind, headers={"Cache-Control": "private, max-age=604800"})
 
 

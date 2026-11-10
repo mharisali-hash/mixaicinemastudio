@@ -376,9 +376,35 @@ async def _with_ticks(coro, tick: Callable[[], None] | None, every: float):
             raise
 
 
+# what a model that couldn't get GPU memory, or sat waiting for it, looks like from here
+_NO_ROOM = ("didn't answer within", "unable to allocate", "process has terminated", "failed to initialize",
+            "out of memory")
+
+
+def _small_instead(role: Role, err: LLMError, kw: dict) -> str | None:
+    small = get_settings().llm_model_small.strip()
+    # the small one can't see pictures, so a vision call has nothing to fall back to
+    if not small or role == "vision" or not any(k in str(err) for k in _NO_ROOM):
+        return None
+    try:
+        if small == (kw.get("model") or model_for(role)) or bare_tag(small) not in asyncio.run(installed_models()):
+            return None
+    except LLMError:
+        return None
+    return small
+
+
 def chat_sync(role: Role, messages: list[dict], *, tick: Callable[[], None] | None = None, tick_every: float = 4.0, **kw) -> ChatResult:
     """For the (synchronous) worker and sync routes. `tick` runs every few seconds while waiting."""
-    return asyncio.run(_with_ticks(chat(role, messages, **kw), tick, tick_every))
+    try:
+        return asyncio.run(_with_ticks(chat(role, messages, **kw), tick, tick_every))
+    except LLMError as e:
+        # a big writer can't load while a video render fills the GPU; the small one fits beside it
+        small = _small_instead(role, e, kw)
+        if small is None:
+            raise
+        log.warning("%s; answering with %s instead", e, small)
+        return asyncio.run(_with_ticks(chat(role, messages, **{**kw, "model": small, "think": False}), tick, tick_every))
 
 
 async def capabilities(model: str) -> list[str] | None:

@@ -114,7 +114,9 @@ class DbLookup:
         with self._session() as db:
             g = db.get(Generation, gen_id)
             if g is None:
-                raise ComfyError(f"referenced generation {gen_id} doesn't exist")
+                # usually the picture was deleted while this job waited in the queue
+                raise ComfyError(f"A picture this needs was deleted before it could be used ({gen_id[:8]}). "
+                                 "Pick another picture and try again")
             if g.status not in ("ready", "approved") or not g.file_path:
                 raise ComfyError(f"referenced generation {gen_id} has no finished image (status {g.status})")
             path = generation_file(g)

@@ -99,10 +99,10 @@ def item_thumb(item_id: str, w: int = Query(thumbs.DEFAULT), db: Session = Depen
     if w not in thumbs.SIZES:
         raise HTTPException(422, f"w must be one of {', '.join(map(str, thumbs.SIZES))}")
     g, src = _file(db, cur, item_id)
+    release(db)
     dest = thumbs.ensure(src, g.media_type, w)
     if dest is None:
         raise HTTPException(404, "No preview for this file")
-    release(db)
     return FileResponse(dest, media_type="image/png" if dest.suffix == ".png" else "image/webp",
                         headers={"Cache-Control": "private, max-age=3600"})
 
