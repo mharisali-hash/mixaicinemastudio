@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { addSources, editPayload, imagePayload, DEFAULT_IMAGE_FORM, placeholdersIn, splitPlaceholders } from '@/lib/images'
+import { addSources, editPayload, imagePayload, DEFAULT_IMAGE_FORM, placeholdersIn, sheetCount, splitPlaceholders } from '@/lib/images'
 import { job, media, mockApi, renderAt } from '@/test/media-fixtures'
 import { closeChip, openChip } from '@/test/dock'
 import { STYLE_OPTIONS } from '@/test/style-fixtures'
@@ -28,6 +28,16 @@ describe('image payloads', () => {
   it('never sends more than three edit sources, and no duplicates', () => {
     expect(addSources(['a', 'b'], ['b', 'c', 'd', 'e'])).toEqual({ ids: ['a', 'b', 'c'], dropped: 2 })
     expect(editPayload(['a', 'a', 'b', 'c', 'd'], ' night ', 2, null)).toEqual({ source_ids: ['a', 'b', 'c'], instruction: 'night', count: 2 })
+  })
+
+  it('spots sheet requests that want more than four pictures', () => {
+    expect(sheetCount('a composite sheet of 25 distinct images, the exact same person')).toBe(25)
+    expect(sheetCount('a 3x3 grid of her expressions')).toBe(9)
+    expect(sheetCount('collage with 16 different photos')).toBe(16)
+    expect(sheetCount('a sheet of 4 images')).toBeNull()
+    expect(sheetCount('25 distinct images of the same person')).toBeNull()
+    expect(sheetCount('a grid of 40 pictures')).toBeNull()
+    expect(editPayload(['a'], 'x', 1, null, undefined, 40)).toMatchObject({ set_size: 25 })
   })
 
   it('finds [placeholders] for templates', () => {
@@ -150,6 +160,45 @@ describe('Edit Image page', () => {
     await user.type(screen.getByRole('textbox', { name: 'What should change?' }), 'Make it night')
     await user.click(screen.getByRole('button', { name: /^Edit/ }))
     expect(calls.find((c) => c.method === 'POST' && c.path === '/images/edit')?.body).toMatchObject({ instruction: 'Make it night', magic_prompt: 'off' })
+  })
+
+  it('offers separate pictures for a sheet request and sends the set size', async () => {
+    const calls = mockApi((method, path) => {
+      const id = path.match(/^\/media\/(\w+)$/)?.[1]
+      if (id) return { ...media(id), versions: [] }
+      if (path === '/media') return { items: [] }
+      if (method === 'POST' && path === '/images/edit') return { items: [media('e1', { media_url: null })], jobs: [job('set1')] }
+    })
+    renderAt('/image/edit?sources=a', [{ path: '/image/edit', element: <ImageEditPage /> }])
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('textbox', { name: 'What should change?' }))
+    await user.paste('Keep everything the same except create a composite sheet of 25 distinct images, each a unique expression')
+    expect(await screen.findByText(/Make these as 25 separate pictures instead of one sheet\?/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Make 25 separate' }))
+    expect(screen.queryByText(/instead of one sheet/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Make 25 pictures/ })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^Make 25 pictures/ }))
+    expect(calls.find((c) => c.method === 'POST' && c.path === '/images/edit')?.body).toMatchObject({ source_ids: ['a'], set_size: 25 })
+  })
+
+  it('caps the set size picker at 25 and turns back to variations', async () => {
+    mockApi((_m, path) => (path === '/media' ? { items: [] } : undefined))
+    renderAt('/image/edit', [{ path: '/image/edit', element: <ImageEditPage /> }])
+    const user = userEvent.setup()
+    const chip = await openChip(user, 'Count')
+    await user.click(within(chip).getByRole('switch', { name: 'Separate pictures' }))
+    expect(within(chip).queryByRole('radio', { name: '2 images' })).not.toBeInTheDocument()
+    const box = within(chip).getByRole('spinbutton', { name: 'How many' })
+    expect(box).toHaveValue(9)
+    await user.clear(box)
+    await user.type(box, '40')
+    await user.tab()
+    expect(box).toHaveValue(25)
+    await user.click(within(chip).getByRole('button', { name: '16' }))
+    expect(within(chip).getByRole('button', { name: '16' })).toHaveAttribute('aria-pressed', 'true')
+    await user.click(within(chip).getByRole('switch', { name: 'Separate pictures' }))
+    expect(within(chip).getByRole('radio', { name: '2 images' })).toBeInTheDocument()
   })
 
   it('needs a source before it can edit', async () => {

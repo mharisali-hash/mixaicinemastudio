@@ -13,6 +13,27 @@ export const IMAGE_ASPECTS: { value: ImageAspect; label: string; size: string; w
 
 export const MAX_EDIT_SOURCES = 3
 export const MAX_COUNT = 4
+// Edit's "separate pictures": a set made under one job, each picture its own version of the instruction
+export const SET_MIN = 2
+export const SET_MAX = 25
+export const SET_PICKS = [9, 16, 25] as const
+
+export const clampSet = (n: number) => Math.min(SET_MAX, Math.max(SET_MIN, Math.round(n) || SET_MIN))
+
+const SHEET = /\b(sheet|grid|collage|composite|mosaic|montage)\b/i
+// "25 distinct images", "16 different photos", "9 expressions"
+const MANY = /\b(\d{1,2})\s+(?:[a-z-]+\s+){0,3}?(images?|pictures?|photos?|portraits?|versions?|shots?|panels?|faces?|expressions?|variations?|looks?)\b/i
+const GRID = /\b([2-5])\s*[x×]\s*([2-5])\b/i
+
+/** How many pictures an instruction asking for a sheet / grid / collage wants, when that's more than
+ * Variations can make and no more than a set can; null otherwise. */
+export function sheetCount(text: string): number | null {
+  if (!SHEET.test(text)) return null
+  const many = text.match(MANY)
+  const grid = text.match(GRID)
+  const n = many ? Number(many[1]) : grid ? Number(grid[1]) * Number(grid[2]) : 0
+  return n > MAX_COUNT && n <= SET_MAX ? n : null
+}
 
 export interface ImageForm {
   prompt: string
@@ -66,12 +87,14 @@ export function editPayload(
   count: number,
   aspect: ImageAspect | null,
   model?: { id: string; max_refs?: number },
+  setSize?: number | null,
 ): ImageEditRequest {
   const body: ImageEditRequest = {
     source_ids: [...new Set(sourceIds)].slice(0, model?.max_refs ?? MAX_EDIT_SOURCES),
     instruction: instruction.trim(),
     count: clampCount(count),
   }
+  if (setSize) body.set_size = clampSet(setSize)
   if (aspect) body.aspect = aspect
   if (model) body.model = model.id
   return body

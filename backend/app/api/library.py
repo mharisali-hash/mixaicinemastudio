@@ -18,6 +18,7 @@ from starlette.concurrency import run_in_threadpool
 from app import brand
 from app import brand_templates as bt
 from app import control as ctl
+from app import edit_set
 from app import image_tools as it
 from app import library as lib
 from app import mentions as mn
@@ -28,6 +29,7 @@ from app import prompt_enhance, uploads
 from app import visibility as vis
 from app import styles as st
 from app.ai_jobs import rewrite_prompt_from_note
+from app.config import get_settings
 from app.db import get_db, release
 from app.models import Generation, Job, MediaItem, Project, UserTemplate, new_id, utcnow
 from app.schemas import (
@@ -217,7 +219,8 @@ def _new_image_item(db: Session, cur: CurrentUser, title: str, prompt: str, para
 def image_options():
     return {"aspects": [{"id": a, "width": w, "height": h} for a, (w, h) in
                         ((a, lib.size_for_aspect(a)) for a in lib.ASPECTS)],
-            **st.options(), "count": {"min": 1, "max": 4}, "edit_sources": {"min": 1, "max": 3}}
+            **st.options(), "count": {"min": 1, "max": 4}, "edit_sources": {"min": 1, "max": 3},
+            "edit_set": {"min": 2, "max": get_settings().edit_set_max}}
 
 
 @router.get("/images/styles/{style_id}/preview")
@@ -382,7 +385,10 @@ def edit_images(body: ImageEditIn, db: Session = Depends(get_db), cur: CurrentUs
         raise HTTPException(422, f"“{template['title']}” isn't available on this server.")
     into = generate_into(db, cur.workspace_id, body.folder_id, "image")
     sources = [_edit_source(db, cur.workspace_id, sid) for sid in body.source_ids[:3]]
-    tool, fallback = _pick_tool(db, body, template, sources)
+    if body.set_size and body.set_size > get_settings().edit_set_max:
+        raise HTTPException(422, f"A set holds at most {get_settings().edit_set_max} pictures")
+    # a set is written variations of one instruction, which only the edit model can follow
+    tool, fallback = (None, None) if body.set_size else _pick_tool(db, body, template, sources)
     if tool is not None:
         return _tool_images(db, cur, body, tool, template, sources, into)
     if not body.instruction.strip():
@@ -402,22 +408,29 @@ def edit_images(body: ImageEditIn, db: Session = Depends(get_db), cur: CurrentUs
                                   brand_kit_id=body.brand_kit_id)
     title = (body.title or "").strip() or f"Edit · {lib.short_title(mn.plain(body.instruction).strip(), 5)}"
     edit_of = [{"media_id": m, "generation_id": g.id} for m, g in sources]
+    params = {"width": w, "height": h, "aspect": body.aspect, "instruction": instruction, "edit_of": edit_of,
+              "reference_ids": [g.id for _, g in sources] + mentioned.ref_ids, "model": model.id,
+              "created_by": {"user_id": cur.id, "flow": "image_edit_set" if body.set_size else "image_edit"},
+              "magic_prompt": magic, "user_prompt": mentioned.prompt.strip(), **chosen}
+    if mentioned.mentions:
+        params["mentions"] = mentioned.mentions
+    if body.template_id:
+        params["template_id"] = body.template_id
+    if fallback:
+        params["tool_fallback"] = fallback
+    prompt, params = brand.apply_to_request(db, cur.workspace_id, body.brand_kit_id, instruction, params, edit=True,
+                                            max_refs=model.max_refs or 3)
+    if body.set_size:
+        job, items = edit_set.create(
+            db, cur.workspace_id, n=body.set_size, title=title, text=mentioned.prompt.strip(),
+            preamble=mn.ref_preamble(mentioned.ref_labels, len(sources) + 1), params=params,
+            seed=body.seed if body.seed is not None else new_seed(), into=into)
+        db.commit()
+        return ImageBatchOut(items=lib.items_out(db, items), jobs=[job_out(job)], model_resolved=model.id)
     items, jobs = [], []
     for i in range(body.count):
-        params = {"width": w, "height": h, "aspect": body.aspect, "instruction": instruction, "edit_of": edit_of,
-                  "reference_ids": [g.id for _, g in sources] + mentioned.ref_ids, "model": model.id,
-                  "created_by": {"user_id": cur.id, "flow": "image_edit"}, "magic_prompt": magic,
-                  "user_prompt": mentioned.prompt.strip(), **chosen}
-        if mentioned.mentions:
-            params["mentions"] = mentioned.mentions
-        if body.template_id:
-            params["template_id"] = body.template_id
-        if fallback:
-            params["tool_fallback"] = fallback
         seed = (body.seed + i) % 2**31 if body.seed is not None else None
-        item, job = _new_image_item(db, cur, title, *brand.apply_to_request(
-            db, cur.workspace_id, body.brand_kit_id, instruction, params, edit=True, max_refs=model.max_refs or 3), seed,
-            into)
+        item, job = _new_image_item(db, cur, title, prompt, dict(params), seed, into)
         items.append(item)
         jobs.append(job)
     db.commit()

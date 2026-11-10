@@ -60,11 +60,7 @@ def create_folder(body: FolderIn, db: Session = Depends(get_db), cur: CurrentUse
         parent = org.check_parent(db, cur.workspace_id, None, body.parent_id)
     except org.OrganiseError as e:
         raise _err(e) from None
-    # a sub-folder can't be broader than its parent
-    kind = parent.kind if parent is not None and parent.kind != "any" else body.kind
-    f = Folder(workspace_id=cur.workspace_id, name=body.name.strip(), parent_id=parent.id if parent else None,
-               kind=kind)
-    db.add(f)
+    f = org.new_folder(db, cur.workspace_id, body.name, body.kind, parent)
     db.commit()
     return _folder_out(f, {})
 

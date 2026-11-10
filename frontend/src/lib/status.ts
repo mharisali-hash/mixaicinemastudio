@@ -144,6 +144,7 @@ const JOB_LABELS: Record<string, string> = {
   look_video: 'Look on video',
   image_generate: 'Create image',
   image_edit: 'Edit image',
+  edit_set: 'Picture set',
 }
 
 export const jobLabel = (type: string) => JOB_LABELS[type] ?? humanize(type)

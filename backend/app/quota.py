@@ -179,7 +179,7 @@ _PREFIX_FEATURE = (("ad_", "ads"), ("poetry_", "poetry"), ("podcast_", "podcast"
                    ("dub_", "dub"), ("story_", "stories"), ("character_", "character"),
                    ("ai_character", "character"), ("autopilot", "video"), ("reel_", "video"),
                    ("upscale", "video"), ("presenter", "presenter"),
-                   ("audio_remix", "audio"))
+                   ("audio_remix", "audio"), ("edit_set", "image"))
 
 
 def _gen(db: Session, gen_id: str | None) -> Generation | None:

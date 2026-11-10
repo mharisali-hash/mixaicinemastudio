@@ -8,7 +8,8 @@ general -> LLM work, ffmpeg assembly / branding, exports, autopilot orchestratio
            looks on video, podcast writing / mixing / publishing, the AI video podcast's orchestration and cut
            (CPU only; its lip-sync takes are ordinary generate jobs on the video lane), Ad Studio's concepts
            and layouts (its photos are generate jobs on the image lane), 3D Studio's logo badges (model3d_logo:
-           numpy; its cut-out is a generate job on the image lane)
+           numpy; its cut-out is a generate job on the image lane), Image Edit sets (edit_set: the writer and
+           the queueing; each picture is a generate job on the image lane)
 
 Kept free of app imports on purpose: migration 0009 backfills with the same classifier.
 """

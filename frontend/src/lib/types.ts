@@ -1177,6 +1177,8 @@ export interface ImageEditRequest extends MagicFields {
   instruction: string
   aspect?: ImageAspect
   count?: number
+  // separate pictures, 2-25, each its own version of the instruction; one job makes the set
+  set_size?: number
   seed?: number
   model?: string
   brand_kit_id?: string

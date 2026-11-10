@@ -119,6 +119,16 @@ def check_parent(db: Session, workspace_id: str, folder: Folder | None, parent_i
     return parent
 
 
+def new_folder(db: Session, workspace_id: str, name: str, kind: str = "any", parent: Folder | None = None) -> Folder:
+    # a sub-folder can't be broader than its parent
+    if parent is not None and parent.kind != "any":
+        kind = parent.kind
+    f = Folder(workspace_id=workspace_id, name=name.strip(), parent_id=parent.id if parent else None, kind=kind)
+    db.add(f)
+    db.flush()
+    return f
+
+
 def item_counts(db: Session, workspace_id: str, want: bool | None = None) -> dict[str, int]:
     counts: dict[str, int] = dict(db.execute(
         select(MediaItem.folder_id, func.count()).where(

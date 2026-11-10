@@ -57,6 +57,10 @@ def cancel_job(job_id: str, db: Session = Depends(get_db), cur: CurrentUser = De
         from app.autopilot import cancel_children
 
         cancel_children(db, job)
+    elif job.type == "edit_set":
+        from app import edit_set
+
+        edit_set.cancel(db, job)
     db.commit()
     return job_out(job)
 
@@ -73,7 +77,7 @@ def retry_job(job_id: str, db: Session = Depends(get_db), cur: CurrentUser = Dep
     job.attempts = 0
     job.started_at = job.finished_at = job.heartbeat_at = None
     job.gpu_seconds = None
-    if job.type in ("autopilot", "video_podcast", "poetry_short", "ad_campaign"):
+    if job.type in ("autopilot", "video_podcast", "poetry_short", "ad_campaign", "edit_set"):
         from app.autopilot import on_retry  # resumes at the failed stage; finished stages stay done
 
         on_retry(job)

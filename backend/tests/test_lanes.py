@@ -72,6 +72,8 @@ def test_every_registered_job_type_has_a_lane():
         "presenter_video": "general", "presenter_assemble": "general",
         # admin bulk runs: the orchestrator, the ZIP unpack and the export; each picture is a generate job
         "bulk_run": "general", "bulk_unzip": "general", "bulk_export": "general",
+        # Image Edit sets: the writer and the queueing; each picture is a generate job on the image lane
+        "edit_set": "general",
     }
     for t in worker.HANDLERS:
         if t.startswith("ai_"):

@@ -1015,6 +1015,9 @@ class ImageEditIn(BaseModel):
     prompt_enhanced: bool = Field(False, description="The instruction was already corrected; skip that step")
     aspect: ImageAspect | None = Field(None, description="Empty keeps the first picture's shape")
     count: int = Field(1, ge=1, le=4)
+    set_size: int | None = Field(None, ge=2, le=25, description="Make this many separate pictures, each a "
+                                 "different version of the instruction (a new expression, angle, light...), "
+                                 "in a new folder. count is ignored when this is set")
     seed: int | None = Field(None, ge=0, le=2**31 - 1, description=_SEED)
     title: str | None = Field(None, max_length=300)
     model: str | None = Field(None, max_length=60, description=_MODEL)

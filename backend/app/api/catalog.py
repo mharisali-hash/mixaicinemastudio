@@ -42,7 +42,7 @@ def estimate(kind: Literal["image", "video", "take", "upscale", "audio", "speech
              model: str | None = Query(None, max_length=60),
              speed: str | None = Query(None, max_length=30, description="A model's speed id; for model3d the "
                                                                            "quality, draft or final"),
-             count: int = Query(1, ge=1, le=16),
+             count: int = Query(1, ge=1, le=25),
              duration_s: float | None = Query(None, gt=0, le=1200), width: int | None = Query(None, ge=64, le=8192),
              height: int | None = Query(None, ge=64, le=8192), chars: int | None = Query(None, ge=0, le=20000),
              better_back: bool = Query(False, description="model3d: add 3D Studio's side and back views, made "

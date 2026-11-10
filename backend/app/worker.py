@@ -608,6 +608,12 @@ HANDLERS[bulk_run.UNZIP_JOB] = bulk_run.handle_unzip
 HANDLERS[bulk.EXPORT_JOB] = bulk_export.handle
 FINISHED_HOOKS.append(bulk.on_job_finished)
 CPU_JOB_LEDGER.update({bulk.RUN_JOB: "autopilot", bulk_run.UNZIP_JOB: "export", bulk.EXPORT_JOB: "export"})
+from app import edit_set  # noqa: E402
+
+# Image Edit sets: the writer and the queueing are CPU; each picture is an ordinary generate job (wake_parent
+# lifts the set when one finishes)
+HANDLERS[edit_set.JOB] = edit_set.handle
+CPU_JOB_LEDGER[edit_set.JOB] = "autopilot"
 
 
 def _db_busy(e: BaseException) -> bool:

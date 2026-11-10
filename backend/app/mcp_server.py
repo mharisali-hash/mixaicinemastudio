@@ -221,13 +221,24 @@ def edit_image(
                                                                                    "references")],
     instruction: Annotated[str, Field(min_length=1, max_length=PROMPT_MAX, description="What to change")],
     aspect: Annotated[ImageAspect | None, Field(description="Empty keeps the first picture's shape")] = None,
-    count: Annotated[int, Field(ge=1, le=4)] = 1,
+    count: Annotated[int, Field(ge=1, le=4, description="Variations: copies of the same edit that differ only "
+                                                         "by chance")] = 1,
     seed: Annotated[int | None, Field(ge=0, le=2**31 - 1)] = None,
+    set_size: Annotated[int | None, Field(ge=2, le=25, description="A set: this many separate pictures, each a "
+                                                                   "different version of the instruction (another "
+                                                                   "expression, angle, light...), in a new folder. "
+                                                                   "Use it for 'a sheet / grid of 9 expressions'. "
+                                                                   "count is ignored")] = None,
 ) -> dict:
-    """Edit pictures with an instruction ("make it night", "put the hat from picture 2 on her")."""
+    """Edit pictures with an instruction ("make it night", "put the hat from picture 2 on her"). With set_size,
+    one job makes the whole set: wait on it, then fetch each item with get_media."""
     with acting(ctx, "generate") as (db, cur):
         out = library.edit_images(ImageEditIn(source_ids=source_ids, instruction=instruction, aspect=aspect,
-                                              count=count, seed=seed), db=db, cur=cur)
+                                              count=count, seed=seed, set_size=set_size), db=db, cur=cur)
+        if set_size:
+            return {**_batch(out, model=out.model_resolved),
+                    "next": "wait_for_job with the one job_id (it finishes after the last picture), then get_media "
+                            "with each media_id"}
         return _batch(out, model=out.model_resolved)
 
 
