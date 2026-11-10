@@ -20,6 +20,15 @@ from app.worker import claim_next, process_one, recover_lanes
 from tests.test_autopilot import brain, create, stages  # noqa: F401  (brain is a fixture)
 
 
+@pytest.fixture(autouse=True)
+def _frames_on_image_gpu(monkeypatch):
+    # most of these tests are about the lane machinery, written when every still went to the picture GPU;
+    # the tests of the video-stills rule switch it back on themselves
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "video_frames_on_video_gpu", False)
+
+
 # ------------------------------------------------------------------ classifier
 
 @pytest.mark.parametrize("kind,lane", [
@@ -31,6 +40,23 @@ from tests.test_autopilot import brain, create, stages  # noqa: F401  (brain is 
 ])
 def test_generate_jobs_follow_their_generation_kind(kind, lane):
     assert lane_for("generate", kind) == lane
+
+
+@pytest.mark.parametrize("kind,target,project,lane", [
+    ("image", "presenter_scene", None, "video"), ("image", "poetry_scene", None, "video"),
+    ("keyframe_start", "shot", "p1", "video"), ("keyframe_end", "media", None, "video"),
+    ("establishing", "location", "p1", "video"), ("portrait", "character", "p1", "video"),
+    # Character Studio, people's own pictures, looks and 3D stay on the picture GPU
+    ("portrait", "character", None, "image"), ("sheet_view", "character", None, "image"),
+    ("image", "media", None, "image"), ("portrait", "character_look", "p1", "image"),
+    ("model3d", "shot", "p1", "image"),
+    ("take", "shot", "p1", "video"),
+])
+def test_stills_for_a_video_go_to_the_video_gpu(kind, target, project, lane):
+    assert lane_for("generate", kind, target, project, frames_on_video=True) == lane
+    # switched off (VIDEO_FRAMES_ON_VIDEO_GPU=false): every still back on the picture GPU
+    off = lane_for("generate", kind, target, project, frames_on_video=False)
+    assert off == ("video" if kind == "take" else "image")
 
 
 def test_every_registered_job_type_has_a_lane():
@@ -116,11 +142,15 @@ def _ws(db):
     return db.scalars(select(Workspace.id)).first()
 
 
-def test_lane_is_stamped_at_enqueue(client, character, db):
+def test_lane_is_stamped_at_enqueue(client, character, db, monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "video_frames_on_video_gpu", True)
     r = client.post("/api/generations", json={"target_type": "character", "target_id": character["id"],
                                               "kind": "portrait", "prompt": "p"})
     job = db.get(Job, r.json()["job_id"])
-    assert job.lane == "image"
+    # this character belongs to a film project, so its portrait is drawn on the video GPU
+    assert job.lane == "video"
     take = _gen_job(db, character["project_id"], "take", character["id"])
     assert take.lane == "video"
     other = Job(workspace_id=_ws(db), type="media_zip", payload={})
@@ -128,7 +158,7 @@ def test_lane_is_stamped_at_enqueue(client, character, db):
     db.commit()
     assert other.lane == "general"
     rows = {j["id"]: j["lane"] for j in client.get("/api/jobs").json()}
-    assert rows[job.id] == "image" and rows[take.id] == "video"
+    assert rows[job.id] == "video" and rows[take.id] == "video"
 
 
 # ------------------------------------------------------------------ ComfyUI URL per lane

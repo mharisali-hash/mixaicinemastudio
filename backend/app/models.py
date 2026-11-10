@@ -18,6 +18,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, Session, mapped_column, object_session
 
+from app.config import get_settings
 from app.db import Base
 from app.lanes import lane_for
 
@@ -1203,11 +1204,11 @@ def _classify_new_jobs(session, _ctx, _instances):
     for obj in session.new:
         if not isinstance(obj, Job) or obj.lane:
             continue
-        kind = None
+        gen = None
         if obj.type == "generate" and obj.generation_id:
             gen = next((g for g in session.new if isinstance(g, Generation) and g.id == obj.generation_id), None)
             if gen is None:
                 with session.no_autoflush:
                     gen = session.get(Generation, obj.generation_id)
-            kind = gen.kind if gen is not None else None
-        obj.lane = lane_for(obj.type, kind)
+        obj.lane = lane_for(obj.type, gen.kind if gen else None, gen.target_type if gen else None,
+                            gen.project_id if gen else None, get_settings().video_frames_on_video_gpu)

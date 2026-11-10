@@ -55,6 +55,8 @@ class Settings(BaseSettings):
     # one ComfyUI (GPU) per lane so stills and video render side by side; empty -> COMFY_URLS
     comfy_image_urls: Annotated[list[str], NoDecode] = []
     comfy_video_urls: Annotated[list[str], NoDecode] = []
+    # the stills a video is made from (scene frames, keyframes, a film's cast) are drawn on the video GPU
+    video_frames_on_video_gpu: bool = True
     comfy_auth_token: str = ""
     comfy_verify_tls: bool = False
     # after a reboot the workers come up before ComfyUI has loaded; jobs wait this long rather than fail
