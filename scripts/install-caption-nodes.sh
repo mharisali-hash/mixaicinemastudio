@@ -71,7 +71,7 @@ else die "no pip in $COMFY_VENV and no uv on PATH"; fi
 # torch and friends belong to ComfyUI; pin what is installed so the node's requirements can't move them
 cons="$(mktemp)"; req="$(mktemp)"
 pipx freeze 2>/dev/null | grep -iE '^(torch|torchvision|torchaudio|numpy|xformers|triton|transformers)==' > "$cons" || true
-grep -viE '^(torch|torchvision|torchaudio)([^a-z0-9_-]|$)' "$dir/requirements.txt" | tr -d '' | sed -e 's/#.*//' | grep -v '^\s*$' > "$req" || true
+grep -viE '^(torch|torchvision|torchaudio)([^a-z0-9_-]|$)' "$dir/requirements.txt" | tr -d '\r' | sed -e 's/#.*//' | grep -v '^\s*$' > "$req" || true
 info "packages: $(paste -sd' ' "$req")"
 info "kept as they are: $(paste -sd' ' "$cons")"
 if (( ! DRY )); then
