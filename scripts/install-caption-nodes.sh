@@ -63,18 +63,25 @@ else
 fi
 
 say "Python packages"
+# ComfyUI's venv may be uv-made, with no pip in it; uv is on the server anyway (install-server.sh needs it)
+if "$PY" -m pip --version >/dev/null 2>&1; then PIP=("$PY" -m pip)
+elif command -v uv >/dev/null; then PIP=(uv pip --python "$PY")
+else die "no pip in $COMFY_VENV and no uv on PATH"; fi
+info "installing with: ${PIP[*]}"
 # torch and friends belong to ComfyUI; pin what is installed so the node's requirements can't move them
 cons="$(mktemp)"; req="$(mktemp)"
-"$PY" -m pip freeze 2>/dev/null | grep -iE '^(torch|torchvision|torchaudio|numpy|xformers|triton|transformers)==' > "$cons" || true
-if (( DRY )); then
-  info "would install from $NODE_DIR/requirements.txt (torch excluded), keeping: $(tr '\n' ' ' < "$cons")"
-else
-  grep -viE '^(torch|torchvision|torchaudio)([^a-z0-9_-]|$)' "$dir/requirements.txt" | sed -e 's/#.*//' | grep -v '^\s*$' > "$req" || true
-  "$PY" -m pip install --quiet -c "$cons" -r "$req" || {
-    # an older transformers than the node asks for: let pip lift just that one
-    warn "pip refused with transformers pinned; retrying with transformers free to move"
-    grep -viE '^transformers==' "$cons" > "$cons.2" && "$PY" -m pip install --quiet -c "$cons.2" -r "$req"
-  }
+"${PIP[@]}" freeze 2>/dev/null | grep -iE '^(torch|torchvision|torchaudio|numpy|xformers|triton|transformers)==' > "$cons" || true
+grep -viE '^(torch|torchvision|torchaudio)([^a-z0-9_-]|$)' "$dir/requirements.txt" | sed -e 's/#.*//' | grep -v '^\s*$' > "$req" || true
+info "packages: $(paste -sd' ' "$req")"
+info "kept as they are: $(paste -sd' ' "$cons")"
+if (( ! DRY )); then
+  if ! "${PIP[@]}" install --quiet -c "$cons" -r "$req"; then
+    # an older transformers than the node asks for: let just that one move
+    warn "install refused with transformers pinned; retrying with transformers free to move"
+    grep -viE '^transformers==' "$cons" > "$cons.2" || true
+    "${PIP[@]}" install --quiet -c "$cons.2" -r "$req" || die "couldn't install the node's packages (see above)"
+  fi
+  "$PY" -c "import transformers, accelerate, bitsandbytes" || die "packages installed but don't import - see above"
 fi
 rm -f "$cons" "$cons.2" "$req"
 
@@ -99,5 +106,5 @@ for port in 8188 8189; do
   echo
   found=$(curl -s "$base/object_info" | "$PY" -c "import sys,json; print(' '.join(k for k in json.load(sys.stdin) if 'joycaption' in k.lower()))" 2>/dev/null || true)
   if [[ -n "$found" ]]; then info ":$port loaded: $found"
-  else warn ":$port has no JoyCaption node - see: journalctl -u comfyui* -n 100 | grep -i joy"; fi
+  else warn ":$port has no JoyCaption node - see: sudo journalctl -u 'comfyui*' -n 200 --no-pager | grep -iA5 joy"; fi
 done
