@@ -29,7 +29,8 @@ from app.config import get_settings
 from app.db import SessionLocal
 from app.drivers import GenerationDriver, get_driver
 from app.lanes import AUDIO_KINDS, IMAGE_KINDS, LANES, MODEL_KINDS, VIDEO_KINDS, gpu_lane, parse_lanes
-from app.models import ACTING_USER, VIA_API, Generation, Job, UsageLedger, WorkerHeartbeat, utcnow
+from app.llm.client import MODEST
+from app.models import ACTING_USER, VIA_API, Generation, Job, UsageLedger, User, WorkerHeartbeat, utcnow
 
 log = logging.getLogger("mixai.worker")
 
@@ -450,6 +451,12 @@ def handle_generate(ctx: JobContext) -> dict:
                       tick=lambda: ctx.progress(0.97, "Checking the result"))
     if batch:
         image_batch.finish(ctx, gen, batch, result)
+    if ((gen.params or {}).get("image_tool") or {}).get("tool") == "remove":
+        from app.image_tools import nothing_removed
+
+        if why := nothing_removed(db, gen, abs_path):
+            abs_path.unlink(missing_ok=True)
+            raise RuntimeError(why)
     content_policy.check_after(ctx, gen, abs_path, result.media_type)
     gen.file_path = rel_path
     gen.media_type = result.media_type
@@ -649,9 +656,13 @@ def run_job(db: Session, job: Job, driver_factory: Callable[[], GenerationDriver
     # an API job's results, child jobs and Library items are API rows too (contract v34)
     db.info[VIA_API] = bool(job.via_api)
     db.info[ACTING_USER] = job.user_id
+    # an admin's writer keeps their words; everyone else's, Managers' and clinics' too, keeps the modesty rule
+    owner = db.get(User, job.user_id) if job.user_id else None
+    modest = MODEST.set(not (owner is not None and owner.is_admin))
     try:
         _run(db, job, ctx)
     finally:
+        MODEST.reset(modest)
         db.info.pop(VIA_API, None)
         db.info.pop(ACTING_USER, None)
 

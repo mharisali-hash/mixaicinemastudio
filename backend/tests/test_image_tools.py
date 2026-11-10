@@ -61,7 +61,8 @@ def test_tool_templates_build_and_check(tool):
     req = tpl.manifest["requires"]
     assert req["pack"] and req["nodes"] and (req.get("assumed") or req.get("verified"))
     assert t.template in TIMEOUTS
-    inputs = {"image": "a.png", "mask": "m.png", "garment": "g.png", "width": 640, "height": 480, "seed": 3}
+    inputs = {"image": "a.png", "mask": "m.png", "garment": "g.png", "words": "men", "width": 640, "height": 480,
+              "seed": 3}
     graph, resolved = build(t.template, inputs)
     titles = {n["_meta"]["title"]: n for n in graph.values()}
     assert titles["Save"]["inputs"]["filename_prefix"] == "mixai/tool"
@@ -114,7 +115,9 @@ def test_plan_dispatch_for_each_tool(tmp_path, monkeypatch):
             rec["mask_file"] = "m.png"
         if tool.id == "tryon":
             rec["garment_id"] = "g2"
-        plan = plan_generation("image", "x", {"image_tool": rec, "width": 512, "height": 512}, 7, Lookup())
+        if tool.id == "remove":
+            rec["inputs"]["words"] = "men"
+        plan =plan_generation("image", "x", {"image_tool": rec, "width": 512, "height": 512}, 7, Lookup())
         assert plan.template == tool.template and plan.images["image"] == src
         assert plan.inputs["seed"] == 7 and plan.sources["tool"] == tool.id
         if tool.needs_mask:

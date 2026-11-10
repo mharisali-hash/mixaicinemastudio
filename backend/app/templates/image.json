@@ -1009,6 +1009,25 @@
       }
     },
     {
+      "id": "image-edit-remove-by-words",
+      "category": "Edit a photo",
+      "target": "image-edit",
+      "title": "Remove…",
+      "description": "Say what should go (men, the text, the dog) and only that is taken out and filled in from what's around it. Everything else stays exactly as it was. No brush needed.",
+      "thumb": null,
+      "tags": ["remove", "cleanup", "erase", "remove people", "remove text", "object removal", "edit"],
+      "refs_required": 1,
+      "ref_labels": ["Photo"],
+      "tool": "remove",
+      "examples": {},
+      "preview_prompt": "Quiet sunlit street in old Lahore with shuttered shop fronts and an empty pavement, nobody in the frame, soft morning colours.",
+      "defaults": {
+        "instruction_scaffold": "Take out of image 1 exactly what is named under What should go, and fill the space from what's around it. Change nothing else.",
+        "model": "qwen_image_edit_2511",
+        "count": 1
+      }
+    },
+    {
       "id": "image-edit-relight",
       "category": "Edit a photo",
       "target": "image-edit",

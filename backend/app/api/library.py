@@ -384,6 +384,9 @@ def _tool_images(db: Session, cur: CurrentUser, body: ImageEditIn, tool: it.Imag
     ran = it.TOOLS[rec["tool"]]
     w, h = rec["inputs"]["width"], rec["inputs"]["height"]
     text = mn.plain(body.instruction).strip()
+    if ran.id == "remove":
+        # the words are what the content checks need to see, not a card's scaffold
+        text = f"Remove {rec['inputs']['words']}"
     title = (body.title or "").strip() or (f"{ran.label} · {lib.short_title(text, 5)}" if text else ran.label)
     edit_of = [{"media_id": m, "generation_id": g.id} for m, g in sources]
     # line art, depth, edges and LaMa give the same picture every time: one is enough

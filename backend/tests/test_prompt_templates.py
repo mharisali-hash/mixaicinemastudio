@@ -117,7 +117,8 @@ def test_shipped_previews_are_small():
 
 
 EDIT_IDS = {"image-edit-outfit-swap", "image-edit-hairstyle", "image-edit-hairstyle-grid", "image-edit-headshot",
-            "image-edit-retouch", "image-edit-remove-object", "image-edit-relight", "image-edit-product-scene",
+            "image-edit-retouch", "image-edit-remove-object", "image-edit-remove-by-words",
+            "image-edit-relight", "image-edit-product-scene",
             "image-edit-line-art", "image-edit-giant-beach", "image-edit-helicopter", "image-edit-icy-plunge",
             "image-edit-3d-billboard", "image-edit-miniature-factory", "image-edit-exploded-view",
             "image-edit-photo-grid", "image-edit-across-time", "image-edit-front-page", "image-edit-mini-me",
@@ -159,7 +160,7 @@ def test_edit_templates():
 
 def test_every_template_loads_and_names_a_real_model():
     rows = [t for t in lib_api.templates().values() if t["type"] == "image"]
-    assert len(rows) == 90 and sum(t["target"] == "image-edit" for t in rows) == len(EDIT_IDS)
+    assert len(rows) == 91 and sum(t["target"] == "image-edit" for t in rows) == len(EDIT_IDS)
     assert {t["id"] for t in rows if t["target"] == "image-control"} == CONTROL_IDS
     for t in rows:
         want = "edit" if t["target"] in ("image-edit", "image-brand") else "image"

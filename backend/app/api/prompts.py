@@ -43,4 +43,4 @@ async def enhance(body: EnhanceIn, db: Session = Depends(get_db), cur: CurrentUs
     # image styles go by their label; quick styles (cinematic, documentary...) are labels already
     style = lib.STYLES[body.style].label if body.style in lib.STYLES else body.style
     return await prompt_enhance.enhance(body.prompt, body.kind, mode=body.mode, model=body.model, style=style,
-                                        brand_context=context)
+                                        brand_context=context, modest=not cur.user.is_admin)

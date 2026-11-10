@@ -54,7 +54,8 @@ TIMEOUTS = {"zimage_t2i": 900.0, "qwen_edit": 900.0, "ltx23_i2v": 3600.0, "ltx23
             "zimage_i2i": 900.0, "flux2_klein_i2i": 600.0, "qwen_image_i2i": 1200.0,
             "ace15_song": 900.0, "sa3_music": 600.0, "sa3_sfx": 600.0, "sa3_medium": 1200.0, "minimax_music3": 1800.0,
             "image_lineart": 300.0, "image_lineart_anime": 300.0, "image_depth": 300.0, "image_canny": 120.0,
-            "image_softedge": 300.0, "image_lama_inpaint": 600.0, "image_iclight": 900.0, "image_catvton": 1200.0,
+            "image_softedge": 300.0, "image_lama_inpaint": 600.0, "image_remove_words": 900.0,
+            "image_iclight": 900.0, "image_catvton": 1200.0,
             "zimage_controlnet": 900.0, "zimage_controlnet_depth": 900.0, "zimage_controlnet_canny": 900.0,
             "zimage_controlnet_pose": 900.0, "zimage_controlnet_hed": 900.0, "zimage_controlnet_scribble": 900.0,
             # contract v32: first loads of 9-16 GB weights on the 20 GB card are slow

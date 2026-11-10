@@ -48,6 +48,7 @@ export function BulkPage() {
           <select id="bulk-action" className={cn(fieldClass, 'h-8 pr-7')} value={action} onChange={(e) => setAction(e.target.value as BulkAction)}>
             <option value="cutout">{ACTION_LABEL.cutout}</option>
             <option value="edit">{ACTION_LABEL.edit}</option>
+            <option value="remove">{ACTION_LABEL.remove}</option>
           </select>
         </div>
         <Button type="submit" variant="primary" loading={create.isPending}>

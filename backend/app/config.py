@@ -129,7 +129,7 @@ class Settings(BaseSettings):
     # aerab for Arabic-script languages (contract v23): the master switch keeps its old name so existing
     # .env files carry on; aerab_languages says which languages it covers
     # the vision model looks at every finished picture (and a frame of each video) for anything nude or sexual;
-    # off only while the vision model is away (app.content_policy)
+    # off only while the vision model is away (app.content_policy). The child check still runs when it's off
     content_check_pictures: bool = True
     # admin bulk runs: how many pictures sit on the image GPU's queue at once (more makes no batch faster, it
     # only puts more of them ahead of a new request), the free disk an upload must leave, the ZIP upload cap

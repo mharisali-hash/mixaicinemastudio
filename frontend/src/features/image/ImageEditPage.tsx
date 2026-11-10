@@ -29,6 +29,7 @@ import { announce } from '@/stores/ui'
 import { CountPicker, ImageAspectTiles } from './controls'
 import { EditSources } from './EditSources'
 import { MaskBrush } from './MaskBrush'
+import { RemoveWords } from './RemoveWords'
 import { SetSizePicker } from './SetSizePicker'
 import { TemplateChoices } from './TemplateChoices'
 import { ToolChoice } from './ToolChoice'
@@ -109,6 +110,8 @@ export function ImageEditPage() {
   const [painted, setPainted] = useState<{ on: string; png: string | null } | null>(null)
   const mask = painted && painted.on === ids[0] ? painted.png : null
   const [light, setLight] = useState<LightFrom>('none')
+  // Remove…: what should go, sent as words rather than an instruction
+  const [removeWords, setRemoveWords] = useState('')
   const [saving, setSaving] = useState<TemplateDraft | null>(null)
   const saveDraft = (): TemplateDraft => ({
     target: 'edit',
@@ -123,6 +126,7 @@ export function ImageEditPage() {
   // LaMa needs a mask; without one the edit model reads the instruction
   const toolRuns = toolOn && (!tool.needs_mask || !!mask)
   const wordsNeeded = !toolRuns || tool.id === 'relight'
+  const removing = toolRuns && tool.id === 'remove'
 
   const add = (items: MediaItem[], at?: number) => {
     const next = placeSources(ids, items.map((m) => m.id), max, at)
@@ -163,11 +167,13 @@ export function ImageEditPage() {
         ? 'Add at least one source image.'
         : toolDown
           ? `${tool.engine} isn't available on this server.`
-          : wordsNeeded && slots.length
-            ? `Replace ${slots.join(', ')} first.`
-            : wordsNeeded && instruction.trim().length < 3
-              ? 'Say what should change.'
-              : null
+          : removing && !removeWords.trim()
+            ? 'Say what should go.'
+            : wordsNeeded && slots.length
+              ? `Replace ${slots.join(', ')} first.`
+              : wordsNeeded && instruction.trim().length < 3
+                ? 'Say what should change.'
+                : null
 
   // a run from the dock empties the prompt once it's queued; a tile's Retry leaves the dock alone
   const run = (r: EditRun, fromDock = false) =>
@@ -208,6 +214,7 @@ export function ImageEditPage() {
       body.engine = useTool ? 'auto' : 'edit'
       if (toolRuns && mask) body.mask = mask
       if (toolOn && tool.id === 'relight') body.tool_options = { light }
+      if (removing) body.tool_options = { words: removeWords.trim() }
     }
     const made = setSize ? plural(setSize, 'separate picture') : plural(count, 'result')
     const summary = [model?.label, plural(sources.length, 'source'), aspect ?? 'source shape', made].filter(Boolean).join(' · ')
@@ -284,7 +291,8 @@ export function ImageEditPage() {
             </div>
             {tpl && (
               <div className="flex flex-col gap-2">
-                {tool && <ToolChoice tool={tool} info={toolInfo} useTool={useTool} onUseTool={setUseTool} light={light} onLight={setLight} />}
+                {tool && !removing && <ToolChoice tool={tool} info={toolInfo} useTool={useTool} onUseTool={setUseTool} light={light} onLight={setLight} />}
+                {removing && <RemoveWords value={removeWords} onChange={setRemoveWords} />}
                 {tool?.needs_mask && toolOn && ids[0] && <MaskBrush key={ids[0]} sourceId={ids[0]} onChange={(png) => setPainted({ on: ids[0], png })} />}
                 <TemplateChoices options={tpl.options} picked={picked} onPick={pick} />
                 <PlaceholderHint text={instruction} field={field} examples={tpl.examples} />

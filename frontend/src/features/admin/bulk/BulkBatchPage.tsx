@@ -262,6 +262,14 @@ function SettingsStep({ b, locked, onSaved }: { b: BulkBatch; locked: boolean; o
                 </select>
               </div>
             </>
+          ) : b.action === 'remove' ? (
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="bulk-words" className="section-label">
+                What should go in every picture?
+              </label>
+              <Input id="bulk-words" placeholder="e.g. men, the text, the dog" value={opts.words ?? ''} maxLength={200} onChange={(e) => set('words', e.target.value)} />
+              <p className="text-small text-studio-muted">Only what you name is taken out and filled in from around it; everything else stays as it was.</p>
+            </div>
           ) : (
             <div className="flex flex-col gap-1.5">
               <label htmlFor="bulk-edge" className="section-label">

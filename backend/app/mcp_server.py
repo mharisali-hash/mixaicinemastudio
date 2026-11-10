@@ -220,7 +220,8 @@ def edit_image(
                                                                                    "or generation_id); the first "
                                                                                    "is the one edited, the rest are "
                                                                                    "references")],
-    instruction: Annotated[str, Field(min_length=1, max_length=PROMPT_MAX, description="What to change")],
+    instruction: Annotated[str, Field(max_length=PROMPT_MAX, description="What to change; may be empty with "
+                                                                         "remove")] = "",
     aspect: Annotated[ImageAspect | None, Field(description="Empty keeps the first picture's shape")] = None,
     count: Annotated[int, Field(ge=1, le=4, description="Variations: copies of the same edit that differ only "
                                                          "by chance")] = 1,
@@ -232,10 +233,21 @@ def edit_image(
                                                                    "count is ignored")] = None,
     with_sheet: Annotated[bool, Field(description="With set_size: also one picture with the whole set laid "
                                                   "out on a single sheet")] = False,
+    remove: Annotated[str | None, Field(max_length=200, description="Take away exactly what these words name "
+                                                                    "(\"men\", \"the text\") and fill in behind "
+                                                                    "it, leaving the rest untouched, instead of "
+                                                                    "redrawing with the edit model")] = None,
 ) -> dict:
     """Edit pictures with an instruction ("make it night", "put the hat from picture 2 on her"). With set_size,
-    one job makes the whole set: wait on it, then fetch each item with get_media."""
+    one job makes the whole set: wait on it, then fetch each item with get_media. With remove, the named things
+    are taken out of the first picture and nothing else changes."""
     with acting(ctx, "generate") as (db, cur):
+        if remove and remove.strip():
+            out = library.edit_images(ImageEditIn(source_ids=source_ids[:1], tool="remove", engine="tool",
+                                                  tool_options={"words": remove}), db=db, cur=cur)
+            return _batch(out)
+        if not instruction.strip():
+            raise ToolError("Say what to change, or what to remove")
         out = library.edit_images(ImageEditIn(source_ids=source_ids, instruction=instruction, aspect=aspect,
                                               count=count, seed=seed, set_size=set_size,
                                               with_sheet=with_sheet), db=db, cur=cur)

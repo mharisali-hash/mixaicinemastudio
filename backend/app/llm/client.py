@@ -10,6 +10,7 @@ import json
 import logging
 import re
 import time
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any, Callable, Literal, TypeVar
 
@@ -31,6 +32,9 @@ _warm: set[str] = set()
 # server root -> (when asked, bare tags installed there)
 _installed: dict[str, tuple[float, set[str]]] = {}
 INSTALLED_TTL_S = 300.0
+# False while the worker runs an admin's job: their writer drops the modesty rule (content_policy.MODESTY_RULE).
+# chat_sync's asyncio.run copies the context, so the setting reaches the call
+MODEST: ContextVar[bool] = ContextVar("llm_modest", default=True)
 
 
 class LLMError(RuntimeError):
@@ -260,13 +264,14 @@ def _validate(model_cls: type[T], text: str) -> T:
     return model_cls.model_validate_json(extract_json(text))
 
 
-def with_house_rules(messages: list[dict]) -> list[dict]:
+def with_house_rules(messages: list[dict], modest: bool = True) -> list[dict]:
     # every writer follows them, so a film, ad or poem never asks the picture models for what they'd refuse
-    from app.content_policy import HOUSE_RULES
+    from app.content_policy import HOUSE_RULES, RELIGIOUS_RULE
 
+    rules = HOUSE_RULES if modest else RELIGIOUS_RULE
     if messages and messages[0].get("role") == "system":
-        return [{**messages[0], "content": messages[0]["content"] + "\n\n" + HOUSE_RULES}, *messages[1:]]
-    return [{"role": "system", "content": HOUSE_RULES}, *messages]
+        return [{**messages[0], "content": messages[0]["content"] + "\n\n" + rules}, *messages[1:]]
+    return [{"role": "system", "content": rules}, *messages]
 
 
 async def chat(
@@ -282,13 +287,14 @@ async def chat(
     model: str | None = None,
     keep_alive: str | None = None,
     house_rules: bool = True,
+    modest: bool | None = None,
 ) -> ChatResult:
     """One chat call for a role. With `schema`, `result.data` is a validated instance or LLMError is raised.
     `model` overrides the role's model for this one call (Ad Studio picks its own copywriter). `keep_alive`
     is Ollama's (native API only): how long the model stays loaded afterwards."""
     s = get_settings()
     if house_rules and role != "vision":
-        messages = with_house_rules(messages)
+        messages = with_house_rules(messages, MODEST.get() if modest is None else modest)
     chosen = model is not None
     model = model or model_for(role)
     if think is None:

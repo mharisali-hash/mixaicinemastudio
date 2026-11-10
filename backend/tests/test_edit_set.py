@@ -25,6 +25,9 @@ def writer(monkeypatch):
 
     def install(lines=None, fail=False):
         def fake(role, messages, **kw):
+            if role == "vision":
+                # the picture check on each finished picture; no eye here, so the picture stands
+                raise llm.LLMError("no vision model in this test")
             asked.append(messages)
             if fail:
                 raise llm.LLMError("the writer is offline")

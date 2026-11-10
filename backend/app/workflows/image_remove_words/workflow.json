@@ -1,0 +1,16 @@
+{
+  "1": {"class_type": "LoadImage", "_meta": {"title": "Source"}, "inputs": {"image": "example.png"}},
+  "2": {"class_type": "ImageScale", "_meta": {"title": "Fit"},
+        "inputs": {"image": ["1", 0], "upscale_method": "lanczos", "width": 1024, "height": 1024, "crop": "disabled"}},
+  "3": {"class_type": "CheckpointLoaderSimple", "_meta": {"title": "Finder"}, "inputs": {"ckpt_name": "sam3.1_multiplex_fp16.safetensors"}},
+  "4": {"class_type": "CLIPTextEncode", "_meta": {"title": "Words"}, "inputs": {"clip": ["3", 1], "text": ""}},
+  "5": {"class_type": "SAM3_Detect", "_meta": {"title": "Detect"},
+        "inputs": {"model": ["3", 0], "image": ["2", 0], "threshold": 0.5, "refine_iterations": 2,
+                   "individual_masks": false, "conditioning": ["4", 0]}},
+  "6": {"class_type": "GrowMask", "_meta": {"title": "Grow"},
+        "inputs": {"mask": ["5", 0], "expand": 10, "tapered_corners": true}},
+  "7": {"class_type": "INPAINT_LoadInpaintModel", "_meta": {"title": "Model"}, "inputs": {"model_name": "big-lama.pt"}},
+  "8": {"class_type": "INPAINT_InpaintWithModel", "_meta": {"title": "Inpaint"},
+        "inputs": {"inpaint_model": ["7", 0], "image": ["2", 0], "mask": ["6", 0], "seed": 0}},
+  "9": {"class_type": "SaveImage", "_meta": {"title": "Save"}, "inputs": {"images": ["8", 0], "filename_prefix": "mixai/tool"}}
+}

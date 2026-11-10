@@ -54,6 +54,10 @@ TOOLS: dict[str, ImageTool] = {t.id: t for t in (
               noncommercial=True),
     ImageTool("inpaint", "Remove with a mask", "LaMa", "image_lama_inpaint", "Apache-2.0 (LaMa big-lama)",
               fallback=True, needs_mask=True, cap_mp=4.2, est_seconds=8),
+    # the engine name reaches the page, so it says what it does rather than "SAM + LaMa"
+    ImageTool("remove", "Remove by words", "Remove by words", "image_remove_words",
+              "SAM Licence (SAM 3.1, Meta; unconfirmed for commercial use) + Apache-2.0 (LaMa big-lama)",
+              cap_mp=4.2, est_seconds=12),
     ImageTool("relight", "Relight", "IC-Light v1", "image_iclight",
               "Apache-2.0 (IC-Light v1); base Realistic Vision 5.1: CreativeML OpenRAIL-M", fallback=True,
               generative=True, cap_mp=0.79, multiple=64, est_seconds=25),
@@ -70,6 +74,13 @@ MAX_MASK_BYTES = 8 * 1024 * 1024
 
 class ToolError(ValueError):
     pass
+
+
+def remove_words(opts: dict) -> str:
+    words = " ".join(str((opts or {}).get("words") or "").split())[:200]
+    if not words:
+        raise ToolError("Say what to remove, e.g. men, the dog, the text")
+    return words
 
 
 def allowed(tool: ImageTool) -> bool:
@@ -308,6 +319,13 @@ def build_params(db: Session, workspace_id: str, tool: ImageTool, template: dict
             if not 0 <= lo < hi <= 255:
                 raise ToolError("Canny thresholds must satisfy 0 <= low < high <= 255")
             inputs.update(low_threshold=lo, high_threshold=hi)
+    elif tool.id == "remove":
+        inputs["words"] = remove_words(opts)
+        try:
+            inputs["threshold"] = round(max(0.1, min(0.9, float(opts.get("threshold", 0.5)))), 2)
+            inputs["grow"] = max(0, min(64, int(opts.get("grow", 10))))
+        except (TypeError, ValueError):
+            raise ToolError("threshold and grow must be numbers") from None
     elif tool.id == "relight":
         light = light_of(opts.get("light"))
         inputs.update(light=light or "Left Light", denoise=0.9 if light else 1.0,
@@ -336,3 +354,30 @@ def relight_prompt(template: dict | None, slots: dict, instruction: str) -> str:
         if "[" not in text:
             return text
     return " ".join(instruction.split())[:300]
+
+
+def nothing_removed(db: Session, gen: Generation, out_path) -> str | None:
+    """Remove by words: when the words matched nothing, LaMa hands back the same picture. Say so instead of
+    filing a copy that looks like a failed edit."""
+    import numpy as np
+    from PIL import ImageOps
+
+    rec = (gen.params or {}).get("image_tool") or {}
+    if rec.get("tool") != "remove":
+        return None
+    src = db.get(Generation, rec.get("source_id") or "")
+    if src is None or not src.file_path:
+        return None
+    try:
+        with Image.open(out_path) as o:
+            out = np.asarray(o.convert("RGB"), dtype=np.int16)
+        with Image.open(get_settings().data_dir / src.file_path) as s:
+            # LoadImage turns by EXIF; the Fit resample is close enough to PIL's that only real edits stand out
+            before = ImageOps.exif_transpose(s).convert("RGB").resize((out.shape[1], out.shape[0]), Image.LANCZOS)
+    except OSError:
+        return None
+    diff = np.abs(out - np.asarray(before, dtype=np.int16)).max(axis=2)
+    if diff.mean() < 1.5 and (diff > 40).mean() < 0.001:
+        words = (rec.get("inputs") or {}).get("words") or "that"
+        return f"Nothing matching “{words}” was found, so the picture wasn't changed"
+    return None

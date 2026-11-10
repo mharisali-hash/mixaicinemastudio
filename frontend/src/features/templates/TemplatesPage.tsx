@@ -182,7 +182,8 @@ function Card({ t, onStart, starting }: { t: Template; onStart: () => void; star
             Runs on Z-Image Turbo + Fun ControlNet when installed, else the edit model
           </p>
         )}
-        {t.tool && (
+        {/* Remove… says what it does in its description; its engine has no name worth showing */}
+        {t.tool && t.tool.id !== 'remove' && (
           <p className="text-[12px] text-studio-muted">
             Runs on {t.tool.engine}
             {t.tool.fallback ? ' when installed' : ''}

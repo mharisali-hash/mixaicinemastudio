@@ -1037,7 +1037,9 @@ class ImageEditIn(BaseModel):
                                                                         "model; tool: the tool or 422; edit: never the tool")
     tool_options: dict[str, Any] = Field(default_factory=dict, description="light (none|left|right|top|bottom), "
                                                                            "garment_type (upper|lower|overall), "
-                                                                           "low_threshold / high_threshold")
+                                                                           "low_threshold / high_threshold, "
+                                                                           "words (tool=remove: what to take "
+                                                                           "away, e.g. men)")
     mask: str | None = Field(None, max_length=12_000_000, description="LaMa: a PNG data URL, white or opaque = "
                                                                       "remove. Without it a Photo Studio selection "
                                                                       "source is used")

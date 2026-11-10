@@ -1,0 +1,23 @@
+{
+  "name": "image_remove_words",
+  "family": "lama",
+  "description": "Remove by words: SAM 3.1 finds everything the words name (\"men\", \"the text\") on the working-size picture, GrowMask widens the merged mask to catch hair and shadows, and big-lama fills it. Pixels outside the mask are left alone; when nothing matches the picture comes back unchanged and the worker says so.",
+  "inputs": {
+    "image":  {"type": "image", "required": true, "targets": [["Source", "image"]]},
+    "words":  {"type": "str", "required": true, "targets": [["Words", "text"]]},
+    "threshold": {"type": "float", "default": 0.5, "targets": [["Detect", "threshold"]]},
+    "width":  {"type": "int", "default": 1024, "multiple_of": 8, "targets": [["Fit", "width"]]},
+    "height": {"type": "int", "default": 1024, "multiple_of": 8, "targets": [["Fit", "height"]]},
+    "grow":   {"type": "int", "default": 10, "targets": [["Grow", "expand"]]},
+    "seed":   {"type": "int", "default": 0, "targets": [["Inpaint", "seed"]]},
+    "filename_prefix": {"type": "str", "default": "mixai/tool", "targets": [["Save", "filename_prefix"]]}
+  },
+  "outputs": {"image": {"node": "Save", "kind": "image"}},
+  "models": {"checkpoints": ["sam3.1_multiplex_fp16.safetensors"], "inpaint": ["big-lama.pt"]},
+  "requires": {
+    "pack": "comfyui-inpaint-nodes (Acly) @ 5b7681746fe19e563113d27366ba85236bc1ba5b, plus ComfyUI's SAM3 nodes",
+    "nodes": ["SAM3_Detect", "GrowMask", "INPAINT_LoadInpaintModel", "INPAINT_InpaintWithModel"],
+    "assumed": "joined from photo_sam_mask and image_lama_inpaint; SAM runs on the Fit output so its mask matches LaMa's size"
+  },
+  "progress_weights": {"Detect": 6, "Inpaint": 4, "Model": 1, "Finder": 2}
+}

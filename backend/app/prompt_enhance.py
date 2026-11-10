@@ -13,7 +13,7 @@ from collections import OrderedDict
 from pydantic import BaseModel
 
 from app.config import get_settings
-from app.llm.client import LLMError, chat, chat_sync
+from app.llm.client import MODEST, LLMError, chat, chat_sync
 
 log = logging.getLogger("mixai.enhance")
 
@@ -145,26 +145,27 @@ def _accept(original: str, kind: str, data: Enhanced) -> dict:
     return _result(original, text, (data.notes or "").strip()[:200] or None)
 
 
-def _plan(prompt: str, kind: str, mode: str, model, style, brand_context) -> tuple[dict | None, tuple]:
+def _plan(prompt: str, kind: str, mode: str, model, style, brand_context, modest: bool) -> tuple[dict | None, tuple]:
     if kind not in KINDS:
         raise ValueError(f"kind must be one of {KINDS}")
-    key = (prompt.strip(), kind, model or "", style or "", brand_context or "")
+    # an admin's draft (no modesty rule) and a member's never share the cache
+    key = (prompt.strip(), kind, model or "", style or "", brand_context or "", modest)
     if mode == "auto" and not needs_enhance(prompt):
         return _result(prompt), key
     return _cache_get(key), key
 
 
 async def enhance(prompt: str, kind: str = "image", *, mode: str = "auto", model: str | None = None,
-                  style: str | None = None, brand_context: str = "") -> dict:
+                  style: str | None = None, brand_context: str = "", modest: bool = True) -> dict:
     """{enhanced, changed, notes?}. Never raises for LLM trouble: the original comes back instead."""
-    early, key = _plan(prompt, kind, mode, model, style, brand_context)
+    early, key = _plan(prompt, kind, mode, model, style, brand_context, modest)
     if early is not None:
         return early
     timeout = get_settings().enhance_timeout_s
     try:
         res = await asyncio.wait_for(
             chat("creative", messages(prompt, kind, model=model, style=style, brand_context=brand_context),
-                 schema=Enhanced, think=False, temperature=0.6, max_tokens=700, timeout=timeout),
+                 schema=Enhanced, think=False, temperature=0.6, max_tokens=700, timeout=timeout, modest=modest),
             timeout + 5)
     except (LLMError, asyncio.TimeoutError) as e:
         log.warning("prompt enhancer unavailable: %s", e)
@@ -178,7 +179,7 @@ async def enhance(prompt: str, kind: str = "image", *, mode: str = "auto", model
 def enhance_sync(prompt: str, kind: str = "image", *, mode: str = "auto", model: str | None = None,
                  style: str | None = None, brand_context: str = "", tick=None, llm: dict | None = None) -> dict:
     """Worker side. `tick` can raise JobCancelled, which is allowed through."""
-    early, key = _plan(prompt, kind, mode, model, style, brand_context)
+    early, key = _plan(prompt, kind, mode, model, style, brand_context, MODEST.get())
     if early is not None:
         return early
     try:

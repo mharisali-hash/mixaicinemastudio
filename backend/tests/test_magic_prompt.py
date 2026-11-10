@@ -27,8 +27,12 @@ class FakeWriter:
         self.seen: list[str] = []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
-        self.calls += 1
         body = json.loads(request.content)
+        if not isinstance(body["messages"][-1]["content"], str):
+            # the picture check every finished picture gets (an admin's too: the child check)
+            return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(
+                {"minor_nude_or_sexual": False, "nudity_or_sexual": False})}, "finish_reason": "stop"}], "usage": {}})
+        self.calls += 1
         self.seen.append(body["messages"][0]["content"])
         user = body["messages"][-1]["content"].split("Prompt:\n", 1)[-1]
         out = self.reply(user)

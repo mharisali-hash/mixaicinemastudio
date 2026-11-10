@@ -22,7 +22,7 @@ router = APIRouter(prefix="/admin/bulk", tags=["admin"])
 
 class BatchIn(BaseModel):
     name: str = Field("", max_length=200)
-    action: Literal["cutout", "edit"]
+    action: Literal["cutout", "edit", "remove"]
     options: dict = Field(default_factory=dict)
 
 

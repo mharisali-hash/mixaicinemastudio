@@ -1189,7 +1189,8 @@ export interface ImageEditRequest extends MagicFields {
   template_id?: string
   tool?: string
   engine?: 'auto' | 'tool' | 'edit'
-  tool_options?: { light?: LightFrom; garment_type?: 'upper' | 'lower' | 'overall'; edge?: 'crisp' | 'soft' }
+  // words: Remove by words, what should go ("men", "the text")
+  tool_options?: { light?: LightFrom; garment_type?: 'upper' | 'lower' | 'overall'; edge?: 'crisp' | 'soft'; words?: string }
   // LaMa: PNG data URL, opaque = remove
   mask?: string
 }

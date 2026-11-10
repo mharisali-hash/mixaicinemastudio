@@ -26,7 +26,7 @@ from app.services import enqueue_generation
 
 log = logging.getLogger("mixai.bulk")
 
-ACTIONS = ("cutout", "edit")
+ACTIONS = ("cutout", "edit", "remove")
 RUN_JOB = "bulk_run"
 EXPORT_JOB = "bulk_export"
 # below everything else in the queue, the autopilot's own waits (-20) included: any request made while a
@@ -35,6 +35,7 @@ BULK_PRIORITY = -30
 # the orchestrator waits below its own children, so a worker that serves every lane runs them first
 BULK_WAIT = -40
 SAMPLE_PRIORITY = 0  # the admin is sitting there waiting for the three previews
+NO_WORDS = "Say what to remove first, e.g. men, the dog, the text"
 LIVE = ("queued", "running")
 _WS_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "https://jafat.ai/bulk-datasets"))
 
@@ -84,6 +85,11 @@ def clean_options(action: str, raw: dict, *, admin_text_check=True) -> dict:
             opts["seed"] = int(raw["seed"]) % 2**31
         if text and admin_text_check:
             screen(text)
+    elif action == "remove":
+        # the words may come later, as an instruction may: start() asks for them
+        opts["words"] = " ".join(str(raw.get("words") or "").split())[:200]
+        if opts["words"] and admin_text_check:
+            screen(f"Remove {opts['words']}")
     else:
         opts["feather"] = round(max(0.0, min(20.0, float(raw.get("feather", 0.6) or 0))), 2)
     opts["keywords"] = " ".join(str(raw.get("keywords") or "").split())[:500]
@@ -93,6 +99,8 @@ def clean_options(action: str, raw: dict, *, admin_text_check=True) -> dict:
 def screen(text: str) -> None:
     """Admins may build datasets the sexual-words rule would stop, never pictures of revered figures. The
     worker checks every prompt again; this only catches a bad instruction before thousands of jobs queue."""
+    if why := cp.child_refusal(text):
+        raise HTTPException(422, why)
     if cp.revered_words(text) and cp.prompt_refusal(text, admin=True):
         raise HTTPException(422, cp.RELIGIOUS_MSG)
 
@@ -247,6 +255,32 @@ def _edit_job(db: Session, batch: BulkBatch, item: BulkItem, source: Generation)
     return db.get(Job, g.job_id)
 
 
+def _remove_job(db: Session, batch: BulkBatch, item: BulkItem, source: Generation) -> Job:
+    from app import image_tools as it
+
+    tool = it.TOOLS["remove"]
+    if why := it.unavailable(tool):
+        raise ValueError(f"{tool.label} can't run: {why}")
+    try:
+        rec = it.build_params(db, batch.workspace_id, tool, None, "", [source], batch.options or {}, None)
+    except it.ToolError as e:
+        raise ValueError(str(e)) from None
+    w, h = rec["inputs"]["width"], rec["inputs"]["height"]
+    text = f"Remove {rec['inputs']['words']}"
+    params = {"width": w, "height": h, "image_tool": rec, "instruction": text,
+              "edit_of": [{"media_id": item.media_id, "generation_id": source.id}],
+              "created_by": {"user_id": batch.user_id, "flow": "bulk"}, "user_prompt": text,
+              "bulk": {"batch_id": batch.id, "item_id": item.id}}
+    out = MediaItem(id=new_id(), workspace_id=batch.workspace_id, kind="image", origin="generated",
+                    title=PurePosixPath(item.filename).stem[:300], tags=[], width=w, height=h)
+    db.add(out)
+    db.flush()
+    g = enqueue_generation(db, workspace_id=batch.workspace_id, project_id=None, target_type="media",
+                           target_id=out.id, kind="image", prompt=text, params=params)
+    out.generation_id = g.id
+    return db.get(Job, g.job_id)
+
+
 def queue_item(db: Session, batch: BulkBatch, item: BulkItem, *, priority: int, parent_job_id: str | None = None) -> Job | None:
     """The item's generate job, built the same way Cutout and Image Edit build theirs. None (and the item
     marked failed) when the picture can't be queued at all."""
@@ -259,6 +293,8 @@ def queue_item(db: Session, batch: BulkBatch, item: BulkItem, *, priority: int, 
         if batch.action == "cutout":
             edge = {"feather": (batch.options or {}).get("feather", 0.6)}
             job = restore.queue_tool(db, source, "cutout", {"edge": edge, "op": "replace"}, batch.user_id)
+        elif batch.action == "remove":
+            job = _remove_job(db, batch, item, source)
         else:
             job = _edit_job(db, batch, item, source)
     except (ValueError, HTTPException, restore.RestoreError) as e:
@@ -325,6 +361,8 @@ def start(db: Session, batch: BulkBatch) -> Job:
             select(func.count()).select_from(BulkItem).where(BulkItem.batch_id == batch.id,
                                                             BulkItem.instruction.is_not(None))):
         raise HTTPException(422, "Write the instruction first")
+    if batch.action == "remove" and not (batch.options or {}).get("words"):
+        raise HTTPException(422, NO_WORDS)
     batch.status = "running"
     job = live_run(db, batch)
     if job is not None:
@@ -403,6 +441,8 @@ def preview(db: Session, batch: BulkBatch, n: int = 3) -> list[BulkItem]:
                             .order_by(BulkItem.seq).limit(n - len(picks))).all()
     if not picks:
         raise HTTPException(422, "Upload some pictures first")
+    if batch.action == "remove" and not (batch.options or {}).get("words"):
+        raise HTTPException(422, NO_WORDS)
     for item in picks:
         old = db.get(Job, item.job_id or "")
         if old is not None and old.status in LIVE:

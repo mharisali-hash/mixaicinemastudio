@@ -1,7 +1,7 @@
 import { request } from '@/lib/api'
 import { PHOTO_EXTS, uploadErrorText, xhrUpload } from '@/lib/upload'
 
-export type BulkAction = 'cutout' | 'edit'
+export type BulkAction = 'cutout' | 'edit' | 'remove'
 export type BatchStatus = 'uploading' | 'running' | 'paused' | 'done' | 'cancelled'
 export type ItemStatus = 'uploaded' | 'queued' | 'running' | 'done' | 'failed' | 'cancelled'
 
@@ -10,6 +10,8 @@ export interface BulkOptions {
   magic_prompt?: 'off' | 'auto' | 'on'
   aspect?: string
   feather?: number
+  // remove: what should go in every picture
+  words?: string
   keywords?: string
 }
 
@@ -59,7 +61,7 @@ export interface PromptsResult {
   unmatched_count: number
 }
 
-export const ACTION_LABEL: Record<BulkAction, string> = { cutout: 'Remove background', edit: 'Edit with an instruction' }
+export const ACTION_LABEL: Record<BulkAction, string> = { cutout: 'Remove background', edit: 'Edit with an instruction', remove: 'Remove by words' }
 export const STATUS: Record<BatchStatus, { label: string; tone: 'neutral' | 'accent' | 'success' | 'warning' | 'danger' }> = {
   uploading: { label: 'Not started', tone: 'neutral' },
   running: { label: 'Running', tone: 'accent' },

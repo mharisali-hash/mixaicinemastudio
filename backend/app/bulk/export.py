@@ -51,7 +51,8 @@ def _row(batch: BulkBatch, item: BulkItem, g: Generation, arc: str) -> dict:
             "prompt_used": item.prompt_used or "", "keywords": kw, "caption": _caption(instr, kw),
             "width": size[0] if size else None, "height": size[1] if size and len(size) > 1 else None,
             "seed": g.seed, "model": p.get("model_resolved") or p.get("model") or
-            ((p.get("restore") or {}).get("template") if batch.action == "cutout" else None),
+            ((p.get("restore") or {}).get("template") if batch.action == "cutout" else None) or
+            (p.get("image_tool") or {}).get("template"),
             "sha256": item.sha256, "batch": batch.name,
             "finished_at": item.finished_at.isoformat() + "Z" if item.finished_at else None}
 

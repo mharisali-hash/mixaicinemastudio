@@ -13,6 +13,7 @@ afterEach(() => vi.unstubAllGlobals())
 const LAMA: TemplateTool = { id: 'inpaint', label: 'Remove with a mask', engine: 'LaMa', licence: 'Apache-2.0 (LaMa big-lama)', noncommercial: false, fallback: true, needs_mask: true }
 const CATVTON: TemplateTool = { id: 'tryon', label: 'Virtual try-on', engine: 'CatVTON', licence: 'CC BY-NC-SA 4.0 (CatVTON weights): non-commercial only', noncommercial: true, fallback: false, needs_mask: false }
 const DEPTH: TemplateTool = { id: 'depth', label: 'Depth map', engine: 'Depth Anything V2 Small', licence: 'Apache-2.0 (Depth Anything V2 Small)', noncommercial: false, fallback: false, needs_mask: false }
+const WORDS: TemplateTool = { id: 'remove', label: 'Remove by words', engine: 'Remove by words', licence: 'x', noncommercial: false, fallback: false, needs_mask: false }
 const ICLIGHT: TemplateTool = { id: 'relight', label: 'Relight', engine: 'IC-Light v1', licence: 'Apache-2.0 (IC-Light v1)', noncommercial: false, fallback: true, needs_mask: false }
 
 const card = (id: string, title: string, tool: TemplateTool, scaffold: string, labels = ['Photo']): Template => ({
@@ -33,7 +34,8 @@ const remove = card('remove', 'Remove an object', LAMA, 'Remove [object to remov
 const tryon = card('tryon', 'Virtual try-on (CatVTON)', CATVTON, 'Dress the person in image 1 in the garment from image 2.', ['Person', 'Garment'])
 const depth = card('depth', 'Depth map', DEPTH, 'Make a depth map of image 1.')
 const relight = card('relight', 'Relight', ICLIGHT, 'Relight image 1 with warm light.')
-const ALL = [remove, tryon, depth, relight]
+const byWords = { ...card('words', 'Remove…', WORDS, 'Take out of image 1 exactly what is named under What should go.'), defaults: { instruction_scaffold: 'Take out of image 1 exactly what is named under What should go.', model: 'qwen_image_edit_2511', count: 1 } }
+const ALL = [remove, tryon, depth, relight, byWords]
 
 const info = (t: TemplateTool, available = true): ImageToolInfo => ({ ...t, available, reason: available ? null : 'missing nodes: CatVTON' })
 
@@ -154,5 +156,32 @@ describe('Edit Image with a tool', () => {
       engine: 'auto',
       tool_options: { light: 'left' },
     })
+  })
+
+  it('Remove… asks what should go, offers quick picks, and sends the words without a brush', async () => {
+    const calls = api([info(WORDS)])
+    renderAt('/image/prompt-templates', routes)
+    expect(await screen.findByRole('heading', { name: 'Remove…' })).toBeInTheDocument()
+    expect(screen.queryByText('Runs on Remove by words')).not.toBeInTheDocument()
+    const user = await open('Remove…')
+    await addPhoto(user)
+    const words = await screen.findByRole('textbox', { name: 'What should go?' })
+    expect(screen.queryByLabelText(/Mask:/)).not.toBeInTheDocument()
+    expect(screen.getByText('Say what should go.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Edit · 1 result/ })).toBeDisabled()
+
+    await user.click(screen.getByRole('button', { name: 'children' }))
+    expect(words).toHaveValue('children')
+    expect(screen.getByRole('button', { name: 'children' })).toHaveAttribute('aria-pressed', 'true')
+    await user.clear(words)
+    await user.type(words, 'men')
+    await user.click(screen.getByRole('button', { name: /^Edit · 1 result/ }))
+    expect(calls.find((c) => c.method === 'POST' && c.path === '/images/edit')?.body).toMatchObject({
+      template_id: 'words',
+      engine: 'auto',
+      source_ids: ['p1'],
+      tool_options: { words: 'men' },
+    })
+    expect(screen.queryByText(/SAM|LaMa/)).not.toBeInTheDocument()
   })
 })

@@ -39,6 +39,24 @@ describe('Admin: Bulk', () => {
     expect(calls.find((c) => c.method === 'POST' && c.path === '/admin/bulk')?.body).toEqual({ name: 'Bags', action: 'cutout', options: {} })
   })
 
+  it('Remove by words asks what should go in every picture and saves it', async () => {
+    let current = batch({ action: 'remove', options: { keywords: '' } })
+    const calls = mockApi((method, path) => {
+      if (path === '/auth/me') return admin
+      if (path === '/admin/bulk/b1' && method === 'GET') return current
+      if (path === '/admin/bulk/b1' && method === 'PATCH') return (current = batch({ action: 'remove', options: { keywords: '', words: 'men' } }))
+      if (path === '/admin/bulk/b1/items') return { items: [], next: null }
+      if (path === '/admin/bulk/b1/exports') return { exports: [] }
+    })
+    renderAt('/admin/bulk/b1', [{ path: '/admin/bulk/:id', element: <BulkBatchPage /> }], (qc) => qc.setQueryData(['me'], admin))
+    expect(await screen.findByText(/Remove by words · 4,200 pictures/)).toBeInTheDocument()
+    expect(screen.queryByLabelText('Instruction for every picture')).not.toBeInTheDocument()
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('What should go in every picture?'), 'men')
+    await user.click(screen.getByRole('button', { name: 'Save settings' }))
+    await waitFor(() => expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({ options: { keywords: '', words: 'men' } }))
+  })
+
   it('runs, pauses and says that other requests go first', async () => {
     let current = batch()
     const calls = mockApi((method, path) => {

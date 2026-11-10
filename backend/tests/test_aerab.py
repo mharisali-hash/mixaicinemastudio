@@ -22,8 +22,10 @@ class Marker:
         self.calls = 0
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
-        self.calls += 1
         user = json.loads(request.content)["messages"][-1]["content"]
+        if not isinstance(user, str):
+            return httpx.Response(500)  # the picture check on a finished frame, not a marking request
+        self.calls += 1
         lines = [row.split(". ", 1)[1] for row in user.split("\n")]
         reply = {"lines": [self.fn(x) for x in lines]}
         return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(reply, ensure_ascii=False)},
