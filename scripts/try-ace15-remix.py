@@ -183,6 +183,14 @@ def _app():
     return lib, get_settings, SessionLocal, Generation, MediaItem, new_id, generation_file, new_seed
 
 
+def loose(text: str) -> str:
+    """Letters only, with the spelling choices of romanised Urdu / Hindi folded together."""
+    import re
+
+    t = re.sub(r"[^a-z0-9]", "", text.lower()).replace("h", "").replace("w", "v").replace("e", "i").replace("o", "u")
+    return re.sub(r"(.)\1+", r"\1", t)
+
+
 def find_song(query: str):
     lib, _, SessionLocal, Generation, MediaItem, _, generation_file, _ = _app()
     from sqlalchemy import select
@@ -190,6 +198,12 @@ def find_song(query: str):
     with SessionLocal() as db:
         rows = db.scalars(select(MediaItem).where(MediaItem.kind == "audio", MediaItem.title.ilike(f"%{query}%"))
                           .order_by(MediaItem.created_at.desc()).limit(20)).all() if query.strip() else []
+        if not rows and query.strip():
+            # Roman Urdu is spelt every which way (jaane / jane, deewana / dewana, dhoondh / dhundh)
+            words = [loose(w) for w in query.split() if loose(w)]
+            pool = db.scalars(select(MediaItem).where(MediaItem.kind == "audio")
+                              .order_by(MediaItem.created_at.desc()).limit(3000)).all()
+            rows = [i for i in pool if all(w in loose(i.title or "") for w in words)][:20]
         # the exact title first, then whole songs before their split-off stems and earlier trials
         q = query.strip().lower()
         rows = sorted(rows, key=lambda i: ((i.title or "").strip().lower() != q,
