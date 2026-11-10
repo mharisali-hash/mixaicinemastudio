@@ -162,7 +162,7 @@ describe('Edit Image page', () => {
     expect(calls.find((c) => c.method === 'POST' && c.path === '/images/edit')?.body).toMatchObject({ instruction: 'Make it night', magic_prompt: 'off' })
   })
 
-  it('offers separate pictures for a sheet request and sends the set size', async () => {
+  it('turns a sheet request into separate pictures, with a way back to one sheet', async () => {
     const calls = mockApi((method, path) => {
       const id = path.match(/^\/media\/(\w+)$/)?.[1]
       if (id) return { ...media(id), versions: [] }
@@ -173,10 +173,13 @@ describe('Edit Image page', () => {
     const user = userEvent.setup()
     await user.click(screen.getByRole('textbox', { name: 'What should change?' }))
     await user.paste('Keep everything the same except create a composite sheet of 25 distinct images, each a unique expression')
-    expect(await screen.findByText(/Make these as 25 separate pictures instead of one sheet\?/)).toBeInTheDocument()
+    // switched on by the prompt itself: one press of the button makes the 25
+    expect(await screen.findByText(/Making 25 separate pictures, as the prompt asks/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Make 25 pictures/ })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Make one sheet instead' }))
+    expect(screen.getByRole('button', { name: /^Edit/ })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Make 25 separate' }))
     expect(screen.queryByText(/instead of one sheet/)).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /^Make 25 pictures/ })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /^Make 25 pictures/ }))
     expect(calls.find((c) => c.method === 'POST' && c.path === '/images/edit')?.body).toMatchObject({ source_ids: ['a'], set_size: 25 })

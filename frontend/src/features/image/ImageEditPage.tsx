@@ -71,7 +71,9 @@ export function ImageEditPage() {
   const [picked, setPicked] = useState<Record<string, number>>({})
   const field = useRef<HTMLTextAreaElement>(null)
   const [count, setCount] = useState(tpl?.count ?? 1)
-  const [setSize, setSetSize] = useState<number | null>(null)
+  const [chosenSet, setChosenSet] = useState<number | null>(null)
+  // a prompt asking for "a sheet of 25 faces" means 25 pictures; one sheet only when the person says so
+  const [oneSheet, setOneSheet] = useState(false)
   const [aspect, setAspect] = useState<ImageAspect | null>(tpl?.aspect ?? null)
   const [seed, setSeed] = useState('')
   const wanted = normalizeModelId(params.get('model'))
@@ -85,6 +87,13 @@ export function ImageEditPage() {
   const magic = useMagicPrompt(instruction, { kind: 'edit', model: send?.id, brandKitId: brand.sendId })
   const max = effective?.max_refs ?? MAX_EDIT_SOURCES
   const over = Math.max(0, sources.length - max)
+  const sheet = sheetCount(instruction)
+  const autoSet = sheet && !oneSheet ? sheet : null
+  const setSize = chosenSet ?? autoSet
+  const pickSet = (n: number | null) => {
+    setChosenSet(n)
+    if (n === null) setOneSheet(true)
+  }
   // a set's estimate is for the whole set
   const pictures = setSize ?? count
   const estimate = useGenEstimate(effective ? { kind: 'image', model: effective.id, count: pictures } : null, localEstimate(effective, { count: pictures }))
@@ -141,9 +150,8 @@ export function ImageEditPage() {
 
   const missing = labels.slice(0, tpl?.required ?? 0).filter((_, i) => !ids[i])
   const slots = placeholdersIn(instruction)
-  // "a sheet of 25 faces" makes one picture with 25 small faces; offer the 25 pictures instead
-  const sheet = sheetCount(instruction)
-  const offer = sheet && sheet !== setSize ? sheet : null
+  // "a sheet of 25 faces" would make one picture with 25 small faces, so it becomes 25 pictures unless undone
+  const offer = sheet && oneSheet && !chosenSet ? sheet : null
   const toolDown = tool && !tool.fallback && toolInfo !== undefined && !toolInfo?.available
   const blocked = over
     ? `Too many source images for ${name}.`
@@ -204,7 +212,7 @@ export function ImageEditPage() {
     if (r.ids) setIds(r.ids)
     if (r.instruction !== undefined) setInstruction(r.instruction)
     if (r.count) setCount(r.count)
-    if (r.setSize !== undefined) setSetSize(r.setSize)
+    if (r.setSize !== undefined) setChosenSet(r.setSize)
     if (r.aspect !== undefined) setAspect(r.aspect)
     if (r.model) setModelId(r.model)
     if (r.seed !== undefined) setSeed(r.seed)
@@ -251,10 +259,18 @@ export function ImageEditPage() {
         belowPrompt={
           <>
             <div aria-live="polite">
+              {autoSet && !chosenSet && (
+                <p className="flex flex-wrap items-center gap-2 text-small text-studio-muted">
+                  Making {autoSet} separate pictures, as the prompt asks.
+                  <Button type="button" size="sm" variant="outline" onClick={() => setOneSheet(true)}>
+                    Make one sheet instead
+                  </Button>
+                </p>
+              )}
               {offer && (
                 <p className="flex flex-wrap items-center gap-2 text-small text-studio-muted">
                   Make these as {offer} separate pictures instead of one sheet?
-                  <Button type="button" size="sm" variant="outline" onClick={() => setSetSize(offer)}>
+                  <Button type="button" size="sm" variant="outline" onClick={() => setOneSheet(false)}>
                     Make {offer} separate
                   </Button>
                 </p>
@@ -282,7 +298,7 @@ export function ImageEditPage() {
             <CountChip value={setSize ? `${setSize} separate` : `×${count}`}>
               <div className="flex flex-col gap-4">
                 {!setSize && <CountPicker value={count} onChange={setCount} />}
-                <SetSizePicker value={setSize} onChange={setSetSize} />
+                <SetSizePicker value={setSize} onChange={pickSet} />
               </div>
             </CountChip>
             <BrandDockChip choice={brand} />
