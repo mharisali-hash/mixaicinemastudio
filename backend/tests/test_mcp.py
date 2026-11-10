@@ -266,3 +266,19 @@ def test_poetry_short_tools(client, anon):
     assert m.call("make_poetry_short", language="ur")["isError"]
     busy = m.call("continue_poetry_short", short_id=made["short_id"])  # still running: nothing to carry on
     assert busy["isError"] and "working" in busy["content"][0]["text"]
+
+
+def test_separate_stems_can_write_out_the_lyrics(client, anon, fast_driver, tmp_path):
+    from tests.test_audio_edit import tone, upload_audio
+
+    a = upload_audio(client, tone(tmp_path / "song.wav", 3.0, 330), title="Lori")
+    m = Mcp(anon, _mint(client, ["read", "generate"])["token"])
+    job = m.call_json("separate_stems", media_id=a["id"], lyrics=True)
+    _drain(fast_driver)
+    done = m.call_json("get_job", job_id=job["job_id"])
+    assert done["status"] == "done" and "mock transcript" in done["result"]["lyrics"]
+
+    # off by default: a plain split has no lyrics in its result
+    job = m.call_json("separate_stems", media_id=a["id"], mode="four")
+    _drain(fast_driver)
+    assert "lyrics" not in m.call_json("get_job", job_id=job["job_id"])["result"]

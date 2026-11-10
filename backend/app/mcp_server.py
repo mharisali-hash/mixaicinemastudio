@@ -434,10 +434,12 @@ def separate_stems(
     media_id: Annotated[str, Field(description="A Library audio item, or a video with sound")],
     mode: Annotated[Literal["two", "four"], Field(description="two: vocals + the rest. four: vocals, drums, bass, "
                                                               "other")] = "two",
+    lyrics: Annotated[bool, Field(description="Also write out the sung words from the vocal stem")] = False,
 ) -> dict:
-    """Split a track into stems. The stems arrive as new Library items when the job is done."""
+    """Split a track into stems. The stems arrive as new Library items when the job is done. With lyrics, the
+    finished job's result also carries the words, one line per sung phrase."""
     with acting(ctx, "generate") as (db, cur):
-        return _job(stems.split(media_id, StemsIn(mode=mode), db=db, cur=cur)["job"])
+        return _job(stems.split(media_id, StemsIn(mode=mode, lyrics=lyrics), db=db, cur=cur)["job"])
 
 
 # ---------------------------------------------------------------- characters

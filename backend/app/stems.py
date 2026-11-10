@@ -178,9 +178,13 @@ def handle(ctx) -> dict:
         stem_item.generation_id = sg.id
         lib.touch(stem_item)
         made.append((name, stem_item.id, sg.id))
-    return {"mode": mode, "model": model, "source_id": item.id, "items": [m[1] for m in made],
-            "generation_ids": [m[2] for m in made], "stems": {m[0]: m[1] for m in made},
-            "seconds": round(time.monotonic() - t0, 3)}
+    out = {"mode": mode, "model": model, "source_id": item.id, "items": [m[1] for m in made],
+           "generation_ids": [m[2] for m in made], "stems": {m[0]: m[1] for m in made},
+           "seconds": round(time.monotonic() - t0, 3)}
+    # in the result too, so a job poller (MCP get_job) gets them without listing the splits
+    if words:
+        out["lyrics"] = words
+    return out
 
 
 def lyrics_text(heard: dict) -> str:
