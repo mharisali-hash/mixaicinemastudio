@@ -76,7 +76,7 @@ TOOL_FEATURE: dict[str, str] = {
     "render_podcast": "podcast", "make_ad_campaign": "ads", "make_print_design": "print",
     "get_print_design": "print", "print_other_size": "print", "make_poetry_short": "poetry",
     "continue_poetry_short": "poetry", "get_poetry_short": "poetry", "make_presenter_video": "presenter",
-    "get_presenter_video": "presenter",
+    "get_presenter_video": "presenter", "list_presenter_videos": "presenter",
 }
 
 
@@ -862,8 +862,20 @@ def make_presenter_video(
                                         script=script, review=False,
                                         settings=SettingsIn(aspect=aspect, caption_style=caption_style,
                                                             background=background)), db=db, cur=cur)
-        return {"presenter_id": out["id"], "scenes": len(out["scenes"]), "job_id": (out["job"] or {}).get("id"),
+        # presenter_out gives a JobOut, not a dict
+        return {"presenter_id": out["id"], "scenes": len(out["scenes"]), "job_id": out["job"].id if out["job"] else None,
                 "next": "get_presenter_video until outputs.draft is there, then get_media on its media_id"}
+
+
+@tool("read", title="List presenter videos")
+def list_presenter_videos(ctx: Context) -> dict:
+    """The workspace's presenter videos, newest first, with their ids for get_presenter_video."""
+    from app.api.presenter import list_presenters
+
+    with acting(ctx, "read") as (db, cur):
+        return {"result": [{"presenter_id": p["id"], "title": p["title"], "scenes": p["scenes"],
+                            "outputs": p["outputs"], "updated_at": jsonable_encoder(p["updated_at"])}
+                           for p in list_presenters(db=db, cur=cur)]}
 
 
 @tool("read", title="Get a presenter video")

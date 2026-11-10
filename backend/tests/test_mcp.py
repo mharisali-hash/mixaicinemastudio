@@ -14,7 +14,7 @@ from tests.test_api_tokens import _mint, _user, flags, login  # noqa: F401  (fix
 
 ACCEPT = {"Accept": "application/json, text/event-stream"}
 READ_TOOLS = {"list_projects", "get_job", "wait_for_job", "search_library", "get_media", "list_voices",
-              "get_poetry_short", "list_characters", "list_looks", "get_presenter_video",
+              "get_poetry_short", "list_characters", "list_looks", "get_presenter_video", "list_presenter_videos",
               # the test user is an admin, so the admin-only Print Studio reader is listed too (contract v41)
               "get_print_design"}
 
@@ -122,7 +122,7 @@ def test_a_viewer_only_sees_read_tools(client, anon, login, flags):
         db.scalars(select(Membership).where(Membership.user_id == u.id)).one().role = "viewer"
         db.commit()
     # not an admin: Print Studio and Presenter aren't released to packages yet (contract v42)
-    assert m.tools() == READ_TOOLS - {"get_print_design", "get_presenter_video"}
+    assert m.tools() == READ_TOOLS - {"get_print_design", "get_presenter_video", "list_presenter_videos"}
     assert m.call("generate_image", prompt="x")["isError"]
 
 
@@ -282,3 +282,15 @@ def test_separate_stems_can_write_out_the_lyrics(client, anon, fast_driver, tmp_
     job = m.call_json("separate_stems", media_id=a["id"], mode="four")
     _drain(fast_driver)
     assert "lyrics" not in m.call_json("get_job", job_id=job["job_id"])["result"]
+
+
+def test_make_presenter_video_returns_its_job_and_is_listed(client, anon, fast_driver):
+    from tests.test_presenter import _presenter_character
+
+    c = _presenter_character(client, fast_driver)
+    m = Mcp(anon, _mint(client, ["read", "generate"])["token"])
+    out = m.call_json("make_presenter_video", character_id=c["id"], script="Hello.\n\nHow are you?")
+    assert out["scenes"] == 2 and out["job_id"]
+    listed = m.call_json("list_presenter_videos")["result"]
+    assert [p["presenter_id"] for p in listed] == [out["presenter_id"]]
+    assert m.call_json("get_presenter_video", presenter_id=out["presenter_id"])["presenter_id"] == out["presenter_id"]
