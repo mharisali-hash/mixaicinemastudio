@@ -104,7 +104,7 @@ for port in 8188 8189; do
   printf '    waiting for %s ' "$base"
   for _ in $(seq 1 90); do curl -sf -o /dev/null "$base/system_stats" && break; printf '.'; sleep 2; done
   echo
-  found=$(curl -s "$base/object_info" | "$PY" -c "import sys,json; print(' '.join(k for k in json.load(sys.stdin) if 'joycaption' in k.lower()))" 2>/dev/null || true)
+  found=$(curl -s "$base/object_info" | "$PY" -c "import sys,json; print(' '.join(k for k, v in json.load(sys.stdin).items() if 'joycaption' in str(v.get('category') or '').lower()))" 2>/dev/null || true)
   if [[ -n "$found" ]]; then info ":$port loaded: $found"
   else warn ":$port has no JoyCaption node - see: sudo journalctl -u 'comfyui*' -n 200 --no-pager | grep -iA5 joy"; fi
 done
