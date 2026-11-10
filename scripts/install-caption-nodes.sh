@@ -64,22 +64,22 @@ fi
 
 say "Python packages"
 # ComfyUI's venv may be uv-made, with no pip in it; uv is on the server anyway (install-server.sh needs it)
-if "$PY" -m pip --version >/dev/null 2>&1; then PIP=("$PY" -m pip)
-elif command -v uv >/dev/null; then PIP=(uv pip --python "$PY")
+# pipx install|freeze ...: uv takes --python after the subcommand
+if "$PY" -m pip --version >/dev/null 2>&1; then pipx() { "$PY" -m pip "$@"; }; info "installing with: $PY -m pip"
+elif command -v uv >/dev/null; then pipx() { local c="$1"; shift; uv pip "$c" --python "$PY" "$@"; }; info "installing with: uv pip"
 else die "no pip in $COMFY_VENV and no uv on PATH"; fi
-info "installing with: ${PIP[*]}"
 # torch and friends belong to ComfyUI; pin what is installed so the node's requirements can't move them
 cons="$(mktemp)"; req="$(mktemp)"
-"${PIP[@]}" freeze 2>/dev/null | grep -iE '^(torch|torchvision|torchaudio|numpy|xformers|triton|transformers)==' > "$cons" || true
-grep -viE '^(torch|torchvision|torchaudio)([^a-z0-9_-]|$)' "$dir/requirements.txt" | sed -e 's/#.*//' | grep -v '^\s*$' > "$req" || true
+pipx freeze 2>/dev/null | grep -iE '^(torch|torchvision|torchaudio|numpy|xformers|triton|transformers)==' > "$cons" || true
+grep -viE '^(torch|torchvision|torchaudio)([^a-z0-9_-]|$)' "$dir/requirements.txt" | tr -d '' | sed -e 's/#.*//' | grep -v '^\s*$' > "$req" || true
 info "packages: $(paste -sd' ' "$req")"
 info "kept as they are: $(paste -sd' ' "$cons")"
 if (( ! DRY )); then
-  if ! "${PIP[@]}" install --quiet -c "$cons" -r "$req"; then
+  if ! pipx install --quiet -c "$cons" -r "$req"; then
     # an older transformers than the node asks for: let just that one move
     warn "install refused with transformers pinned; retrying with transformers free to move"
     grep -viE '^transformers==' "$cons" > "$cons.2" || true
-    "${PIP[@]}" install --quiet -c "$cons.2" -r "$req" || die "couldn't install the node's packages (see above)"
+    pipx install --quiet -c "$cons.2" -r "$req" || die "couldn't install the node's packages (see above)"
   fi
   "$PY" -c "import transformers, accelerate, bitsandbytes" || die "packages installed but don't import - see above"
 fi
