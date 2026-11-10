@@ -54,6 +54,8 @@ say "ComfyUI: $COMFY_ROOT   venv: $COMFY_VENV"
 dir="$COMFY_ROOT/custom_nodes/$NODE_DIR"
 if [[ -d "$dir/.git" ]]; then
   run git -C "$dir" fetch --quiet origin
+  # our own patch below edits JC.py; put it back so the checkout is clean, then patch again
+  run git -C "$dir" checkout --quiet -- JC.py
   run git -C "$dir" checkout --quiet "$NODE_PIN"
   info "$NODE_DIR at ${NODE_PIN:0:10}"
 else
@@ -61,6 +63,8 @@ else
   run git -C "$dir" checkout --quiet "$NODE_PIN"
   info "cloned $NODE_DIR at ${NODE_PIN:0:10}"
 fi
+# transformers 5 reports the picture size as a SizeDict, which this pin doesn't understand
+run "$PY" "$(dirname "$0")/patches/joycaption_sizedict.py" "$dir/JC.py"
 
 say "Python packages"
 # ComfyUI's venv may be uv-made, with no pip in it; uv is on the server anyway (install-server.sh needs it)
