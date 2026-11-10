@@ -984,9 +984,12 @@ class ImageGenerateIn(BaseModel):
                                                                    "turn it into a reference-guided composition")
     negative: str | None = Field(None, max_length=PROMPT_MAX, description="Things to keep out of the picture")
     aspect: ImageAspect = Field("1:1", description="Output shape, about 1 megapixel")
-    count: int = Field(1, ge=1, le=4, description="Pictures to make; one job each")
+    count: int = Field(1, ge=1, le=8, description="Pictures to make. Each is its own Library item; on the fast "
+                                                  "models they are drawn together under one job")
     style: str | None = Field(None, description="A style id from GET /api/images/options")
     seed: int | None = Field(None, ge=0, le=2**31 - 1, description=_SEED)
+    batch_index: int | None = Field(None, ge=0, le=7, description="With a seed and count 1: make the picture that "
+                                    "stood at this place in a batch (its params.batch.index) again")
     steps: int | None = Field(None, ge=1, le=60, description="Sampler steps; empty uses the model's own")
     template_id: str | None = Field(None, description="The prompt template this came from, kept for the record")
     title: str | None = Field(None, max_length=300, description="Library title; empty makes one from the prompt")

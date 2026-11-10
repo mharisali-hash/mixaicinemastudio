@@ -19,6 +19,7 @@ from app import brand
 from app import brand_templates as bt
 from app import control as ctl
 from app import edit_set
+from app import image_batch
 from app import image_tools as it
 from app import library as lib
 from app import mentions as mn
@@ -172,7 +173,7 @@ def regenerate_media(media_id: str, body: RegenerateIn, db: Session = Depends(ge
     ).order_by(Generation.version.desc())).first()
     if base is None:
         raise HTTPException(409, "Nothing to regenerate yet")
-    params = {k: v for k, v in (base.params or {}).items() if k not in ("comfy", "upscale", "size")}
+    params = {k: v for k, v in (base.params or {}).items() if k not in ("comfy", "upscale", "size", "batch")}
     prompt, seed, note, rewrite_failed = base.prompt, new_seed(), None, None
     if body.mode == "note":
         if not (body.note and body.note.strip()):
@@ -188,6 +189,9 @@ def regenerate_media(media_id: str, body: RegenerateIn, db: Session = Depends(ge
             params.update({k: v for k, v in body.params.items() if k in ("negative", "steps", "seed")})
         if "seed" in params:
             seed = int(params.pop("seed"))
+    if seed == base.seed and image_batch.index_of(base):
+        # the same seed only makes the same picture at its place in the batch it came from
+        params["batch"] = {"index": image_batch.index_of(base)}
     params["created_by"] = {"user_id": cur.id, "flow": f"regenerate:{body.mode}"}
     g = enqueue_generation(db, workspace_id=cur.workspace_id, project_id=None, target_type="media",
                            target_id=item.id, kind="image", prompt=prompt, params=params, seed=seed,
@@ -202,13 +206,19 @@ def regenerate_media(media_id: str, body: RegenerateIn, db: Session = Depends(ge
 
 # ---------------------------------------------------------------- image studio
 
-def _new_image_item(db: Session, cur: CurrentUser, title: str, prompt: str, params: dict, seed: int | None,
-                    folder_id: str | None = None, home: str | None = None):
+def _image_item(db: Session, cur: CurrentUser, title: str, params: dict, folder_id: str | None = None,
+                home: str | None = None) -> MediaItem:
     item = MediaItem(id=new_id(), workspace_id=cur.workspace_id, kind="image", origin="generated", title=title,
                      tags=[], width=params.get("width"), height=params.get("height"), folder_id=folder_id,
                      home=home)
     db.add(item)
     db.flush()
+    return item
+
+
+def _new_image_item(db: Session, cur: CurrentUser, title: str, prompt: str, params: dict, seed: int | None,
+                    folder_id: str | None = None, home: str | None = None):
+    item = _image_item(db, cur, title, params, folder_id, home)
     g = enqueue_generation(db, workspace_id=cur.workspace_id, project_id=None, target_type="media",
                            target_id=item.id, kind="image", prompt=prompt, params=params, seed=seed)
     item.generation_id = g.id
@@ -219,7 +229,7 @@ def _new_image_item(db: Session, cur: CurrentUser, title: str, prompt: str, para
 def image_options():
     return {"aspects": [{"id": a, "width": w, "height": h} for a, (w, h) in
                         ((a, lib.size_for_aspect(a)) for a in lib.ASPECTS)],
-            **st.options(), "count": {"min": 1, "max": 4}, "edit_sources": {"min": 1, "max": 3},
+            **st.options(), "count": {"min": 1, "max": 8}, "edit_sources": {"min": 1, "max": 3},
             "edit_set": {"min": 2, "max": get_settings().edit_set_max}}
 
 
@@ -258,30 +268,46 @@ def generate_images(body: ImageGenerateIn, db: Session = Depends(get_db), cur: C
                            model_label=editor.label)
     prompt = lib.styled_prompt(mn.ref_preamble(mentioned.ref_labels) + mentioned.prompt, body.style)
     title = (body.title or "").strip() or lib.short_title(mn.plain(body.prompt))
+    params = {"aspect": body.aspect, "width": w, "height": h, "style": body.style,
+              "user_prompt": mn.plain(body.prompt).strip(),
+              "created_by": {"user_id": cur.id, "flow": "image_generate"}, "magic_prompt": magic, **chosen}
+    if mentioned.mentions:
+        params["mentions"] = mentioned.mentions
+    if mentioned.ref_ids:
+        params["reference_ids"], params["reference_labels"] = list(mentioned.ref_ids), list(mentioned.ref_labels)
+    negative = st.joined_negative(body.negative, style, speed.cfg if speed else None)
+    if negative:
+        params["negative"] = negative
+    if body.steps:
+        params["steps"] = body.steps
+    if body.template_id:
+        params["template_id"] = body.template_id
+    params["model"] = model.id
+    if speed:
+        params["speed"] = speed.id
+    prompt, params = brand.apply_to_request(db, cur.workspace_id, body.brand_kit_id, prompt, params)
+    if body.batch_index:
+        if body.count != 1 or body.seed is None:
+            raise HTTPException(422, "batch_index needs a seed and a count of 1")
+        if body.batch_index < model.max_batch:
+            params["batch"] = {"index": body.batch_index}
+    # the fast models draw several pictures in one run (app.image_batch); the rest get a job each
+    per_run = image_batch.size_for(model, speed, body.count, params)
+    home = lib.home_of(body.part_of)
     items, jobs = [], []
-    for i in range(body.count):
-        params = {"aspect": body.aspect, "width": w, "height": h, "style": body.style,
-                  "user_prompt": mn.plain(body.prompt).strip(),
-                  "created_by": {"user_id": cur.id, "flow": "image_generate"}, "magic_prompt": magic, **chosen}
-        if mentioned.mentions:
-            params["mentions"] = mentioned.mentions
-        if mentioned.ref_ids:
-            params["reference_ids"], params["reference_labels"] = list(mentioned.ref_ids), list(mentioned.ref_labels)
-        negative = st.joined_negative(body.negative, style, speed.cfg if speed else None)
-        if negative:
-            params["negative"] = negative
-        if body.steps:
-            params["steps"] = body.steps
-        if body.template_id:
-            params["template_id"] = body.template_id
-        params["model"] = model.id
-        if speed:
-            params["speed"] = speed.id
-        seed = (body.seed + i) % 2**31 if body.seed is not None else None
-        item, job = _new_image_item(db, cur, title, *brand.apply_to_request(
-            db, cur.workspace_id, body.brand_kit_id, prompt, params), seed, into, lib.home_of(body.part_of))
-        items.append(item)
+    for start in range(0, body.count, per_run):
+        seed = (body.seed + start) % 2**31 if body.seed is not None else None
+        lead_item, job = _new_image_item(db, cur, title, prompt, dict(params), seed, into, home)
+        items.append(lead_item)
         jobs.append(job)
+        lead = db.get(Generation, lead_item.generation_id)
+        rest = []
+        for i in range(1, min(per_run, body.count - start)):
+            item = _image_item(db, cur, title, params, into, home)
+            rest.append(image_batch.wait_behind(db, lead, item, i))
+            items.append(item)
+        if rest:
+            image_batch.link(lead, rest)
     db.commit()
     return ImageBatchOut(items=lib.items_out(db, items), jobs=[job_out(j) for j in jobs],
                          model_resolved=model.id, magic_prompt=magic)

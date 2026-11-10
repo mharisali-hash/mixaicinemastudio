@@ -1163,6 +1163,7 @@ export interface ImageGenerateRequest extends MagicFields {
   count: number
   style?: string
   seed?: number
+  batch_index?: number
   steps?: number
   template_id?: string
   model?: string

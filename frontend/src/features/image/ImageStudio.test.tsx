@@ -13,7 +13,11 @@ afterEach(() => vi.unstubAllGlobals())
 
 describe('image payloads', () => {
   it('builds the generate body: trims, clamps count, drops empty extras', () => {
-    expect(imagePayload({ ...DEFAULT_IMAGE_FORM, prompt: '  a fox  ', count: 9, seed: '', steps: '' })).toEqual({ prompt: 'a fox', aspect: '1:1', count: 4 })
+    expect(imagePayload({ ...DEFAULT_IMAGE_FORM, prompt: '  a fox  ', count: 9, seed: '', steps: '' })).toEqual({ prompt: 'a fox', aspect: '1:1', count: 8 })
+    // a reused batch picture: its place goes along with its seed, for a single picture only
+    expect(imagePayload({ ...DEFAULT_IMAGE_FORM, prompt: 'x', count: 1, seed: '7', batchIndex: 4 })).toMatchObject({ seed: 7, batch_index: 4 })
+    expect(imagePayload({ ...DEFAULT_IMAGE_FORM, prompt: 'x', count: 2, seed: '7', batchIndex: 4 })).not.toHaveProperty('batch_index')
+    expect(imagePayload({ ...DEFAULT_IMAGE_FORM, prompt: 'x', count: 1, seed: '', batchIndex: 4 })).not.toHaveProperty('batch_index')
     expect(imagePayload({ ...DEFAULT_IMAGE_FORM, prompt: 'x', count: 0, seed: '7', steps: '80', negative: ' blur ', style: 'anime' })).toEqual({
       prompt: 'x',
       aspect: '1:1',
@@ -68,7 +72,10 @@ describe('Create Image page', () => {
     await user.paste('A lighthouse keeper at dusk')
     await user.click(within(await openChip(user, 'Aspect')).getByRole('radio', { name: /16:9 Wide/ }))
     await closeChip(user)
-    await user.click(within(await openChip(user, 'Count')).getByRole('radio', { name: '4 images' }))
+    const counts = within(await openChip(user, 'Count'))
+    // Create goes to eight; Edit and the others stay at four
+    expect(counts.getAllByRole('radio').map((r) => r.getAttribute('aria-label'))).toEqual(['1 image', ...[2, 3, 4, 5, 6, 7, 8].map((n) => `${n} images`)])
+    await user.click(counts.getByRole('radio', { name: '4 images' }))
     await closeChip(user)
     await user.click(within(await openChip(user, 'Style')).getByRole('radio', { name: 'Cinematic, Film still' }))
     await closeChip(user)

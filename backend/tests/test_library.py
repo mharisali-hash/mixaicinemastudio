@@ -204,22 +204,24 @@ def test_generate_count_makes_items_and_jobs(client, fast_driver):
                                                   "style": "cinematic", "seed": 7, "steps": 9})
     assert r.status_code == 202, r.text
     body = r.json()
-    assert len(body["items"]) == len(body["jobs"]) == 3
+    # the default model draws the three in one batch: three items, one job (more in test_image_batch.py)
+    assert len(body["items"]) == 3 and len(body["jobs"]) == 1
     assert {i["status"] for i in body["items"]} == {"queued"} and body["items"][0]["media_url"] is None
     with SessionLocal() as db:
         gens = [db.get(Generation, i["generation_id"]) for i in body["items"]]
-        assert sorted(g.seed for g in gens) == [7, 8, 9]
+        assert [g.seed for g in gens] == [7, 7, 7]
         g = gens[0]
         assert g.kind == "image" and g.target_type == "media" and "anamorphic" in g.prompt
         assert (g.params["width"], g.params["height"]) == (1344, 768) and g.params["steps"] == 9
     assert client.post("/api/images/generate", json={"prompt": "x", "style": "vaporwave"}).status_code == 422
-    assert client.post("/api/images/generate", json={"prompt": "x", "count": 5}).status_code == 422
+    assert client.post("/api/images/generate", json={"prompt": "x", "count": 9}).status_code == 422
 
     _run_all(fast_driver)
-    item = client.get(f"/api/media/{body['items'][0]['id']}").json()
-    assert item["status"] == "ready" and item["media_url"].startswith("/api/media/workspaces/")
-    assert "/media/" in item["media_url"] and (item["width"], item["height"]) == (1344, 768)
-    assert client.get(item["media_url"]).status_code == 200
+    for it in body["items"]:
+        item = client.get(f"/api/media/{it['id']}").json()
+        assert item["status"] == "ready" and item["media_url"].startswith("/api/media/workspaces/")
+        assert "/media/" in item["media_url"] and (item["width"], item["height"]) == (1344, 768)
+        assert client.get(item["media_url"]).status_code == 200
 
 
 def test_aspect_sizes_are_about_one_megapixel():
@@ -429,7 +431,8 @@ def test_dashboard(client, project, fast_driver):
     d = client.get("/api/dashboard").json()
     assert [p["id"] for p in d["recent_projects"]] == [project["id"]]
     assert len(d["recent_images"]) == 3 and len(d["recent_videos"]) == 1
-    assert len(d["running_jobs"]) == 2 and d["quick_recent"] == []
+    # both ferns come from one batch job
+    assert len(d["running_jobs"]) == 1 and d["quick_recent"] == []
     _run_all(fast_driver)
     assert client.get("/api/dashboard").json()["running_jobs"] == []
 

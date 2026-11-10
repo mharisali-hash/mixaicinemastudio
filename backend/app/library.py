@@ -436,6 +436,13 @@ def delete_item(db: Session, item: MediaItem) -> None:
                                                Generation.target_id == item.id)).all()
     ids = [g.id for g in gens]
     if ids:
+        from app import image_batch
+
+        for g in gens:
+            job = db.get(Job, g.job_id) if g.job_id else None
+            if job is not None and job.status in ("queued", "running"):
+                # the first picture of a batch goes; the others it would have drawn get jobs of their own
+                image_batch.split(db, g, job)
         # a worker mid-job sees "cancelled" on its next progress tick and stops
         db.execute(update(Job).where(Job.generation_id.in_(ids), Job.status.in_(("queued", "running")))
                    .values(status="cancelled", message="Cancelled: item deleted", finished_at=utcnow(),
@@ -478,7 +485,11 @@ def _dims_of(g: Generation) -> tuple[int | None, int | None, float | None]:
 
 def on_job_finished(db: Session, job: Job) -> None:
     """Worker hook: a media generation finished (or failed), so the item's current version may move."""
-    g = db.get(Generation, job.generation_id) if job.generation_id else None
+    on_generation_finished(db, db.get(Generation, job.generation_id) if job.generation_id else None)
+
+
+def on_generation_finished(db: Session, g: Generation | None) -> None:
+    # also for the pictures of a batch, which finish under their first picture's job (app.image_batch)
     if g is None or g.target_type != "media":
         return
     item = db.get(MediaItem, g.target_id)

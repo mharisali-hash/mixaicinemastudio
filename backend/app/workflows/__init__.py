@@ -164,6 +164,25 @@ def insert_loras(graph: dict, after: str, loras: list[tuple[str, float]], output
         node["inputs"][key] = list(prev)
 
 
+def batch_latent(graph: dict, size: int, index: int, length: int) -> None:
+    """Draw pictures index..index+length-1 of a batch of `size` from the graph's empty latent.
+
+    LatentFromBatch tags the latent with batch_index, and with that tag ComfyUI draws each picture's noise
+    on its own, in index order, from the one seed. So picture 5 of a batch of 8 comes out the same when it is
+    drawn alone later (size 6, index 5, length 1): only a few empty latents are allocated, one is sampled."""
+    lat = find_node(graph, "Latent")
+    if "batch_size" not in graph[lat]["inputs"]:
+        raise TemplateError("this graph's latent has no batch size")
+    graph[lat]["inputs"]["batch_size"] = int(size)
+    consumers = [(node, key) for node in graph.values() for key, val in node["inputs"].items()
+                 if _is_link(val) and val[0] == lat]
+    nid = str(max(int(k) for k in graph if k.isdigit()) + 1)
+    graph[nid] = {"class_type": "LatentFromBatch", "_meta": {"title": "Batch pick"},
+                  "inputs": {"samples": [lat, 0], "batch_index": int(index), "length": int(length)}}
+    for node, key in consumers:
+        node["inputs"][key] = [nid, 0]
+
+
 def _check_links(graph: dict) -> None:
     for nid, node in graph.items():
         for key, val in node["inputs"].items():

@@ -17,7 +17,7 @@ from app import models_catalog as mc
 from app import native_audio
 from app.character_panels import VIEW_ALIASES, VIEW_PROMPTS
 from app.lanes import AUDIO_KINDS
-from app.workflows import build, frames_for, load, snap_multiple
+from app.workflows import batch_latent, build, frames_for, load, snap_multiple
 
 log = logging.getLogger("mixai.comfy")
 
@@ -97,6 +97,8 @@ class Plan:
     loras: list[tuple[str, float]] = field(default_factory=list)
     media: str = "image"
     sources: dict[str, Any] = field(default_factory=dict)  # generation ids behind the images, for the record
+    # (latent batch size, first index, how many): see workflows.batch_latent
+    batch: tuple[int, int, int] | None = None
 
 
 class DbLookup:
@@ -283,7 +285,17 @@ def _plan(kind: str, prompt: str, params: dict, seed: int, lookup) -> Plan:
         size = (params.get("width") or 1024, params.get("height") or 1024)
         if params.get("img2img_of"):
             return i2i_plan(size)
-        return edit_plan(ref_ids, prompt, size) if ref_ids else t2i_plan(size)
+        if ref_ids:
+            return edit_plan(ref_ids, prompt, size)
+        plan = t2i_plan(size)
+        n = 1 + len(params.get("batch_out") or [])
+        at = int(params.get("batch_index") or 0)
+        if n > 1:
+            plan.batch = (n, 0, n)
+        elif at > 0:
+            # one picture of an earlier batch, drawn again on its own
+            plan.batch = (at + 1, at, 1)
+        return plan
 
     if kind == "video" and params.get("speech_audio"):
         # a Character Studio test clip: a Library "video" with a voice (contract v26), lip-synced like a take
@@ -887,6 +899,9 @@ class ComfyDriver:
             inputs["filename_prefix"] = f"mixai/{gen_id}"
 
             graph, resolved = build(plan.template, inputs, plan.loras)
+            if plan.batch:
+                batch_latent(graph, *plan.batch)
+                resolved.update(batch_size=plan.batch[2], batch_index=plan.batch[1])
             tpl = load(plan.template)
             weights = {tpl.node_id(t): w for t, w in tpl.manifest.get("progress_weights", {}).items()
                        if any(n.get("_meta", {}).get("title") == t for n in graph.values())}
@@ -911,7 +926,10 @@ class ComfyDriver:
             if not outs:
                 raise ComfyError(f"{plan.template} finished but produced no {plan.media} output")
             progress_cb(0.99, "Downloading result")
-            await client.download(self._pick(outs, graph, tpl.manifest), out_path)
+            if plan.batch and plan.batch[2] > 1:
+                await self._download_batch(client, outs, graph, tpl.manifest, out_path, params, plan.batch[2])
+            else:
+                await client.download(self._pick(outs, graph, tpl.manifest), out_path)
             server = client.base_url
         finally:
             await client.close()
@@ -949,10 +967,24 @@ class ComfyDriver:
         media_type = {"video": "video/mp4", "audio": "audio/flac", "model": "model/gltf-binary"}.get(plan.media, "image/png")
         return DriverResult(out_path, media_type, meta, params_update={"comfy": record})
 
+    async def _download_batch(self, client, outs, graph, manifest, out_path: Path, params: dict, n: int) -> None:
+        # SaveImage lists a batch in order, so file i is picture i
+        ids = self._output_ids(graph, manifest)
+        saved = [o for o in outs if o.node_id in ids] or outs
+        if len(saved) < n:
+            raise ComfyError(f"asked for {n} pictures in one batch, got {len(saved)}")
+        for o, dest in zip(saved, [out_path, *(params.get("batch_out") or [])]):
+            if dest:  # None: that picture was deleted while it waited
+                await client.download(o, Path(dest))
+
+    @staticmethod
+    def _output_ids(graph: dict, manifest: dict) -> set[str]:
+        wanted = {spec["node"] for spec in manifest.get("outputs", {}).values()}
+        return {nid for nid, n in graph.items() if n.get("_meta", {}).get("title") in wanted}
+
     @staticmethod
     def _pick(outs: list[ComfyOutput], graph: dict, manifest: dict) -> ComfyOutput:
-        wanted = {spec["node"] for spec in manifest.get("outputs", {}).values()}
-        ids = {nid for nid, n in graph.items() if n.get("_meta", {}).get("title") in wanted}
+        ids = ComfyDriver._output_ids(graph, manifest)
         for o in outs:
             if o.node_id in ids:
                 return o

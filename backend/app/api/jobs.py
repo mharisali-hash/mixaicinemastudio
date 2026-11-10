@@ -52,6 +52,11 @@ def cancel_job(job_id: str, db: Session = Depends(get_db), cur: CurrentUser = De
             g = db.get(Generation, job.generation_id)
             if g and g.status in ("queued", "generating"):
                 g.status = "failed"
+        if job.type == "generate":
+            from app import image_batch
+
+            # the pictures that would have come out of the same run go with it
+            image_batch.on_job_finished(db, job)
     # the AI video podcast and Poetry Shorts wait on their children the same way
     if job.type in ("autopilot", "video_podcast", "poetry_short", "ad_campaign"):
         from app.autopilot import cancel_children

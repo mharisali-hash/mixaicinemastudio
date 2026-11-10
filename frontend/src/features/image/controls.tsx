@@ -55,15 +55,15 @@ export function ImageAspectTiles({
   )
 }
 
-export function CountPicker({ value, onChange }: { value: number; onChange: (n: number) => void }) {
+export function CountPicker({ value, onChange, max = MAX_COUNT }: { value: number; onChange: (n: number) => void; max?: number }) {
   const id = useId()
   return (
     <div>
       <div id={id} className="section-label mb-2">
         Variations
       </div>
-      <ToggleGroup type="single" aria-labelledby={id} value={String(value)} onValueChange={(v) => v && onChange(Number(v))}>
-        {Array.from({ length: MAX_COUNT }, (_, i) => (
+      <ToggleGroup type="single" aria-labelledby={id} value={String(value)} onValueChange={(v) => v && onChange(Number(v))} className="flex-wrap">
+        {Array.from({ length: max }, (_, i) => (
           <ToggleGroupItem key={i} value={String(i + 1)} aria-label={`${i + 1} ${i ? 'images' : 'image'}`} className="w-10">
             {i + 1}
           </ToggleGroupItem>

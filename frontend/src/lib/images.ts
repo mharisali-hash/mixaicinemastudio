@@ -13,6 +13,8 @@ export const IMAGE_ASPECTS: { value: ImageAspect; label: string; size: string; w
 
 export const MAX_EDIT_SOURCES = 3
 export const MAX_COUNT = 4
+// Create can go higher: the fast models draw up to 8 in one go
+export const GENERATE_MAX_COUNT = 8
 // Edit's "separate pictures": a set made under one job, each picture its own version of the instruction
 export const SET_MIN = 2
 export const SET_MAX = 25
@@ -42,6 +44,8 @@ export interface ImageForm {
   count: number
   style: string | null
   seed: string
+  // where a reused picture sat in the batch it came from; with its seed that makes the same picture again
+  batchIndex?: number
   steps: string
   templateId?: string
   // sample values for the template's [slots], shown as hints; never sent
@@ -68,11 +72,13 @@ const optInt = (s: string) => {
 }
 
 export function imagePayload(f: ImageForm): ImageGenerateRequest {
-  const body: ImageGenerateRequest = { prompt: f.prompt.trim(), aspect: f.aspect, count: clampCount(f.count) }
+  const count = Math.min(GENERATE_MAX_COUNT, Math.max(1, Math.round(f.count) || 1))
+  const body: ImageGenerateRequest = { prompt: f.prompt.trim(), aspect: f.aspect, count }
   if (f.negative.trim()) body.negative = f.negative.trim()
   if (f.style) body.style = f.style
   const seed = optInt(f.seed)
   if (seed !== undefined) body.seed = seed
+  if (seed !== undefined && count === 1 && f.batchIndex) body.batch_index = f.batchIndex
   const steps = optInt(f.steps)
   if (steps) body.steps = Math.min(50, steps)
   if (f.templateId) body.template_id = f.templateId

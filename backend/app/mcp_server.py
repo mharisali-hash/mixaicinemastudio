@@ -197,14 +197,15 @@ def generate_image(
     ctx: Context,
     prompt: Annotated[str, Field(min_length=1, max_length=PROMPT_MAX, description="What to draw")],
     aspect: Annotated[ImageAspect, Field(description="Output shape, about 1 megapixel")] = "1:1",
-    count: Annotated[int, Field(ge=1, le=4, description="Pictures to make; one job each")] = 1,
+    count: Annotated[int, Field(ge=1, le=8, description="Pictures to make, each its own Library item")] = 1,
     negative: Annotated[str | None, Field(max_length=PROMPT_MAX, description="Things to keep out")] = None,
     style: Annotated[str | None, Field(description="A style id, e.g. cinematic, anime, watercolor")] = None,
     seed: Annotated[int | None, Field(ge=0, le=2**31 - 1)] = None,
     model: Annotated[str | None, Field(max_length=60, description="A model id, or empty for the default")] = None,
     part_of: Annotated[str | None, Field(max_length=80, description=PART_OF)] = None,
 ) -> dict:
-    """Make pictures from a text prompt. Returns the new Library items and one job per picture."""
+    """Make pictures from a text prompt. Returns the new Library items and their jobs: one per picture, or on
+    the fast models one job that makes several items at once (get_media on each item once it is done)."""
     with acting(ctx, "generate") as (db, cur):
         out = library.generate_images(ImageGenerateIn(prompt=prompt, aspect=aspect, count=count, negative=negative,
                                                       style=style, seed=seed, model=model, part_of=part_of),

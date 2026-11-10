@@ -28,7 +28,7 @@ import { useImageOptions } from '@/hooks/useMedia'
 import { useTemplates } from '@/hooks/useStudio'
 import { withBrand } from '@/lib/brand'
 import { localEstimate } from '@/lib/estimate'
-import { IMAGE_ASPECTS, imagePayload, placeholdersIn, type ImageForm } from '@/lib/images'
+import { GENERATE_MAX_COUNT, IMAGE_ASPECTS, imagePayload, placeholdersIn, type ImageForm } from '@/lib/images'
 import { defaultSpeed, has } from '@/lib/models'
 import { MENTION_REFS } from '@/lib/mentions'
 import { findStyle } from '@/lib/styles'
@@ -190,7 +190,7 @@ export function ImageGenerateForm({ initial, templateTitle, modelPicked, onRun, 
             <ImageAspectTiles value={form.aspect} onChange={(v) => v && set('aspect', v)} />
           </AspectChip>
           <CountChip value={`×${form.count}`}>
-            <CountPicker value={form.count} onChange={(n) => set('count', n)} />
+            <CountPicker value={form.count} onChange={(n) => set('count', n)} max={GENERATE_MAX_COUNT} />
           </CountChip>
           <StyleDockChip
             value={form.style}
@@ -224,7 +224,7 @@ export function ImageGenerateForm({ initial, templateTitle, modelPicked, onRun, 
             <Label htmlFor={`${uid}-seed`} className="mb-1.5">
               Seed
             </Label>
-            <Input id={`${uid}-seed`} inputMode="numeric" value={form.seed} onChange={(e) => set('seed', e.target.value.replace(/\D/g, ''))} placeholder="Random" className="font-mono" />
+            <Input id={`${uid}-seed`} inputMode="numeric" value={form.seed} onChange={(e) => setForm((f) => ({ ...f, seed: e.target.value.replace(/\D/g, ''), batchIndex: undefined }))} placeholder="Random" className="font-mono" />
           </div>
           <div>
             <Label htmlFor={`${uid}-steps`} className="mb-1.5">

@@ -6,14 +6,22 @@ import { GeneratorPage, ResultsHeading } from '@/components/generate/GeneratorPa
 import { SessionResults } from '@/components/generate/SessionResults'
 import { useRecordRun } from '@/components/generate/useRecordRun'
 import { flatItems, useImageGenerate, useMediaList } from '@/hooks/useMedia'
-import { DEFAULT_IMAGE_FORM, type ImageForm } from '@/lib/images'
+import { DEFAULT_IMAGE_FORM, GENERATE_MAX_COUNT, type ImageForm } from '@/lib/images'
 import { modelUsedId, normalizeModelId } from '@/lib/models'
+import type { MediaItem } from '@/lib/types'
 import { imageFormFrom, type TemplatePrefill } from '@/lib/templates'
 import { plural } from '@/lib/utils'
 import { announce } from '@/stores/ui'
 import { ImageGenerateForm, type ImageRun } from './ImageGenerateForm'
 
 const PAGE = 'image-create'
+
+// a picture from a batch shares its seed with the others; its place in the batch makes it this one again
+function reuseForm(m: MediaItem): ImageForm {
+  const index = Number((m.params?.batch as { index?: number } | undefined)?.index) || 0
+  const form: ImageForm = { ...DEFAULT_IMAGE_FORM, prompt: m.prompt ?? m.title, model: modelUsedId(m.params, { model: m.model }) ?? undefined, seed: m.seed != null ? String(m.seed) : '' }
+  return index && m.seed != null ? { ...form, count: 1, batchIndex: index } : form
+}
 
 export function ImageGeneratePage() {
   const location = useLocation()
@@ -80,12 +88,12 @@ export function ImageGeneratePage() {
             row.request?.settings.form ?? {
               ...DEFAULT_IMAGE_FORM,
               prompt: row.prompt,
-              count: Math.min(4, row.items.length),
+              count: Math.min(GENERATE_MAX_COUNT, row.items.length),
               model: modelUsedId(row.items[0]?.params, { model: row.items[0]?.model }) ?? undefined,
             },
           )
         }
-        reuseItem={(m) => refill({ ...DEFAULT_IMAGE_FORM, prompt: m.prompt ?? m.title, model: modelUsedId(m.params, { model: m.model }) ?? undefined, seed: m.seed != null ? String(m.seed) : '' })}
+        reuseItem={(m) => refill(reuseForm(m))}
         empty={
           <EmptyState icon={<Images />} title="No images yet">
             Describe what you want above. Each variation appears here as it finishes.

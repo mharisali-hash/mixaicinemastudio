@@ -32,9 +32,10 @@ def _size(params: dict) -> tuple[int, int]:
     return ASPECTS.get(params.get("aspect_ratio", "16:9"), ASPECTS["16:9"])
 
 
-def render_placeholder(prompt: str, params: dict, seed: int, out_path: Path) -> Path:
+def render_placeholder(prompt: str, params: dict, seed: int, out_path: Path, index: int = 0) -> Path:
     w, h = _size(params)
-    rng = random.Random(seed)
+    # a batch shares one seed; the index keeps its pictures apart, as ComfyUI's per-picture noise does
+    rng = random.Random(f"{seed}/{index}" if index else seed)
     # seed picks the hue so different versions are visibly different at a glance
     # warm sepia range to sit with the parchment UI
     r = rng.randint(60, 110)
@@ -58,7 +59,7 @@ def render_placeholder(prompt: str, params: dict, seed: int, out_path: Path) -> 
     chars_per_line = max(20, int((w - 2 * pad) / (body_px * 0.55)))
     lines = textwrap.wrap(prompt.strip() or "(empty prompt)", width=chars_per_line)[:10]
     draw.multiline_text((pad, pad * 3), "\n".join(lines), font=body, fill=(240, 230, 214), spacing=6)
-    footer = f"v{params.get('version', 1)}  ·  seed {seed}  ·  {w}x{h}"
+    footer = f"v{params.get('version', 1)}  ·  seed {seed}{f' #{index + 1}' if index else ''}  ·  {w}x{h}"
     draw.text((pad, h - pad - small_px), footer, font=small, fill=(196, 174, 140))
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -127,7 +128,10 @@ class MockDriver:
         if params.get("upscale"):
             return self._upscale_image(params["upscale"], out_path, progress_cb)
         self._tick(progress_cb, "Sampling")
-        render_placeholder(prompt, params, seed, out_path)
+        render_placeholder(prompt, params, seed, out_path, int(params.get("batch_index") or 0))
+        for i, more in enumerate(params.get("batch_out") or [], 1):
+            if more:
+                render_placeholder(prompt, params, seed, Path(more), i)
         progress_cb(1.0, "Done")
         meta = {"width": _size(params)[0], "height": _size(params)[1]}
         if params.get("model"):

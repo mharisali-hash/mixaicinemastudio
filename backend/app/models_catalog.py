@@ -45,6 +45,8 @@ class Model:
     speeds: tuple[Speed, ...] = ()
     default_speed: str | None = None
     max_refs: int | None = None
+    # pictures ComfyUI may draw in one run (app.image_batch); the big models stay at 1 so 8 never meets 20 GB
+    max_batch: int = 1
     max_duration_s: float | None = None
     est_seconds: float | None = None
     default: bool = False
@@ -90,7 +92,8 @@ IMAGE_GROUPS = ("fast", "photo", "text", "anime", "experimental")
 MODELS: dict[str, Model] = {m.id: m for m in (
     Model("zimage_turbo", "image", "Z-Image Turbo", "FAST",
           "Photoreal pictures in a few seconds.", ("t2i", "i2i"), "zimage_t2i", extra={"i2i": "zimage_i2i"},
-          est_seconds=7, default=True, licence=APACHE, group="fast", best_for=("photos", "everyday pictures")),
+          est_seconds=7, default=True, licence=APACHE, group="fast", best_for=("photos", "everyday pictures"),
+          max_batch=8),
     Model("qwen_image_2512", "image", "Qwen-Image 2512", "TEXT",
           "Best for writing inside the picture: signs, posters, titles, including Urdu.",
           ("t2i", "i2i", "text_render"), "qwen_image_t2i", extra={"i2i": "qwen_image_i2i"},
@@ -104,7 +107,7 @@ MODELS: dict[str, Model] = {m.id: m for m in (
           best_for=("posters", "signs", "Urdu and other scripts")),
     Model("flux2_klein", "image", "FLUX.2 klein 4B", "FAST",
           "Very fast general-purpose images.", ("t2i", "i2i"), "flux2_klein_t2i", extra={"i2i": "flux2_klein_i2i"},
-          est_seconds=5, licence=APACHE, group="fast", best_for=("batches", "quick drafts")),
+          est_seconds=5, licence=APACHE, group="fast", best_for=("batches", "quick drafts"), max_batch=8),
 
     # contract v32 (est_seconds are guesses for the RTX 4000 Ada until the server has run some)
     Model("realvis_xl5", "image", "RealVisXL V5.0", "PHOTO",
@@ -133,7 +136,7 @@ MODELS: dict[str, Model] = {m.id: m for m in (
     Model("ernie_image_turbo", "image", "ERNIE-Image Turbo", "TEXT",
           "8-step pictures with accurate text, infographics and layouts.", ("t2i", "text_render"),
           "ernie_turbo_t2i", est_seconds=20, licence=APACHE, group="text",
-          best_for=("infographics", "comics", "layouts")),
+          best_for=("infographics", "comics", "layouts"), max_batch=8),
     Model("illustrious_xl2", "image", "Illustrious XL v2.0", "ANIME",
           "SDXL anime and illustration: characters, key visuals, manga looks.", ("t2i", "i2i"),
           "illustrious_xl_t2i", extra={"i2i": "illustrious_xl_i2i"}, est_seconds=12, licence=OPENRAIL_M,
@@ -155,11 +158,11 @@ MODELS: dict[str, Model] = {m.id: m for m in (
                     template="krea2_raw_t2i"),
           ),
           default_speed="turbo", est_seconds=25, licence=KREA_LICENCE, noncommercial=True, terms="conditional",
-          group="experimental", best_for=("art direction", "stylised looks")),
+          group="experimental", best_for=("art direction", "stylised looks"), max_batch=8),
     Model("flux2_klein_9b", "image", "FLUX.2 klein 9B", "FAST",
           "Bigger klein: more detail than 4B at the same 4 steps.", ("t2i", "i2i"), "flux2_klein9b_t2i",
           extra={"i2i": "flux2_klein9b_i2i"}, est_seconds=10, licence=FLUX_NC, noncommercial=True,
-          group="experimental", best_for=("quick drafts", "detail")),
+          group="experimental", best_for=("quick drafts", "detail"), max_batch=8),
     Model("qwen_image_21", "image", "Qwen-Image 2.1", "TEXT",
           "Newer Qwen-Image: sharper text and 2K detail. 2512 stays the default.",
           ("t2i", "text_render"), "qwen_image21_t2i",

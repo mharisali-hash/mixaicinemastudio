@@ -406,7 +406,12 @@ def handle_generate(ctx: JobContext) -> dict:
         "project_id": gen.project_id,
         **safety,
     }
-    result = getattr(driver, method)(gen.prompt, params, gen.seed, abs_path, ctx.progress)
+    batch = image_batch.prepare(db, gen, params, _out_path) if gen.kind == "image" else []
+    if batch:
+        result, batch = image_batch.run(
+            ctx, gen, batch, params, lambda p: getattr(driver, method)(gen.prompt, p, gen.seed, abs_path, ctx.progress))
+    else:
+        result = getattr(driver, method)(gen.prompt, params, gen.seed, abs_path, ctx.progress)
     if (gen.params or {}).get("ideogram_caption"):
         from app import ideogram_caption
 
@@ -443,6 +448,8 @@ def handle_generate(ctx: JobContext) -> dict:
         finish_result(db, gen, abs_path,
                       lambda seed: getattr(driver, method)(gen.prompt, params, seed, abs_path, ctx.progress),
                       tick=lambda: ctx.progress(0.97, "Checking the result"))
+    if batch:
+        image_batch.finish(ctx, gen, batch, result)
     content_policy.check_after(ctx, gen, abs_path, result.media_type)
     gen.file_path = rel_path
     gen.media_type = result.media_type
@@ -480,6 +487,10 @@ FINISHED_HOOKS.append(media_finished)
 from app import thumbs  # noqa: E402
 
 FINISHED_HOOKS.append(thumbs.on_job_finished)
+from app import image_batch  # noqa: E402
+
+# Image → Create batches: the other pictures of the run are finished, or ended, with its job
+FINISHED_HOOKS.append(image_batch.on_job_finished)
 from app import brand  # noqa: E402
 
 HANDLERS[brand.BRAND_JOB] = brand.handle_brand_apply
