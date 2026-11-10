@@ -1018,6 +1018,8 @@ class ImageEditIn(BaseModel):
     set_size: int | None = Field(None, ge=2, le=25, description="Make this many separate pictures, each a "
                                  "different version of the instruction (a new expression, angle, light...), "
                                  "in a new folder. count is ignored when this is set")
+    with_sheet: bool = Field(False, description="With set_size: one more picture, all of the set's pictures "
+                                                "laid out on a single sheet once they're done")
     seed: int | None = Field(None, ge=0, le=2**31 - 1, description=_SEED)
     title: str | None = Field(None, max_length=300)
     model: str | None = Field(None, max_length=60, description=_MODEL)

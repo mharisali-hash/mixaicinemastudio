@@ -182,7 +182,7 @@ describe('Edit Image page', () => {
     expect(screen.queryByText(/instead of one sheet/)).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /^Make 25 pictures/ }))
-    expect(calls.find((c) => c.method === 'POST' && c.path === '/images/edit')?.body).toMatchObject({ source_ids: ['a'], set_size: 25 })
+    expect(calls.find((c) => c.method === 'POST' && c.path === '/images/edit')?.body).toMatchObject({ source_ids: ['a'], set_size: 25, with_sheet: true })
   })
 
   it('caps the set size picker at 25 and turns back to variations', async () => {

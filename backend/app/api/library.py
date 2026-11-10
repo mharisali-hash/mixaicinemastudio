@@ -424,7 +424,7 @@ def edit_images(body: ImageEditIn, db: Session = Depends(get_db), cur: CurrentUs
         job, items = edit_set.create(
             db, cur.workspace_id, n=body.set_size, title=title, text=mentioned.prompt.strip(),
             preamble=mn.ref_preamble(mentioned.ref_labels, len(sources) + 1), params=params,
-            seed=body.seed if body.seed is not None else new_seed(), into=into)
+            seed=body.seed if body.seed is not None else new_seed(), into=into, sheet=body.with_sheet)
         db.commit()
         return ImageBatchOut(items=lib.items_out(db, items), jobs=[job_out(job)], model_resolved=model.id)
     items, jobs = [], []

@@ -8,6 +8,7 @@ couple of the pictures on the image queue at a time, like the bulk orchestrator 
 ordinary generate job with parent_job_id, so the content and rights checks still run on every one.
 """
 import logging
+import math
 import re
 import time
 from dataclasses import replace
@@ -94,7 +95,7 @@ def set_name(text: str) -> str:
 # ---------------------------------------------------------------- the request
 
 def create(db: Session, workspace_id: str, *, n: int, title: str, text: str, preamble: str, params: dict,
-           seed: int, into: str | None) -> tuple[Job, list[MediaItem]]:
+           seed: int, into: str | None, sheet: bool = False) -> tuple[Job, list[MediaItem]]:
     """The folder, n waiting tiles and the parent job. Nothing is queued for the GPU until the parent runs."""
     from app import organise
 
@@ -120,7 +121,67 @@ def create(db: Session, workspace_id: str, *, n: int, title: str, text: str, pre
         items.append(item)
         gens.append(g.id)
     job.payload = {"generation_ids": gens, "folder_id": folder.id, "instruction": text, "preamble": preamble}
+    if sheet:
+        # one more tile: all the finished pictures on a single sheet, laid out once the last one is in
+        item = MediaItem(id=new_id(), workspace_id=workspace_id, kind="image", origin="generated",
+                         title=f"{title} · all {n}"[:300], tags=["sheet"], folder_id=folder.id)
+        db.add(item)
+        db.flush()
+        g = Generation(workspace_id=workspace_id, project_id=None, target_type="media", target_id=item.id,
+                       kind="image", version=1, status="queued", prompt=text,
+                       params={"edit_set": {"job_id": job.id, "sheet": True, "of": n}}, seed=seed)
+        db.add(g)
+        db.flush()
+        item.generation_id = g.id
+        items.append(item)
+        job.payload = {**job.payload, "sheet_generation_id": g.id}
     return job, items
+
+
+SHEET_W = 2400
+SHEET_GAP = 8
+
+
+def make_sheet(db: Session, job: Job) -> None:
+    """Lay the finished pictures out on one grid, in order, as the set's extra tile. Drawn here, not by the
+    edit model, so every face on it is one of the set's own pictures and the count is exact."""
+    from PIL import Image
+
+    from app import library as lib
+    from app import thumbs
+    from app.services import generation_file
+
+    g = db.get(Generation, (job.payload or {}).get("sheet_generation_id") or "")
+    if g is None or g.status in FINISHED:
+        return
+    files = [f for _, x in _gens(db, job.payload) if x.status in FINISHED and (f := generation_file(x)) and f.is_file()]
+    if not files:
+        g.status = "failed"
+        return
+    cols = math.ceil(math.sqrt(len(files)))
+    rows = math.ceil(len(files) / cols)
+    with Image.open(files[0]) as first:
+        ratio = first.height / first.width
+    cell_w = (SHEET_W - SHEET_GAP * (cols + 1)) // cols
+    cell_h = round(cell_w * ratio)
+    sheet = Image.new("RGB", (SHEET_W, rows * cell_h + SHEET_GAP * (rows + 1)), "white")
+    for k, f in enumerate(files):
+        with Image.open(f) as im:
+            tile = im.convert("RGB").resize((cell_w, cell_h), Image.LANCZOS)
+        r, c = divmod(k, cols)
+        sheet.paste(tile, (SHEET_GAP + c * (cell_w + SHEET_GAP), SHEET_GAP + r * (cell_h + SHEET_GAP)))
+    folder, rel_folder = lib.media_dir(g.workspace_id)
+    folder.mkdir(parents=True, exist_ok=True)
+    dest = folder / f"{g.id}.png"
+    sheet.save(dest, "PNG")
+    g.file_path = f"{rel_folder}/{dest.name}"
+    g.media_type = "image/png"
+    g.status = "ready"
+    g.params = {**(g.params or {}), "width": sheet.width, "height": sheet.height, "pictures": len(files)}
+    item = db.get(MediaItem, g.target_id)
+    if item is not None:
+        item.width, item.height = sheet.width, sheet.height
+    thumbs.ensure_all(dest, g.media_type)
 
 
 # ---------------------------------------------------------------- writing the versions
@@ -294,6 +355,15 @@ def handle(ctx) -> dict:
         ended = sum(1 for _, g in gens if not _waiting(g) and g not in live)
         r.update(folder_id=(job.payload or {}).get("folder_id"), done=done, failed=ended - done)
         if not live and not any(_waiting(g) for _, g in gens):
+            if (job.payload or {}).get("sheet_generation_id"):
+                ctx.progress(0.99, "Laying out the sheet")
+                try:
+                    make_sheet(db, job)
+                except OSError as e:
+                    log.warning("set %s: couldn't lay out the sheet: %s", job.id, e)
+                    if (sg := db.get(Generation, job.payload["sheet_generation_id"])) is not None:
+                        sg.status = "failed"
+                db.commit()
             r["waiting_on"] = []
             job.result = dict(r)
             ctx.progress(1.0, f"{done} of {n} pictures")
@@ -323,6 +393,9 @@ def handle(ctx) -> dict:
 def cancel(db: Session, job: Job) -> None:
     """API cancel of a set: what is queued goes, running pictures are flagged, waiting tiles stop."""
     now = utcnow()
+    sheet = db.get(Generation, (job.payload or {}).get("sheet_generation_id") or "")
+    if sheet is not None and sheet.status == "queued":
+        sheet.status = "failed"
     for _, g in _gens(db, job.payload):
         child = _child(db, g)
         if child is None:

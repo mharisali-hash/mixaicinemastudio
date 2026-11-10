@@ -176,3 +176,19 @@ def test_fallback_lines_never_repeat():
     assert len(set(lines)) == 25 and len(set(edit_set.EXPRESSIONS)) == 25 and len(edit_set.LIGHTING) == 12
     assert edit_set.set_name("make 9 different camera angles").startswith("Angles set")
     assert edit_set.set_name("a grid of 9 cats in hats").startswith("Cats in hats set · ")
+
+
+def test_a_sheet_request_also_gets_one_picture_of_them_all(client, fast_driver, writer):
+    writer([f"Expression {i}" for i in range(5)])
+    out = _make(client, 5, with_sheet=True)
+    assert len(out["items"]) == 6 and out["items"][-1]["title"].endswith("· all 5")
+    _drain(fast_driver)
+    parent, gens, _ = _set_rows(out["jobs"][0]["id"])
+    assert parent.status == "done" and all(g.status == "ready" for g in gens)
+    with SessionLocal() as db:
+        sheet = db.get(Generation, parent.payload["sheet_generation_id"])
+        item = db.get(MediaItem, sheet.target_id)
+        assert sheet.status == "ready" and sheet.params["pictures"] == 5 and sheet.file_path
+        # 5 pictures: 3 across, 2 rows, the same shape as the pictures
+        assert item.folder_id == parent.payload["folder_id"] and item.width == edit_set.SHEET_W
+    assert client.get(f"/api/media/{sheet.target_id}").status_code == 200

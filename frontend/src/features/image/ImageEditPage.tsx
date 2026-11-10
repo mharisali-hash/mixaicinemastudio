@@ -90,6 +90,8 @@ export function ImageEditPage() {
   const sheet = sheetCount(instruction)
   const autoSet = sheet && !oneSheet ? sheet : null
   const setSize = chosenSet ?? autoSet
+  // they asked for a sheet, so they get the separate pictures and the sheet of them all
+  const withSheet = !!setSize && !!sheet && !oneSheet
   const pickSet = (n: number | null) => {
     setChosenSet(n)
     if (n === null) setOneSheet(true)
@@ -194,7 +196,11 @@ export function ImageEditPage() {
     // images/edit treats a missing choice as off (API and MCP edits keep their words), so the dock always says which
     const f = magic.fields()
     const said = f.prompt_enhanced ? { prompt_enhanced: true } : { magic_prompt: f.magic_prompt ?? magic.mode }
-    const base = { ...editPayload(sources, f.prompt, count, aspect, send && { id: send.id, max_refs: max }, setSize), ...said }
+    const base = {
+      ...editPayload(sources, f.prompt, count, aspect, send && { id: send.id, max_refs: max }, setSize),
+      ...(withSheet ? { with_sheet: true } : {}),
+      ...said,
+    }
     const n = Number.parseInt(seed, 10)
     const body = withBrand({ ...base, ...(Number.isFinite(n) && n >= 0 ? { seed: n } : {}) }, brand.sendId)
     if (tpl?.id) body.template_id = tpl.id
@@ -261,7 +267,7 @@ export function ImageEditPage() {
             <div aria-live="polite">
               {autoSet && !chosenSet && (
                 <p className="flex flex-wrap items-center gap-2 text-small text-studio-muted">
-                  Making {autoSet} separate pictures, as the prompt asks.
+                  Making {autoSet} separate pictures, as the prompt asks, plus one with them all on a sheet.
                   <Button type="button" size="sm" variant="outline" onClick={() => setOneSheet(true)}>
                     Make one sheet instead
                   </Button>
@@ -315,7 +321,7 @@ export function ImageEditPage() {
         error={edit.isError ? <ErrorState compact title="Couldn't start the edit" error={edit.error} /> : null}
         footer={
           <GenerateButton
-            verb={setSize ? `Make ${plural(setSize, 'picture')}` : 'Edit'}
+            verb={setSize ? `Make ${plural(setSize, 'picture')}${withSheet ? ' + sheet' : ''}` : 'Edit'}
             what={setSize ? null : plural(count, 'result')}
             estimate={estimate}
             icon={<Brush aria-hidden />}

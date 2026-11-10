@@ -229,12 +229,15 @@ def edit_image(
                                                                    "expression, angle, light...), in a new folder. "
                                                                    "Use it for 'a sheet / grid of 9 expressions'. "
                                                                    "count is ignored")] = None,
+    with_sheet: Annotated[bool, Field(description="With set_size: also one picture with the whole set laid "
+                                                  "out on a single sheet")] = False,
 ) -> dict:
     """Edit pictures with an instruction ("make it night", "put the hat from picture 2 on her"). With set_size,
     one job makes the whole set: wait on it, then fetch each item with get_media."""
     with acting(ctx, "generate") as (db, cur):
         out = library.edit_images(ImageEditIn(source_ids=source_ids, instruction=instruction, aspect=aspect,
-                                              count=count, seed=seed, set_size=set_size), db=db, cur=cur)
+                                              count=count, seed=seed, set_size=set_size,
+                                              with_sheet=with_sheet), db=db, cur=cur)
         if set_size:
             return {**_batch(out, model=out.model_resolved),
                     "next": "wait_for_job with the one job_id (it finishes after the last picture), then get_media "
