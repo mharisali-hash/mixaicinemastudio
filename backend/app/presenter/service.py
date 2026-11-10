@@ -30,8 +30,9 @@ FINISHED = ("ready", "approved")
 ATTEMPTS = 2
 # Wan S2V lip-syncs up to three 77-frame passes at 16 fps; a scene has to fit with a little room
 MAX_SCENE_S = 14.0
-# about how much one scene holds: a sentence or two, roughly 10 s of speech
-SCENE_WORDS = 28
+# how much text one scene holds. Counted in characters, not words: Russian and Spanish words run long, and a
+# slow voice reads about 10 characters a second, so 110 stays near 11 s with room under MAX_SCENE_S
+SCENE_CHARS = 110
 MAX_SCENES = 40
 
 BACKGROUNDS = {
@@ -62,24 +63,37 @@ def _fp(*parts) -> str:
 # ---------------------------------------------------------------- scenes
 
 _SENTENCE = re.compile(r"(?<=[.!?؟۔])\s+")
+_CLAUSE = re.compile(r"(?<=[,;:،؛—–])\s+")
+
+
+def _pack(pieces: list[str], budget: int) -> list[str]:
+    out: list[str] = []
+    for piece in pieces:
+        if out and len(out[-1]) + 1 + len(piece) <= budget:
+            out[-1] = f"{out[-1]} {piece}"
+        else:
+            out.append(piece)
+    return out
+
+
+def split_text(text: str, budget: int) -> list[str]:
+    """Cut at sentence ends first, then at commas and dashes, and only then between words."""
+    out: list[str] = []
+    for sent in _SENTENCE.split(" ".join(text.split())):
+        if len(sent) <= budget:
+            out.append(sent)
+            continue
+        for clause in _pack(_CLAUSE.split(sent), budget):
+            out.extend([clause] if len(clause) <= budget else _pack(clause.split(), budget))
+    return _pack([p for p in out if p], budget)
 
 
 def split_script(script: str) -> list[str]:
-    """Paragraphs first; a paragraph too long for one scene is cut at sentence ends, keeping a sentence or two
-    together; a single over-long sentence stays whole (the voice step says if it's too long to film)."""
+    # paragraphs are the writer's own scene breaks; inside one, keep each scene short enough to film
     out: list[str] = []
     for para in re.split(r"\n\s*\n", (script or "").strip()):
-        para = " ".join(para.split())
-        if not para:
-            continue
-        cur: list[str] = []
-        for sent in _SENTENCE.split(para):
-            if cur and len(" ".join(cur + [sent]).split()) > SCENE_WORDS:
-                out.append(" ".join(cur))
-                cur = []
-            cur.append(sent)
-        if cur:
-            out.append(" ".join(cur))
+        if para.strip():
+            out.extend(split_text(para, SCENE_CHARS))
     return out[:MAX_SCENES]
 
 

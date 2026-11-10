@@ -6,6 +6,7 @@ PresenterVideo row. Per scene, a part is made again only when its fingerprint ch
 """
 import copy
 import logging
+import math
 import shutil
 import time
 from datetime import datetime, timezone
@@ -170,6 +171,20 @@ class Run:
         self.db.flush()
         return None, g.job_id
 
+    def split_scene(self, sc: dict, dur: float) -> bool:
+        """A voice slower than the splitter guessed: cut the scene by its measured length, aiming at 80% of the cap."""
+        n = math.ceil(dur / (svc.MAX_SCENE_S * 0.8))
+        # a little slack so the cut lands on a comma, not on one stray word
+        parts = svc.split_text(sc["text"], max(20, math.ceil(len(sc["text"]) * 1.2 / n)))
+        if len(parts) < 2 or len(self.pv.scenes) + len(parts) - 1 > svc.MAX_SCENES:
+            return False
+        fresh = [svc.new_scene(p, sc.get("background")) for p in parts]
+        at = next(k for k, s in enumerate(self.pv.scenes) if s["id"] == sc["id"])
+        self.pv.scenes = self.pv.scenes[:at] + fresh + self.pv.scenes[at + 1:]
+        flag_modified(self.pv, "scenes")
+        self.db.flush()
+        return True
+
     def stage_speech(self, _reviewed: bool):
         waits, n = [], 0
         for i, sc in enumerate(self.pv.scenes, 1):
@@ -183,6 +198,9 @@ class Run:
                 continue
             dur = round(aa.stream_info(generation_file(g)).duration, 3)
             if dur > svc.MAX_SCENE_S:
+                if self.split_scene(sc, dur):
+                    # the pieces are new scenes with no voice yet: go round again and voice them
+                    return self.stage_speech(_reviewed)
                 raise StageFailed(f"Scene {i} is {dur:.0f} s spoken; a scene can be at most "
                                   f"{svc.MAX_SCENE_S:.0f} s. Split it into two")
             if sc.get("duration_s") != dur:

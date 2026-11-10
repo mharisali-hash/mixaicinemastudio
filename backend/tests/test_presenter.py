@@ -36,8 +36,22 @@ def test_split_script():
     parts = svc.split_script(SCRIPT)
     assert len(parts) == 3 and parts[0].startswith("Welcome")
     long = " ".join(f"This is sentence number {i} of a long paragraph." for i in range(12))
-    assert all(len(p.split()) <= svc.SCENE_WORDS + 10 for p in svc.split_script(long))
+    assert all(len(p) <= svc.SCENE_CHARS for p in svc.split_script(long))
     assert svc.split_script("   ") == []
+
+
+def test_long_sentences_are_cut_at_commas_then_words():
+    # two long Russian sentences used to share one scene and run 18 s with a slow voice
+    ru = ("Каждый вечер, когда солнце садится за горы, старый пастух выходит на крыльцо и смотрит на небо. "
+          "Он ждёт, когда загорится первая звезда, потому что верит, что в этот час ангел слышит каждое слово.")
+    parts = svc.split_script(ru)
+    assert len(parts) == 2 and parts[1].startswith("Он")
+    one = ru.replace(". Он", ", и он")
+    parts = svc.split_script(one)
+    assert len(parts) >= 2 and all(len(p) <= svc.SCENE_CHARS for p in parts)
+    assert " ".join(parts) == " ".join(one.split()) and parts[0].endswith(",")
+    run_on = " ".join(["слово"] * 60)
+    assert all(len(p) <= svc.SCENE_CHARS for p in svc.split_text(run_on, svc.SCENE_CHARS))
 
 
 def test_needs_a_voice_and_a_portrait(client, fast_driver):
@@ -108,3 +122,18 @@ def test_a_scene_too_long_to_film_says_so(client, fast_driver, monkeypatch):
     pv = client.get(f"/api/presenter/{r.json()['id']}").json()
     speech = next(s for s in pv["stages"] if s["key"] == "speech")
     assert speech["status"] == "failed" and "Split it" in speech["detail"]
+
+
+def test_a_slow_voice_splits_the_scene_and_carries_on(client, fast_driver, monkeypatch):
+    c = _presenter_character(client, fast_driver)
+    # the mock voice reads 2.5 words a second, so these 20 words take 8 s: over a 5 s cap, under it once halved
+    monkeypatch.setattr(svc, "MAX_SCENE_S", 5.0)
+    text = "When evening comes, the old shepherd walks out, looks at the hills and waits for the first star to rise."
+    r = client.post("/api/presenter", json={"character_id": c["id"], "script": text})
+    assert len(r.json()["scenes"]) == 1
+    _run_all(fast_driver)
+    pv = client.get(f"/api/presenter/{r.json()['id']}").json()
+    stages = {s["key"]: s["status"] for s in pv["stages"]}
+    assert stages["speech"] == "done", pv["stages"]
+    assert len(pv["scenes"]) == 2 and " ".join(sc["text"] for sc in pv["scenes"]) == text
+    assert all(sc["duration_s"] <= 5.0 for sc in pv["scenes"])
