@@ -20,14 +20,21 @@ const FILTERS: { value: Filter; label: string; test: (j: Job) => boolean }[] = [
   { value: 'all', label: 'Everything', test: () => true },
 ]
 
-// One lane per GPU; jobs still waiting for a GPU sit in their own lane.
+// Pictures and video run on separate GPUs at the same time, each with its own line; sound fits on either.
+// Grouping by job.gpu put everything in one list: every worker stamps the same driver name there.
+const LANES: { key: NonNullable<Job['lane']>; label: string }[] = [
+  { key: 'image', label: 'Pictures' },
+  { key: 'video', label: 'Video' },
+  { key: 'audio', label: 'Sound' },
+  { key: 'general', label: 'Writing and finishing' },
+]
+
 function lanes(list: Job[]) {
-  const by = new Map<string, Job[]>()
-  for (const j of list) {
-    const key = j.gpu || (j.status === 'queued' ? 'Waiting for a GPU' : 'No GPU')
-    by.set(key, [...(by.get(key) ?? []), j])
-  }
-  return [...by.entries()].sort(([a], [b]) => a.localeCompare(b))
+  return LANES.map(({ key, label }) => {
+    const items = list.filter((j) => (j.lane ?? 'general') === key)
+    const running = items.filter((j) => j.status === 'running').length
+    return { key, label, items, running, waiting: items.length - running }
+  }).filter((l) => l.items.length > 0)
 }
 
 export function QueuePage() {
@@ -78,10 +85,10 @@ export function QueuePage() {
         )}
         {visible.length > 0 &&
           (filter === 'active' ? (
-            lanes(visible).map(([lane, items]) => (
-              <section key={lane} aria-label={lane}>
-                <h2 className="section-label mb-2 font-mono">
-                  {lane} ({items.length})
+            lanes(visible).map(({ key, label, items, running: on, waiting }) => (
+              <section key={key} aria-label={label}>
+                <h2 className="section-label mb-2">
+                  {label} · {on} running · {waiting} waiting
                 </h2>
                 <ul className="flex flex-col gap-2">
                   {items.map((j) => (

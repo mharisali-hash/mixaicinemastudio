@@ -29,7 +29,6 @@ export function JobRow({ job }: { job: Job }) {
               ? job.message
               : timeAgo(job.finished_at ?? job.created_at)}
         </span>
-        {job.gpu && <span className="font-mono">{job.gpu}</span>}
         {/* TODO: real ETA once the worker reports throughput; placeholder keeps the layout stable */}
         {active && <span className="font-mono">ETA —</span>}
         {job.gpu_seconds != null && !active && <span className="font-mono">{Math.round(job.gpu_seconds)}s GPU</span>}
