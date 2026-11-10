@@ -26,6 +26,7 @@ from app.llm import LLMError, chat_sync
 from app.models import BrandKit, Generation, Job, MediaItem, Project, new_id
 from app.services import generation_file, next_version
 from app.vision import VisionScore
+from app.workdirs import job_workdir
 
 log = logging.getLogger("mixai.brand")
 
@@ -561,7 +562,7 @@ def out_path(g: Generation, ext: str) -> tuple[Path, str]:
 
 
 def _workdir(job_id: str) -> Path:
-    return get_settings().data_dir / "tmp" / "brand" / job_id
+    return job_workdir("brand", job_id)
 
 
 def handle_brand_apply(ctx) -> dict:
@@ -587,7 +588,6 @@ def handle_brand_apply(ctx) -> dict:
     ctx.progress(0.1, "Applying the brand")
 
     work = _workdir(job.id)
-    shutil.rmtree(work, ignore_errors=True)
     try:
         if is_video(source):
             dest, rel = out_path(gen, ".mp4")

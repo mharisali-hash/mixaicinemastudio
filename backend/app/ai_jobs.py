@@ -274,7 +274,15 @@ class AiRun:
             except LLMError as e:
                 return film.retry_json(lambda m, **k: self._call(f"{label} (again)", frac, role, m, **k),
                                        messages, kw, e)
-        return self._call(label, frac, role, messages, **kw)
+        try:
+            return self._call(label, frac, role, messages, **kw)
+        except LLMError as e:
+            # the thinking model can think past the time limit on a long script; the writer answers straight away
+            if role != "reasoning" or "didn't answer within" not in str(e) or kw.get("model"):
+                raise
+            log.warning("%s: %s; trying the creative model", label, e)
+            return self._call(f"{label} (quicker model)", frac, "creative", messages,
+                              **{k: v for k, v in kw.items() if k != "think"})
 
     def _call(self, label: str, frac: float, role, messages, **kw):
         cold = not is_warm(role)

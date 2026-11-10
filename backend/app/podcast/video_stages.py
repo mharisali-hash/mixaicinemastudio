@@ -27,13 +27,13 @@ from app import storyboard as sb
 from app import transcripts as tr
 from app.autopilot import POLL_S, WAIT_PRIORITY, Skip, StageFailed, Wait
 from app.brand_schemas import CardSettings
-from app.config import get_settings
 from app.drivers.comfy import HQ_SIZES, VIDEO_SIZES
 from app.llm import LLMError, chat_sync
 from app.models import Character, Generation, Job, MediaItem, PodcastShow, Project, VideoPodcast, utcnow
 from app.podcast import video as vd
 from app.podcast import vplan
 from app.services import approve, enqueue_generation, generation_file
+from app.workdirs import job_workdir
 
 log = logging.getLogger("mixai.video_podcast")
 
@@ -543,10 +543,7 @@ def handle(ctx) -> dict:
 # ---------------------------------------------------------------- assembly
 
 def _work(job_id: str) -> Path:
-    w = (get_settings().data_dir / "tmp" / "vpodcast" / job_id).resolve()
-    shutil.rmtree(w, ignore_errors=True)
-    w.mkdir(parents=True)
-    return w
+    return job_workdir("vpodcast", job_id)
 
 
 def out_size(aspect: str, quality: str) -> tuple[int, int]:

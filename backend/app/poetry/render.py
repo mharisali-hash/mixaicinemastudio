@@ -16,10 +16,10 @@ from app import audio_analysis as aa
 from app import library as lib
 from app import montage as mt
 from app import stories
-from app.config import get_settings
 from app.models import Generation, PoetryShort
 from app.poetry import service as svc
 from app.services import generation_file
+from app.workdirs import job_workdir
 
 log = logging.getLogger("mixai.poetry")
 
@@ -109,9 +109,7 @@ def handle_render(ctx) -> dict:
     out_dir.mkdir(parents=True, exist_ok=True)
     folder, rel_folder = lib.media_dir(gen.workspace_id)
     folder.mkdir(parents=True, exist_ok=True)
-    work = (get_settings().data_dir / "tmp" / "poetry_render" / job.id).resolve()
-    shutil.rmtree(work, ignore_errors=True)
-    work.mkdir(parents=True)
+    work = job_workdir("poetry_render", job.id)
     dst = (folder / f"{gen.id}.mp4").resolve()
     srt, preview = out_dir / f"{gen.id}.srt", out_dir / f"{gen.id}_preview.mp4"
     held: list[int] = []

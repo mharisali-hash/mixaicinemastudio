@@ -24,6 +24,7 @@ from app import audio_analysis as aa
 from app.config import get_settings
 from app.models import Generation
 from app.services import generation_file
+from app.workdirs import job_workdir
 
 log = logging.getLogger("mixai.poetry")
 
@@ -280,9 +281,7 @@ def handle(ctx) -> dict:
     if src is None or not src.is_file():
         raise TimingError("The song is gone; make it again")
     W = _w()
-    work = get_settings().data_dir / "tmp" / "poetry" / job.id
-    shutil.rmtree(work, ignore_errors=True)
-    work.mkdir(parents=True)
+    work = job_workdir("poetry", job.id)
     texts = list(p.get("lines") or [])
     try:
         ctx.progress(0.02, "Reading the song")

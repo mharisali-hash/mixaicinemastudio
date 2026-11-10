@@ -30,6 +30,7 @@ from app.schemas import (
     MezzanineOut, ReelClipOut, ReelMissingOut, ReelOut, ReelSceneOut, RenderOut,
 )
 from app.services import gen_out, generation_file, media_url, next_version
+from app.workdirs import job_workdir
 
 log = logging.getLogger("mixai.reel")
 
@@ -802,7 +803,7 @@ def finish_film(src: Path, workdir: Path, dst: Path, title: str, chapters) -> di
 
 
 def _workdir(job_id: str) -> Path:
-    return get_settings().data_dir / "tmp" / "reel" / job_id
+    return job_workdir("reel", job_id)
 
 
 def handle_assemble(ctx) -> dict:
@@ -831,8 +832,6 @@ def handle_assemble(ctx) -> dict:
     db.commit()
 
     work = _workdir(job.id)
-    shutil.rmtree(work, ignore_errors=True)
-    work.mkdir(parents=True, exist_ok=True)
     check = lambda: ctx.progress(job.progress)  # noqa: E731  (raises when cancelled)
     built, cached, fallbacks = [], [], []
     try:

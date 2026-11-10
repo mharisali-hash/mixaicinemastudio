@@ -10,7 +10,6 @@ import math
 import shutil
 import time
 from datetime import datetime, timezone
-from pathlib import Path
 
 from sqlalchemy import func, select
 from sqlalchemy.orm.attributes import flag_modified
@@ -19,10 +18,10 @@ from app import audio_analysis as aa
 from app import library as lib
 from app import reel as rl
 from app.autopilot import POLL_S, WAIT_PRIORITY, Skip, StageFailed, Wait
-from app.config import get_settings
 from app.models import Generation, Job, MediaItem, PresenterVideo, new_id, utcnow
 from app.presenter import service as svc
 from app.services import enqueue_generation, generation_file, new_seed, next_version
+from app.workdirs import job_workdir
 
 log = logging.getLogger("mixai.presenter")
 
@@ -355,9 +354,7 @@ def handle_assemble(ctx) -> dict:
     w, h = SIZES[st["aspect"]]
     gen.status = "generating"
     db.commit()
-    work = get_settings().data_dir / "tmp" / "presenter" / job.id
-    shutil.rmtree(work, ignore_errors=True)
-    work.mkdir(parents=True)
+    work = job_workdir("presenter", job.id)
     folder, rel_folder = lib.media_dir(gen.workspace_id)
     folder.mkdir(parents=True, exist_ok=True)
     dst = folder / f"{gen.id}.mp4"
