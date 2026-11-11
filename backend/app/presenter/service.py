@@ -270,12 +270,15 @@ def presenter_out(db: Session, pv: PresenterVideo) -> dict:
     c = db.get(Character, pv.character_id or "")
     job = db.get(Job, pv.job_id or "")
     stages = [{"key": k, "label": lbl, **((pv.stages or {}).get(k) or {"status": "pending"})} for k, lbl in STAGES]
-    # a run cancelled while it waited in the queue never got back to its handler to say so
-    if job is not None and job.status in ("cancelled", "failed"):
-        for s in stages:
-            if s["status"] == "running":
-                s.update(status="pending" if job.status == "cancelled" else "failed",
-                         detail=s.get("detail") or ("Cancelled" if job.status == "cancelled" else job.error))
+    # a run cancelled while it waited in the queue, or given up after worker restarts, never got back to its
+    # handler to say so; a stage left "running" would lock the page
+    if job is None or job.status in ("cancelled", "failed"):
+        for st in stages:
+            if st["status"] == "running":
+                cancelled = job is not None and job.status == "cancelled"
+                st.update(status="pending" if cancelled else "failed",
+                          detail=st.get("detail") or ("Cancelled" if cancelled else (job.error if job is not None and
+                                  job.error else "Stopped before it finished. Press Continue to carry on from here.")))
     return {"id": pv.id, "title": pv.title, "language": pv.language, "character_id": pv.character_id,
             "character_name": c.name if c else None, "look_id": pv.look_id, "settings": settings_of(pv),
             "scenes": [scene_out(db, s) for s in pv.scenes or []],

@@ -166,3 +166,30 @@ def test_a_cancelled_video_says_so_stops_its_parts_and_resumes_on_retry(client, 
     pv = client.get(f"/api/presenter/{pv['id']}").json()
     assert {s["key"]: s["status"] for s in pv["stages"]}["assemble"] == "done", pv["stages"]
     assert pv["outputs"]["draft"]["duration_s"] > 0
+
+
+def test_restarts_never_give_up_on_a_presenter_video_and_a_dead_job_unlocks_the_page(client, fast_driver):
+    from app.models import Job, PresenterVideo
+    from app.worker import MAX_ATTEMPTS, claim_next, recover_stuck
+
+    c = _presenter_character(client, fast_driver)
+    pv = client.post("/api/presenter", json={"character_id": c["id"], "script": SCRIPT}).json()
+    with SessionLocal() as db:
+        job_id = db.get(PresenterVideo, pv["id"]).job_id
+        # five server updates in a row, each killing the run mid-way
+        for _ in range(MAX_ATTEMPTS + 2):
+            assert claim_next(db).id == job_id
+            recover_stuck(db)
+        job = db.get(Job, job_id)
+        assert job.status == "queued" and job.attempts < MAX_ATTEMPTS
+
+        # a job that died some other way, with its stage still saying "running"
+        p = db.get(PresenterVideo, pv["id"])
+        p.stages = {**(p.stages or {}), "frames": {"status": "running"}}
+        job.status, job.error = "failed", "Gave up after 3 attempts (worker kept dying mid-job)"
+        db.commit()
+    out = client.get(f"/api/presenter/{pv['id']}").json()
+    frames = next(s for s in out["stages"] if s["key"] == "frames")
+    assert frames["status"] == "failed" and "Gave up" in frames["detail"]
+    # and Continue starts it again
+    assert client.post(f"/api/presenter/{pv['id']}/continue").status_code == 202

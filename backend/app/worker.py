@@ -35,6 +35,8 @@ from app.models import ACTING_USER, VIA_API, Generation, Job, UsageLedger, User,
 log = logging.getLogger("mixai.worker")
 
 MAX_ATTEMPTS = 3
+# orchestrators that resume from their own saved state and only wait on child jobs
+RESTART_SAFE = frozenset({"presenter_video", "poetry_short", "edit_set", "bulk_run"})
 STALE_AFTER = timedelta(seconds=90)
 HEARTBEAT_EVERY = 5.0
 SWEEP_EVERY = 300.0
@@ -148,7 +150,11 @@ def recover_stuck(db: Session, stale_after: timedelta | None = None, lanes=None)
             job.finished_at = utcnow()
             n += 1
             continue
-        if job.attempts >= MAX_ATTEMPTS:
+        if job.type in RESTART_SAFE:
+            # these pick up from what they saved, so a restart (an update, a crash) isn't a failed attempt;
+            # three server updates in an afternoon used to kill every presenter video that was running
+            job.attempts = max(0, job.attempts - 1)
+        if job.attempts >= MAX_ATTEMPTS and job.type not in RESTART_SAFE:
             job.status = "failed"
             job.error = f"Gave up after {job.attempts} attempts (worker kept dying mid-job)"
             job.finished_at = utcnow()
