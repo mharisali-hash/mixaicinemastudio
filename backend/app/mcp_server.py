@@ -916,6 +916,8 @@ def get_presenter_video(ctx: Context, presenter_id: str) -> dict:
                 "stages": {s["key"]: s["status"] for s in out["stages"]},
                 "detail": next((s.get("detail") for s in out["stages"] if s.get("detail")), None),
                 "scenes": [{"text": s["text"], "seconds": s["duration_s"]} for s in out["scenes"]],
+                # stages alone can't show a cancelled or queued run; the job can
+                "job": _job(out["job"]) if out["job"] else None,
                 "outputs": out["outputs"]}
 
 
@@ -949,6 +951,14 @@ def get_job(ctx: Context, job_id: str) -> dict:
     """A job's status and progress (0-1). Once done it has a download_url (or the transcript)."""
     with acting(ctx, "read") as (db, cur):
         return _job_report(db, cur, job_id, _origin(ctx))
+
+
+@tool("generate", title="Retry a job")
+def retry_job(ctx: Context, job_id: str) -> dict:
+    """Run a failed or cancelled job again. Multi-stage work (presenter videos, Poetry Shorts, films) picks up
+    where it stopped and keeps what was already made."""
+    with acting(ctx, "generate") as (db, cur):
+        return _job(jobs.retry_job(job_id, db=db, cur=cur))
 
 
 @tool("read", title="Wait for a job")

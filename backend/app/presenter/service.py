@@ -269,10 +269,16 @@ def presenter_out(db: Session, pv: PresenterVideo) -> dict:
 
     c = db.get(Character, pv.character_id or "")
     job = db.get(Job, pv.job_id or "")
+    stages = [{"key": k, "label": lbl, **((pv.stages or {}).get(k) or {"status": "pending"})} for k, lbl in STAGES]
+    # a run cancelled while it waited in the queue never got back to its handler to say so
+    if job is not None and job.status in ("cancelled", "failed"):
+        for s in stages:
+            if s["status"] == "running":
+                s.update(status="pending" if job.status == "cancelled" else "failed",
+                         detail=s.get("detail") or ("Cancelled" if job.status == "cancelled" else job.error))
     return {"id": pv.id, "title": pv.title, "language": pv.language, "character_id": pv.character_id,
             "character_name": c.name if c else None, "look_id": pv.look_id, "settings": settings_of(pv),
             "scenes": [scene_out(db, s) for s in pv.scenes or []],
-            "stages": [{"key": k, "label": lbl, **((pv.stages or {}).get(k) or {"status": "pending"})}
-                       for k, lbl in STAGES],
+            "stages": stages,
             "outputs": pv.outputs or {}, "job": job_out(job) if job is not None else None,
             "created_at": pv.created_at, "updated_at": pv.updated_at}

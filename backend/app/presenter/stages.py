@@ -288,6 +288,13 @@ def handle(ctx) -> dict:
         raise
     except W.JobCancelled:
         run.db.rollback()
+        # left as "running", a cancelled video looked stuck forever; say what happened, like Poetry Shorts do
+        pv = run.db.get(PresenterVideo, run.pv.id)
+        if pv is not None and run.current:
+            rec = dict((pv.stages or {}).get(run.current) or {})
+            if rec.get("status") == "running":
+                rec.update(status="pending", detail="Cancelled")
+                pv.stages = {**(pv.stages or {}), run.current: rec}
         run.db.commit()
         raise
     except Exception as e:

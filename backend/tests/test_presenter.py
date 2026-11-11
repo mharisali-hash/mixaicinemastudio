@@ -137,3 +137,32 @@ def test_a_slow_voice_splits_the_scene_and_carries_on(client, fast_driver, monke
     assert stages["speech"] == "done", pv["stages"]
     assert len(pv["scenes"]) == 2 and " ".join(sc["text"] for sc in pv["scenes"]) == text
     assert all(sc["duration_s"] <= 5.0 for sc in pv["scenes"])
+
+
+def test_a_cancelled_video_says_so_stops_its_parts_and_resumes_on_retry(client, fast_driver):
+    from app.models import Job
+    from app.worker import process_one
+
+    c = _presenter_character(client, fast_driver)
+    pv = client.post("/api/presenter", json={"character_id": c["id"], "script": SCRIPT, "review": False}).json()
+    job_id = pv["job"]["id"]
+    # one pass: the voices are queued and the video waits on them in the queue
+    process_one(driver_factory=fast_driver)
+    with SessionLocal() as db:
+        parent = db.get(Job, job_id)
+        parts = list(parent.result["waiting_on"])
+        assert parent.status == "queued" and parts
+
+    r = client.post(f"/api/jobs/{job_id}/cancel")
+    assert r.status_code == 200 and r.json()["status"] == "cancelled"
+    with SessionLocal() as db:
+        assert {db.get(Job, j).status for j in parts} == {"cancelled"}
+    pv = client.get(f"/api/presenter/{pv['id']}").json()
+    speech = next(s for s in pv["stages"] if s["key"] == "speech")
+    assert speech["status"] == "pending" and speech["detail"] == "Cancelled"
+
+    assert client.post(f"/api/jobs/{job_id}/retry").status_code == 200
+    _run_all(fast_driver)
+    pv = client.get(f"/api/presenter/{pv['id']}").json()
+    assert {s["key"]: s["status"] for s in pv["stages"]}["assemble"] == "done", pv["stages"]
+    assert pv["outputs"]["draft"]["duration_s"] > 0

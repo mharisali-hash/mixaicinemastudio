@@ -294,3 +294,21 @@ def test_make_presenter_video_returns_its_job_and_is_listed(client, anon, fast_d
     listed = m.call_json("list_presenter_videos")["result"]
     assert [p["presenter_id"] for p in listed] == [out["presenter_id"]]
     assert m.call_json("get_presenter_video", presenter_id=out["presenter_id"])["presenter_id"] == out["presenter_id"]
+
+
+def test_retry_job_resumes_a_cancelled_presenter_video(client, anon, fast_driver):
+    from tests.test_presenter import _presenter_character
+
+    c = _presenter_character(client, fast_driver)
+    m = Mcp(anon, _mint(client, ["read", "generate"])["token"])
+    out = m.call_json("make_presenter_video", character_id=c["id"], script="Hello.\n\nHow are you?")
+    assert client.post(f"/api/jobs/{out['job_id']}/cancel").status_code == 200
+    got = m.call_json("get_presenter_video", presenter_id=out["presenter_id"])
+    assert got["job"]["status"] == "cancelled"
+
+    assert m.call_json("retry_job", job_id=out["job_id"])["status"] == "queued"
+    _drain(fast_driver)
+    got = m.call_json("get_presenter_video", presenter_id=out["presenter_id"])
+    assert got["job"]["status"] == "done" and got["outputs"]["draft"]
+    # a job that's still fine can't be retried
+    assert m.call("retry_job", job_id=out["job_id"])["isError"]
