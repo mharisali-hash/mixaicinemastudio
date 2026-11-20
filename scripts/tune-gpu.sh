@@ -8,7 +8,7 @@
 #   ./scripts/tune-gpu.sh --dry-run  # show what it would write
 #   ./scripts/tune-gpu.sh --undo     # remove everything this script added and restart
 #
-# Everything goes into drop-in files named 90-mixai-tune.conf, so --undo is exact and the original units are untouched.
+# Everything goes into drop-in files named zz-mixai-tune.conf, so --undo is exact and the original units are untouched.
 set -euo pipefail
 DRY=0 UNDO=0
 for a in "$@"; do
@@ -19,7 +19,8 @@ done
 say()  { printf '\n\033[1;33m==> %s\033[0m\n' "$*"; }
 info() { printf '    %s\n' "$*"; }
 FLAGS="--fast fp8_matrix_mult cublas_ops --preview-method none --reserve-vram 0.6"
-DROPIN=90-mixai-tune.conf
+# "zz-" so it is read after any override.conf already in the unit's folder (Ollama's sets KEEP_ALIVE=1h there)
+DROPIN=zz-mixai-tune.conf
 mapfile -t UNITS < <(systemctl list-units --all --type=service --plain --no-legend 'comfyui*' | awk '{print $1}')
 
 write() {  # $1 path, stdin = content
@@ -32,8 +33,9 @@ write() {  # $1 path, stdin = content
 
 if (( UNDO )); then
   say "Removing the tuning"
-  for u in "${UNITS[@]}" ollama.service; do sudo rm -f "/etc/systemd/system/$u.d/$DROPIN"; done
+  for u in "${UNITS[@]}" ollama.service; do sudo rm -f "/etc/systemd/system/$u.d/$DROPIN" "/etc/systemd/system/$u.d/90-mixai-tune.conf"; done
   sudo rm -f /etc/sysctl.d/90-mixai-gpu.conf
+  sudo sysctl -q vm.swappiness=60   # Ubuntu's default; the file alone only changes it at the next boot
   sudo systemctl daemon-reload
   sudo systemctl restart "${UNITS[@]}" ollama
   info "back to the original settings (persistence mode stays on until the next reboot)"
