@@ -10,6 +10,7 @@ const LEAD: Record<Notice['kind'], string> = {
   warning: 'A warning from a moderator',
   removal: 'A moderator removed one of your items',
   unblock: 'Your account is open again',
+  adult_off: 'Adult content was switched off for your account',
 }
 
 /** What a moderator told this person (contract v42). A hold stays for as long as it lasts; anything else stays

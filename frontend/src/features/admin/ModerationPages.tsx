@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AudioLines, Ban, Check, Eye, ShieldAlert, Trash2, Undo2 } from 'lucide-react'
+import { AudioLines, Ban, Check, Eye, EyeOff, ShieldAlert, Trash2, Undo2 } from 'lucide-react'
+import { ConfirmDialog } from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -12,7 +13,8 @@ import { ChipGroup } from '@/components/studio/chip'
 import { EmptyState, ErrorState } from '@/components/studio/states'
 import { qk } from '@/hooks/keys'
 import { api } from '@/lib/api'
-import type { ModPerson, ReviewItem, ReviewState } from '@/lib/types'
+import { useMe } from '@/hooks/useAuth'
+import type { HeldItem, ModPerson, ReviewItem, ReviewState } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { Notice } from '@/features/auth/AuthLayout'
 import { announce } from '@/stores/ui'
@@ -27,12 +29,13 @@ const PRESETS = [
   'Spam or misuse of the studio',
 ]
 
-type ReasonMode = 'remove' | 'warn' | 'block' | 'unblock'
+type ReasonMode = 'remove' | 'warn' | 'block' | 'unblock' | 'adult_off'
 const MODE_TEXT: Record<ReasonMode, { title: string; action: string; tone: 'primary' | 'danger' }> = {
   remove: { title: 'Remove this item', action: 'Remove', tone: 'danger' },
   warn: { title: 'Send a warning', action: 'Send warning', tone: 'primary' },
   block: { title: 'Put the account on hold', action: 'Put on hold', tone: 'danger' },
   unblock: { title: 'Lift the hold', action: 'Lift the hold', tone: 'primary' },
+  adult_off: { title: 'Switch off adult content', action: 'Switch off', tone: 'danger' },
 }
 
 export interface ReasonResult {
@@ -166,7 +169,10 @@ function Tile({ item, selected, onToggle, onOpen, onRemove, onWarn, onRestore }:
         <label className="absolute left-2 top-2 flex size-7 items-center justify-center rounded-[6px] bg-studio-panel/90">
           <input type="checkbox" className="size-4 accent-studio-accent" checked={selected} onChange={(e) => onToggle(e.target.checked)} aria-label={`Select ${label}`} />
         </label>
-        {item.kind === 'video' && <Badge tone="neutral" className="absolute right-2 top-2">Video</Badge>}
+        <div className="absolute right-2 top-2 flex gap-1">
+          {item.adult && <Badge tone="warning">18+</Badge>}
+          {item.kind === 'video' && <Badge tone="neutral">Video</Badge>}
+        </div>
       </div>
       <div className="flex flex-1 flex-col gap-1 p-2">
         <p className="truncate text-body font-medium" title={label}>
@@ -239,10 +245,11 @@ export function ReviewPage() {
   const [q, setQ] = useState('')
   const [since, setSince] = useState('')
   const [until, setUntil] = useState('')
+  const [adult, setAdult] = useState(false)
   const [selected, setSelected] = useState<string[]>([])
   const [open, setOpen] = useState<ReviewItem | null>(null)
   const [acting, setActing] = useState<{ mode: 'remove' | 'warn'; item: ReviewItem } | null>(null)
-  const filters = { state, kind: kind ?? undefined, user: user || undefined, q: q.trim() || undefined, since: since || undefined, until: until || undefined }
+  const filters = { state, kind: kind ?? undefined, user: user || undefined, q: q.trim() || undefined, since: since || undefined, until: until || undefined, adult: adult || undefined }
   const people = useQuery({ queryKey: qk.modPeople('', 'all'), queryFn: () => api.moderation.people() })
   const items = useInfiniteQuery({
     queryKey: qk.review(filters),
@@ -291,6 +298,10 @@ export function ReviewPage() {
           <Label htmlFor="rv-q">Search</Label>
           <Input id="rv-q" className="h-8 w-48" placeholder="Title, name or email" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
+        <label className="flex h-8 items-center gap-2 text-body">
+          <input type="checkbox" className="size-4 accent-studio-accent" checked={adult} onChange={(e) => setAdult(e.target.checked)} />
+          Adult mode only
+        </label>
       </div>
 
       {selected.length > 0 && (
@@ -359,21 +370,32 @@ export function ReviewPage() {
 
 // ---------------------------------------------------------------- people
 
+type PersonMode = 'warn' | 'block' | 'unblock' | 'adult_off'
+const PERSON_DONE: Record<PersonMode, string> = {
+  warn: 'warning sent',
+  block: 'on hold',
+  unblock: 'hold lifted',
+  adult_off: 'adult content switched off',
+}
+
 /** Moderation › People: warnings in the last 90 days, holds, and the actions on an account. */
 export function PeoplePage() {
   const [q, setQ] = useState('')
   const [status, setStatus] = useState<'all' | 'warned' | 'blocked'>('all')
-  const [acting, setActing] = useState<{ mode: 'warn' | 'block' | 'unblock'; person: ModPerson } | null>(null)
+  const { data: me } = useMe()
+  const [acting, setActing] = useState<{ mode: PersonMode; person: ModPerson } | null>(null)
   const people = useQuery({ queryKey: qk.modPeople(q, status), queryFn: () => api.moderation.people(q, status) })
   const act = useModAction(
-    ({ mode, person, r }: { mode: 'warn' | 'block' | 'unblock'; person: ModPerson; r: ReasonResult }) =>
-      mode === 'warn'
-        ? api.moderation.warn(person.id, { reason: r.reason, email: r.email })
-        : mode === 'block'
-          ? api.moderation.block(person.id, { reason: r.reason, email: r.email })
-          : api.moderation.unblock(person.id, { reason: r.reason, email: r.email }),
-    ({ mode, person }) => `${person.name || person.email}: ${mode === 'warn' ? 'warning sent' : mode === 'block' ? 'on hold' : 'hold lifted'}`,
+    ({ mode, person, r }: { mode: PersonMode; person: ModPerson; r: ReasonResult }) => {
+      const body = { reason: r.reason, email: r.email }
+      if (mode === 'warn') return api.moderation.warn(person.id, body)
+      if (mode === 'block') return api.moderation.block(person.id, body)
+      if (mode === 'adult_off') return api.moderation.adultOff(person.id, body)
+      return api.moderation.unblock(person.id, body)
+    },
+    ({ mode, person }) => `${person.name || person.email}: ${PERSON_DONE[mode]}`,
   )
+  const allow = useModAction((p: ModPerson) => api.moderation.adultAllow(p.id), (p) => `${p.name || p.email}: adult content can be switched on again`)
   const limit = people.data?.warn_limit ?? 3
 
   return (
@@ -395,6 +417,7 @@ export function PeoplePage() {
           allowEmpty={false}
         />
       </div>
+      {allow.error && <Notice>{allow.error.message}</Notice>}
       {people.isError ? (
         <ErrorState error={people.error} onRetry={() => people.refetch()} />
       ) : !people.data ? (
@@ -437,8 +460,20 @@ export function PeoplePage() {
                       ) : (
                         <Badge tone="success">Active</Badge>
                       )}
+                      {p.adult && <Badge tone="warning" className="ml-1">Adult mode</Badge>}
+                      {p.adult_off && <Badge tone="neutral" className="ml-1">Adult off</Badge>}
                     </td>
                     <td className={`${td} whitespace-nowrap text-right`}>
+                      {p.adult && (
+                        <Button size="sm" variant="ghost" onClick={() => setActing({ mode: 'adult_off', person: p })}>
+                          <EyeOff aria-hidden /> Switch off adult
+                        </Button>
+                      )}
+                      {p.adult_off && me?.admin && (
+                        <Button size="sm" variant="ghost" loading={allow.isPending && allow.variables?.id === p.id} onClick={() => allow.mutate(p)}>
+                          <Undo2 aria-hidden /> Allow adult again
+                        </Button>
+                      )}
                       <Button size="sm" variant="ghost" onClick={() => setActing({ mode: 'warn', person: p })}>
                         <ShieldAlert aria-hidden /> Warn
                       </Button>
@@ -475,6 +510,112 @@ export function PeoplePage() {
   )
 }
 
+// ---------------------------------------------------------------- held by the age check
+
+function HeldCard({ item, onRelease, onDelete, pending }: {
+  item: HeldItem
+  onRelease: () => void
+  onDelete: () => void
+  pending: boolean
+}) {
+  // blurred until someone chooses to look: most of these are adults the check misjudged, but not all
+  const [shown, setShown] = useState(false)
+  const video = (item.media_type ?? '').startsWith('video/')
+  const who = item.owner ? item.owner.name || item.owner.email : 'Unknown'
+  return (
+    <li className="flex flex-col overflow-hidden rounded-[8px] border border-studio-border bg-studio-raised">
+      <div className="relative aspect-square overflow-hidden bg-studio-panel">
+        {video ? (
+          <video src={item.file_url} controls={shown} muted className={cn('size-full object-cover', !shown && 'scale-110 blur-2xl')} />
+        ) : (
+          <img src={item.file_url} alt={shown ? item.prompt || 'Held picture' : ''} className={cn('size-full object-cover', !shown && 'scale-110 blur-2xl')} />
+        )}
+        {!shown && (
+          <button
+            type="button"
+            onClick={() => setShown(true)}
+            className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-studio-darkroom/40 text-body text-studio-on-dark focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-studio-gold/50"
+          >
+            <Eye aria-hidden className="size-5" />
+            Show the picture
+          </button>
+        )}
+      </div>
+      <div className="flex flex-1 flex-col gap-1 p-2">
+        <p className="text-body">
+          <span className="font-medium">{who}</span>
+          {item.adult && <Badge tone="warning" className="ml-1">18+</Badge>}
+        </p>
+        {item.owner && <p className="truncate text-small text-studio-muted">{item.owner.email}</p>}
+        <p className="text-small">
+          <span className="text-studio-muted">Looked like: </span>
+          {item.age ? `about ${item.age}` : 'age unclear'}
+          {item.why && <span className="text-studio-muted"> ({item.why})</span>}
+        </p>
+        {item.prompt && <p className="line-clamp-3 text-small text-studio-muted" title={item.prompt}>{item.prompt}</p>}
+        <p className="text-small text-studio-muted">{when(item.held_at ?? item.created_at)}</p>
+        <div className="mt-auto flex flex-wrap gap-1 pt-1">
+          <Button size="sm" onClick={onRelease} disabled={pending} aria-label={`Release the picture by ${who}`}>
+            <Check aria-hidden /> Release
+          </Button>
+          <Button size="sm" variant="ghost" onClick={onDelete} disabled={pending} aria-label={`Delete the picture by ${who}`}>
+            <Trash2 aria-hidden /> Delete
+          </Button>
+        </div>
+      </div>
+    </li>
+  )
+}
+
+/** Moderation › Held for review: pictures the age check flagged without a clear child. Admins only; a picture
+ * goes to its owner's Library only when a different admin releases it. */
+export function HeldPage() {
+  const held = useQuery({ queryKey: qk.modHeld, queryFn: api.moderation.held })
+  const [deleting, setDeleting] = useState<HeldItem | null>(null)
+  const release = useModAction((id: string) => api.moderation.release(id), () => 'Released to their Library')
+  const remove = useModAction((id: string) => api.moderation.deleteHeld(id), () => 'Deleted')
+  const list = held.data?.items ?? []
+  return (
+    <AdminPage
+      id="held-title"
+      title="Held for review"
+      intro="Pictures the age check wasn't sure about. Look, then release the ones that show adults or delete the rest. You can't release your own."
+    >
+      {(release.error || remove.error) && <Notice>{(release.error ?? remove.error)?.message}</Notice>}
+      {held.isError ? (
+        <ErrorState error={held.error} onRetry={() => held.refetch()} />
+      ) : held.isPending ? (
+        <p role="status" className="text-body text-studio-muted">
+          Loading…
+        </p>
+      ) : !list.length ? (
+        <EmptyState title="Nothing held">Pictures the age check holds show up here.</EmptyState>
+      ) : (
+        <ul aria-label="Held pictures" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {list.map((it) => (
+            <HeldCard
+              key={it.id}
+              item={it}
+              pending={release.isPending || remove.isPending}
+              onRelease={() => release.mutate(it.id)}
+              onDelete={() => setDeleting(it)}
+            />
+          ))}
+        </ul>
+      )}
+      <ConfirmDialog
+        open={!!deleting}
+        onOpenChange={(o) => !o && setDeleting(null)}
+        title="Delete this picture?"
+        description="It's removed for good, and its owner sees that our team took it out."
+        confirmLabel="Delete"
+        tone="danger"
+        onConfirm={() => deleting && remove.mutate(deleting.id, { onSuccess: () => setDeleting(null) })}
+      />
+    </AdminPage>
+  )
+}
+
 // ---------------------------------------------------------------- log
 
 const ACTION_LABEL: Record<string, string> = {
@@ -484,6 +625,8 @@ const ACTION_LABEL: Record<string, string> = {
   moderation_warning: 'Sent a warning',
   moderation_block: 'Put an account on hold',
   moderation_unblock: 'Lifted a hold',
+  moderation_adult_off: 'Switched off adult content',
+  moderation_adult_allowed: 'Allowed adult content again',
 }
 
 /** Moderation › Log: every moderation action, newest first; a manager sees the ones about their people. */

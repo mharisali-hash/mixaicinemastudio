@@ -17,6 +17,7 @@ from app.models import Generation, Job, ManagerMember, MediaItem, User, UserNoti
 from app.security import CurrentUser
 
 WARNING, REMOVAL, BLOCK, UNBLOCK = "warning", "removal", "block", "unblock"
+ADULT_OFF = "adult_off"
 WARN_WINDOW = timedelta(days=90)
 
 
@@ -66,8 +67,12 @@ STATES = ("queue", "reviewed", "removed", "all")
 
 def list_items(db: Session, cur: CurrentUser, *, user_id: str | None = None, kind: str | None = None,
                since=None, until=None, state: str = "queue", q: str = "", limit: int = 60,
-               before=None) -> list[tuple[MediaItem, User]]:
+               before=None, adult: bool = False) -> list[tuple[MediaItem, User]]:
     stmt = _owned_items(cur).where(MediaItem.kind.in_(("image", "video", "audio")))
+    if adult:
+        # what adult mode made (content_policy.check_before marks it), by the item's current version
+        stmt = stmt.join(Generation, Generation.id == MediaItem.generation_id).where(
+            func.json_extract(Generation.params, "$.adult") == 1)
     if state == "queue":
         # uploads too: a picture brought in from outside can break the rules as easily as one made here
         stmt = stmt.where(MediaItem.reviewed_at.is_(None), MediaItem.removed_at.is_(None))
@@ -107,6 +112,7 @@ def item_out(db: Session, item: MediaItem, owner: User) -> dict:
             "media_type": g.media_type if g else None, "width": item.width, "height": item.height,
             "duration_s": item.duration_s, "created_at": item.created_at,
             "owner": {"id": owner.id, "email": owner.email, "name": owner.display_name},
+            "adult": bool(params.get("adult")),
             "reviewed_at": item.reviewed_at, "removed_at": item.removed_at, "removed_reason": item.removed_reason,
             "thumb_url": f"{base}/thumb" if g and g.file_path else None,
             "file_url": f"{base}/file" if g and g.file_path else None}
@@ -171,6 +177,111 @@ def unblock(db: Session, cur: CurrentUser, user: User, reason: str = "", *, emai
     return notify(db, cur, user, UNBLOCK, reason or "Your account is open again.", email=email)
 
 
+def adult_off(db: Session, cur: CurrentUser, user: User, reason: str, *, email: bool = False) -> UserNotice:
+    if user.adult_revoked_at is not None:
+        raise HTTPException(409, "Adult content is off for them already")
+    # the opt-in goes too, so lifting this later doesn't switch it back on without their three ticks
+    user.adult_revoked_at, user.adult_revoked_by, user.adult_mode_at = utcnow(), cur.user.id, None
+    return notify(db, cur, user, ADULT_OFF, reason, email=email)
+
+
+def adult_allow(db: Session, cur: CurrentUser, user: User) -> None:
+    # admins only: a manager can switch it off but not lift that
+    if not cur.user.is_admin:
+        raise HTTPException(403, "Only an admin can lift this")
+    if user.adult_revoked_at is None:
+        raise HTTPException(409, "Adult content isn't switched off for them")
+    user.adult_revoked_at = user.adult_revoked_by = None
+    audit.record(db, cur.user, "moderation_adult_allowed", "user", user.id)
+
+
+# ---------------------------------------------------------------- held by the age check (admins only)
+
+HELD_GONE = "Removed after a check by our team."
+
+
+def _requester(db: Session, g: Generation) -> User | None:
+    uid = db.scalar(select(Job.user_id).where(Job.generation_id == g.id).order_by(Job.created_at.desc()).limit(1))
+    if uid is None:
+        uid = db.scalar(select(Workspace.owner_user_id).where(Workspace.id == g.workspace_id))
+    return db.get(User, uid) if uid else None
+
+
+def held_list(db: Session, limit: int = 100) -> list[dict]:
+    rows = db.scalars(select(Generation).where(Generation.status == "held")
+                      .order_by(Generation.created_at.desc()).limit(limit))
+    out = []
+    for g in rows:
+        held = (g.params or {}).get("held") or {}
+        owner = _requester(db, g)
+        out.append({"id": g.id, "kind": g.kind, "media_type": held.get("media_type"),
+                    "prompt": ((g.params or {}).get("user_prompt") or g.prompt or "")[:600],
+                    "why": held.get("why") or "", "age": held.get("age") or 0, "held_at": held.get("at"),
+                    "created_at": g.created_at, "adult": bool((g.params or {}).get("adult")),
+                    "owner": {"id": owner.id, "email": owner.email, "name": owner.display_name} if owner else None,
+                    "file_url": f"/api/moderation/held/{g.id}/file"})
+    return out
+
+
+def held_generation(db: Session, gen_id: str) -> Generation:
+    g = db.get(Generation, gen_id)
+    if g is None or g.status != "held" or not (g.params or {}).get("held"):
+        raise HTTPException(404, "Nothing held with that id")
+    return g
+
+
+def held_path(g: Generation):
+    p = get_settings().data_dir / g.params["held"]["path"]
+    return p if p.is_file() else None
+
+
+def release_held(db: Session, cur: CurrentUser, g: Generation) -> None:
+    """Back where the worker would have put it, then the same Library step a finished job takes."""
+    import shutil
+
+    from app import library, thumbs
+
+    owner = _requester(db, g)
+    if owner is not None and owner.id == cur.user.id:
+        raise HTTPException(403, "Another admin has to release this: it's your own picture")
+    held = g.params["held"]
+    src = held_path(g)
+    if src is None:
+        raise HTTPException(404, "The held file is missing")
+    home = get_settings().data_dir / held["home"]
+    home.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(src), home)
+    g.file_path, g.media_type, g.status = held["home"], held.get("media_type") or g.media_type, "ready"
+    g.params = {**{k: v for k, v in g.params.items() if k != "held"},
+                "held_released": {"by": cur.user.id, "at": utcnow().isoformat(), "age": held.get("age")}}
+    # the job ended "failed" with the held message; the tile goes by it, so it says done now
+    db.execute(update(Job).where(Job.generation_id == g.id, Job.status == "failed")
+               .values(status="done", error=None, message="Done").execution_options(synchronize_session=False))
+    audit.record(db, cur.user, "child_check_released", "generation", g.id, owner=owner.id if owner else None,
+                 age=held.get("age"))
+    library.on_generation_finished(db, g)
+    try:
+        thumbs.for_generation(g)
+    except Exception:
+        # the grid makes one on demand anyway
+        pass
+
+
+def delete_held(db: Session, cur: CurrentUser, g: Generation) -> None:
+    held = g.params["held"]
+    src = held_path(g)
+    if src is not None:
+        src.unlink(missing_ok=True)
+    g.status, g.note = "failed", HELD_GONE
+    g.params = {**{k: v for k, v in g.params.items() if k != "held"},
+                "held_deleted": {"by": cur.user.id, "at": utcnow().isoformat(), "age": held.get("age")}}
+    db.execute(update(Job).where(Job.generation_id == g.id, Job.status == "failed")
+               .values(error=HELD_GONE).execution_options(synchronize_session=False))
+    owner = _requester(db, g)
+    audit.record(db, cur.user, "child_check_deleted", "generation", g.id, owner=owner.id if owner else None,
+                 age=held.get("age"))
+
+
 def notify(db: Session, cur: CurrentUser, user: User, kind: str, reason: str, *, item: MediaItem | None = None,
            email: bool = False, **detail) -> UserNotice:
     n = UserNotice(user_id=user.id, kind=kind, reason=reason, item_type="media" if item else "",
@@ -186,14 +297,17 @@ def notify(db: Session, cur: CurrentUser, user: User, kind: str, reason: str, *,
 
 
 SUBJECTS = {WARNING: "A warning about your account", REMOVAL: "We removed one of your items",
-            BLOCK: "Your account is on hold", UNBLOCK: "Your account is open again"}
+            BLOCK: "Your account is on hold", UNBLOCK: "Your account is open again",
+            ADULT_OFF: "Adult content is off for your account"}
 
 
 def _mail(user: User, kind: str, reason: str):
     lead = {WARNING: "A moderator has sent you a warning.", REMOVAL: "A moderator removed one of your items.",
             BLOCK: "A moderator has put your account on hold. You can still sign in, look at and download your "
                    "work, but you can't make anything new for now.",
-            UNBLOCK: "Your account is open again, and you can carry on creating."}[kind]
+            UNBLOCK: "Your account is open again, and you can carry on creating.",
+            ADULT_OFF: "A moderator has switched adult content off for your account. Everything else works as "
+                       "before."}[kind]
     return mailer.compose(user.email, SUBJECTS[kind], SUBJECTS[kind], [lead, f"Reason: {reason}"],
                           button=("Open the studio", mailer.link("/")))
 

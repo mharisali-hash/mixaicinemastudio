@@ -163,7 +163,8 @@ export type TileState = 'pending' | 'ready' | 'failed'
 /** MediaItem has no status in the contract; combine what the item, its generation and its job say. */
 export function tileState(item: MediaItem, gen?: { status: GenerationStatus } | null, job?: Job): TileState {
   const status = gen?.status ?? item.status
-  if (status === 'failed' || job?.status === 'failed') return 'failed'
+  // held by the age check: nothing to show until the team looks, and the tile says so
+  if (status === 'failed' || status === 'held' || job?.status === 'failed') return 'failed'
   if (status === 'queued' || status === 'generating') return 'pending'
   if (job && (job.status === 'queued' || job.status === 'running')) return 'pending'
   return item.media_url ? 'ready' : 'pending'

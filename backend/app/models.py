@@ -1,10 +1,11 @@
 """ORM models. Every domain row carries workspace_id so multi-tenant later is a filter, not a rewrite."""
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy import (
     JSON,
     Boolean,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -89,6 +90,10 @@ class User(Base):
     blocked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     blocked_reason: Mapped[str] = mapped_column(String(1000), default="", server_default="")
     blocked_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    # 18+ opt-in (owner, 22 Nov): text-only work of made-up people may be adult. An admin can switch it off
+    adult_mode_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    adult_revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    adult_revoked_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
@@ -1148,7 +1153,14 @@ class ImplantPatient(Base):
     surgeon_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("user.id", ondelete="CASCADE"), index=True)
     label: Mapped[str] = mapped_column(String(120))
     adult_confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
-    # {at, attested_by, form_path, topless_ok}; nothing is generated until it's recorded
+    # required for new patients since 22 Nov; under 18 means no photo previews at all, only planning and the 3D form
+    date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # the patient's own account, linked by a one-time code the surgeon hands over; view and try sizes only
+    patient_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("user.id", ondelete="SET NULL"),
+                                                        nullable=True, index=True)
+    invite_code_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    invite_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # {at, attested_by, form_path, topless_ok, guardian}; nothing is generated until it's recorded
     consent: Mapped[dict] = mapped_column(JSON, default=dict)
     measurements: Mapped[dict] = mapped_column(JSON, default=dict)
     notes: Mapped[str] = mapped_column(Text, default="")

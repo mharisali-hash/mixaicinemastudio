@@ -14,22 +14,36 @@ export type Placement = 'subglandular' | 'submuscular' | 'dual_plane'
 export type Fill = 'silicone' | 'saline'
 export type Procedure = 'augmentation' | 'augmentation_lift'
 
+export interface Guardian {
+  name: string
+  relation: string
+  consented_at: string
+}
+
 export interface Consent {
   at: string | null
   attested_by: string | null
   topless_ok: boolean
   form: boolean
+  // under 18: a parent or guardian signed
+  guardian?: Guardian | null
 }
 
 export interface PatientSummary {
   id: string
   label: string
   adult_confirmed: boolean
+  // null on records from before the date of birth was asked; they keep the 18+ tick
+  date_of_birth: string | null
+  age: number | null
+  // under 18: planning and the 3D form only, no photos
+  minor: boolean
   consent: Consent
   retention_months: number
   last_activity_at: string
   created_at: string
   approved: boolean
+  patient_linked: boolean
 }
 
 export interface Measurements {
@@ -59,6 +73,8 @@ export interface ImplantPicture {
   chest_box?: ChestBox
   garment_check?: boolean | null
   engine?: Engine
+  // the age check queried this topless photo; unused until the date of birth is typed again
+  age_flag?: boolean
 }
 
 export interface ImplantOption {
@@ -108,11 +124,19 @@ export interface Patient extends PatientSummary {
   photos: Partial<Record<View, ImplantPicture | null>>
   sessions: ImplantSession[]
   chart: Chart
+  patient_account: { linked: boolean; name: string | null; invite_expires_at: string | null }
+}
+
+export interface GuardianIn {
+  name: string
+  relation: string
+  consented: boolean
 }
 
 export interface PatientCreate {
   label: string
-  adult_confirmed: boolean
+  date_of_birth: string
+  guardian?: GuardianIn
   consent_attested: boolean
   topless_ok: boolean
   retention_months: number
@@ -120,7 +144,21 @@ export interface PatientCreate {
   notes?: string
 }
 
-export type PatientPatch = Partial<Pick<Patient, 'label' | 'retention_months' | 'measurements' | 'notes'>> & { topless_ok?: boolean }
+export type PatientPatch = Partial<Pick<Patient, 'label' | 'retention_months' | 'measurements' | 'notes'>> & { topless_ok?: boolean; date_of_birth?: string; guardian?: GuardianIn }
+
+// a record the patient opens from her own account is kept for one of these
+export const PATIENT_KEEP = [1, 3, 6] as const
+
+export const ADULT_AGE = 18
+// whole years on the given day, as the server counts them (service.years)
+export function yearsSince(dob: string, today = new Date()) {
+  const [y, m, d] = dob.split('-').map(Number)
+  if (!y || !m || !d) return null
+  const md = (today.getMonth() + 1) * 100 + today.getDate()
+  return today.getFullYear() - y - (md < m * 100 + d ? 1 : 0)
+}
+
+export const flaggedPhotos = (p: Patient) => Object.values(p.photos).filter((g): g is ImplantPicture => !!g?.age_flag)
 
 export const VIEWS: View[] = ['front', 'left_oblique', 'right_oblique', 'left_lateral', 'right_lateral']
 export const VIEW_LABEL: Record<View, string> = { own: 'Her own photo', front: 'Front', left_oblique: 'Left 45°', right_oblique: 'Right 45°', left_lateral: 'Left 90°', right_lateral: 'Right 90°' }
@@ -212,6 +250,53 @@ export const implantApi = {
   render: (id: string, options: ImplantOption[], engines: Engine[]) => request<Patient>('POST', `${base(id)}/sessions`, { options, engines }),
   approve: (id: string, sessionId: string, body: { option: number; engine: Engine; notes: string }) => request<Patient>('POST', `${base(id)}/sessions/${sessionId}/approve`, body),
   retry: (jobId: string) => request<Job>('POST', `/jobs/${jobId}/retry`, {}),
+  invite: (id: string, retention_months?: number) =>
+    request<{ code: string; expires_at: string; patient: Patient }>('POST', `${base(id)}/invite`, retention_months ? { retention_months } : {}),
+  unlink: (id: string) => request<Patient>('DELETE', `${base(id)}/patient`),
+  confirmAge: (id: string, genId: string, date_of_birth: string) => request<ImplantPicture>('POST', `${base(id)}/photos/${genId}/confirm-age`, { date_of_birth }),
   chartUrl: (id: string) => `/api${base(id)}/chart.pdf`,
   consultationUrl: (id: string, sessionId: string) => `/api${base(id)}/sessions/${sessionId}/consultation.pdf`,
+}
+
+// ---------------------------------------------------------------- My preview: the patient's own view
+
+export interface PreviewOption {
+  label: string
+  left_cc: number
+  right_cc: number
+  profile: Profile
+  shape: ImplantShape
+  placement: Placement
+  fill: Fill
+  procedure: Procedure
+}
+
+export interface PreviewPicture {
+  id: string
+  status: GenerationStatus
+  url: string | null
+  option: number
+  view: View
+}
+
+export interface MyPreview {
+  linked: true
+  label: string
+  clinic: string
+  kept_until: string
+  photos: { id: string; view: View; view_label: string; url: string | null }[]
+  sessions: { id: string; created_at: string; by: 'you' | 'clinic'; options: PreviewOption[]; results: PreviewPicture[] }[]
+  approved: { option: PreviewOption; approved_at: string | null } | null
+  can_try: boolean
+}
+
+export type MyPreviewAnswer = MyPreview | { linked: false }
+
+export const previewBusy = (p: MyPreviewAnswer | undefined) => !!p?.linked && p.sessions.some((s) => s.results.some((r) => r.status === 'queued' || r.status === 'generating'))
+
+export const myPreviewApi = {
+  // poll: a refresh while a preview renders, which the server doesn't log as a new visit
+  get: (poll = false) => request<MyPreviewAnswer>('GET', `/implant-patient/me${poll ? '?poll=1' : ''}`),
+  link: (code: string) => request<MyPreview>('POST', '/implant-patient/link', { code }),
+  tryOn: (option: Omit<PreviewOption, 'label'>) => request<MyPreview>('POST', '/implant-patient/me/try', { option }),
 }

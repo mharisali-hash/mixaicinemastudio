@@ -187,6 +187,9 @@ def to_library(path: Path, workspace_id: str, title: str, params: dict, folder_i
         try:
             content_policy.check_after(ctx, g, dst, "video/mp4")
         except RuntimeError:
+            if g.status == "held":
+                # kept for an admin to release or delete (Moderation → Held for review)
+                raise
             # the check already deleted the file and recorded why; the rows go too
             db.delete(g)
             db.delete(item)

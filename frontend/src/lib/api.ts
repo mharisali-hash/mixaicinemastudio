@@ -136,6 +136,7 @@ import type {
   VPEstimate,
   VPQuality,
   VPRegenerate,
+  HeldItem,
   ModLogRow,
   ModPerson,
   Notice,
@@ -397,6 +398,8 @@ export const api = {
       post<User>('/auth/password', { current_password, new_password }),
     logoutEverywhere: () => post<void>('/auth/logout-everywhere'),
     updateMe: (display_name: string) => patch<User>('/auth/me', { display_name }),
+    setAdult: (body: { on: boolean; confirm_18?: boolean; confirm_made_up?: boolean; confirm_review?: boolean }) =>
+      patch<User>('/auth/me/adult', body),
     // dev-only prefill; the server answers {enabled:false} anywhere but a local dev run
     devLogin: () => get<{ enabled: boolean; email?: string; password?: string }>('/auth/dev-login'),
   },
@@ -456,7 +459,7 @@ export const api = {
   },
   // contract v42: admins and managers; everyone else gets 404
   moderation: {
-    items: (q: { user?: string; kind?: string; state?: ReviewState; q?: string; since?: string; until?: string; before?: string; limit?: number }) =>
+    items: (q: { user?: string; kind?: string; state?: ReviewState; q?: string; since?: string; until?: string; before?: string; limit?: number; adult?: boolean }) =>
       get<{ items: ReviewItem[]; next: string | null }>('/moderation/items', q),
     reviewed: (ids: string[]) => post<{ reviewed: number }>('/moderation/items/reviewed', { ids }),
     remove: (id: string, body: { reason: string; warn: boolean; email: boolean }) => post<ReviewItem>(`/moderation/items/${id}/remove`, body),
@@ -468,6 +471,12 @@ export const api = {
     block: (id: string, body: { reason: string; email: boolean }) => post<unknown>(`/moderation/users/${id}/block`, body),
     unblock: (id: string, body: { reason?: string; email: boolean }) => post<unknown>(`/moderation/users/${id}/unblock`, body),
     log: () => get<ModLogRow[]>('/moderation/log'),
+    adultOff: (id: string, body: { reason: string; email: boolean }) => post<unknown>(`/moderation/users/${id}/adult-off`, body),
+    // admins only: a manager can switch it off but not lift that
+    adultAllow: (id: string) => post<unknown>(`/moderation/users/${id}/adult-allow`),
+    held: () => get<{ items: HeldItem[] }>('/moderation/held'),
+    release: (id: string) => post<unknown>(`/moderation/held/${id}/release`),
+    deleteHeld: (id: string) => post<unknown>(`/moderation/held/${id}/delete`),
   },
   // contract v27: browser session only; the server refuses these with a token
   tokens: {

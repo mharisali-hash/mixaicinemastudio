@@ -79,6 +79,33 @@ describe('Settings: Account', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent("current password isn't right")
   })
 
+  it('switches adult content on only after all three ticks, and off in one click', async () => {
+    const { calls, user } = open(me, (method, path, body) => {
+      if (method === 'PATCH' && path === '/auth/me/adult') return { ...me, adult: (body as { on: boolean }).on }
+    })
+    const card = screen.getByRole('region', { name: 'Adult content (18+)' })
+    await user.click(within(card).getByRole('button', { name: 'Switch on…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Switch on adult content?' })
+    const go = within(dialog).getByRole('button', { name: 'Switch on' })
+    await user.click(within(dialog).getByLabelText('I am 18 or older'))
+    await user.click(within(dialog).getByLabelText('Only made-up people; never real people’s photos'))
+    expect(go).toBeDisabled()
+    await user.click(within(dialog).getByLabelText('My work may be reviewed, and misuse blocks my account'))
+    await user.click(go)
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === 'PATCH')?.body).toEqual({ on: true, confirm_18: true, confirm_made_up: true, confirm_review: true }),
+    )
+    await user.click(await within(card).findByRole('button', { name: 'Switch off' }))
+    await waitFor(() => expect(calls.filter((c) => c.method === 'PATCH').at(-1)?.body).toEqual({ on: false }))
+  })
+
+  it('says when the team switched adult content off', () => {
+    open({ ...me, adult_off: true })
+    const card = screen.getByRole('region', { name: 'Adult content (18+)' })
+    expect(card).toHaveTextContent('Our team switched this off')
+    expect(within(card).queryByRole('button', { name: /Switch on/ })).toBeNull()
+  })
+
   it('signs out everywhere after a confirm', async () => {
     const { calls, user } = open(me, (method, path) => {
       if (method === 'POST' && path === '/auth/logout-everywhere') return new Response(null, { status: 204 })

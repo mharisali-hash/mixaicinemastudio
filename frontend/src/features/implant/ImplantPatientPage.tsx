@@ -13,6 +13,7 @@ import { announce } from '@/stores/ui'
 import { BodyModel } from './BodyModel'
 import { Measurements } from './Measurements'
 import { Options } from './Options'
+import { AgeCard, PatientAccount } from './PatientAccount'
 import { Photos } from './Photos'
 import { Results } from './Results'
 
@@ -35,6 +36,10 @@ function PatientView({ patient }: { patient: Patient }) {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 md:px-8">
       <Header patient={patient} />
+      <div className="grid min-w-0 gap-3 md:grid-cols-2">
+        <AgeCard key={patient.date_of_birth ?? 'none'} patient={patient} />
+        <PatientAccount patient={patient} />
+      </div>
       <Photos patient={patient} />
       <Measurements key={patient.id} patient={patient} />
       <Options patient={patient} />
@@ -78,7 +83,7 @@ function Header({ patient }: { patient: Patient }) {
         <label className="flex items-center gap-2.5 text-body">
           <Switch
             checked={patient.consent.topless_ok}
-            disabled={patch.isPending}
+            disabled={patch.isPending || patient.minor}
             onCheckedChange={(v) => patch.mutate({ topless_ok: v }, { onSuccess: () => announce(v ? 'Topless photos allowed' : 'Topless photos no longer allowed') })}
           />
           Topless clinical photos allowed

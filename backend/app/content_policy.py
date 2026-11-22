@@ -1,7 +1,8 @@
 """What Jafat won't picture (owner, 24 Oct 2026; Pakistan is an Islamic state by law):
 
-- nudity, sexual or revealing pictures and videos, for everyone but admins. The private Implant Preview has its
-  own consent-gated rules and is left to them;
+- nudity, sexual or revealing pictures and videos, for everyone but admins and, since 22 Nov, people who opted in
+  to adult mode (18+, made-up people only: never on a job that starts from a picture). The private Implant
+  Preview has its own consent-gated rules and is left to them;
 - the Prophets (Prophet Muhammad ﷺ first of all), the Sahaba, the Ahl-e-Bayt, angels and other revered
   religious figures, for everyone, admins included (Khatm-e-Nabuwwat; PPC 295-C);
 - a child (anyone who looks under 18) in a sexual or nude way, for everyone, admins included. There is no setting
@@ -157,6 +158,14 @@ class _Look(BaseModel):
 class _Minor(BaseModel):
     minor_nude_or_sexual: bool
     why: str = ""
+    # the youngest flagged person's apparent age, 0 when unsure; only a clear child is deleted unseen
+    apparent_age: int = 0
+
+
+HELD_MSG = "Held for a quick check by our team."
+# below this the flag is trusted and the picture deleted unseen; above it the model has called a petite
+# 45-year-old a child (22 Nov), so a person looks first
+CLEAR_CHILD = 13
 
 
 def _ask_vision(path: Path, question: str, schema, tick=None):
@@ -196,16 +205,29 @@ def picture_refusal(path: Path, tick=None) -> str | None:
     return None
 
 
-def minor_refusal(path: Path, tick=None) -> str | None:
-    """Admins may make adult nudity, so their pictures get only this narrower question."""
+def minor_look(path: Path, tick=None) -> _Minor | None:
+    """The flag, or None when the picture passed or the model couldn't answer."""
     look = _ask_vision(path, "Is anyone in this picture who looks under 18 shown nude, partly nude, in underwear "
                              "or swimwear, or in a sexual way or pose? Children dressed and doing ordinary things "
-                             "are fine. Reply as JSON "
-                             '{"minor_nude_or_sexual": true|false, "why": "short reason"}.', _Minor, tick)
-    if look and look.minor_nude_or_sexual:
-        log.warning("child check refused %s: %s", path.name, look.why)
-        return CHILD_MSG
-    return None
+                             "are fine. If so, also give the apparent age in years of the youngest such person "
+                             "(0 if you can't tell). Reply as JSON "
+                             '{"minor_nude_or_sexual": true|false, "apparent_age": 0, "why": "short reason"}.',
+                       _Minor, tick)
+    return look if look and look.minor_nude_or_sexual else None
+
+
+def clear_child(look: _Minor) -> bool:
+    return 0 < look.apparent_age < CLEAR_CHILD
+
+
+def minor_refusal(path: Path, tick=None) -> str | None:
+    """Admins and adult mode may make adult nudity, so their pictures get only this narrower question.
+    CHILD_MSG for a clear child, HELD_MSG for any other flag (check_after holds those for review)."""
+    look = minor_look(path, tick)
+    if look is None:
+        return None
+    log.warning("child check flagged %s (age %s): %s", path.name, look.apparent_age, look.why)
+    return CHILD_MSG if clear_child(look) else HELD_MSG
 
 
 RELIGIOUS_RULE = ("House rules for anything that will be pictured (Jafat AI Studio, Pakistan): never show or "
@@ -215,6 +237,59 @@ RELIGIOUS_RULE = ("House rules for anything that will be pictured (Jafat AI Stud
 # admins may make what the nudity checks would stop for others, so their writer keeps their words (llm.client.MODEST)
 MODESTY_RULE = "Keep every person modestly dressed; nothing nude, sexual or revealing."
 HOUSE_RULES = RELIGIOUS_RULE + " " + MODESTY_RULE
+
+
+# ---------------------------------------------------------------- who may make adult work
+
+# top-level params whose ids are bookkeeping (the requester, the batch's siblings, a folder), never a picture
+# the job starts from
+_NOT_INPUTS = ("created_by", "batch", "comfy", "folder_id", "album_id", "project_id", "workspace_id",
+               "magic_prompt")
+
+
+def ids_in(value, out: set[str]) -> None:
+    # every id-shaped string anywhere in value (app.implant.guard uses it on whole params)
+    if isinstance(value, str):
+        if len(value) == 36 and value.count("-") == 4:
+            out.add(value)
+    elif isinstance(value, dict):
+        for v in value.values():
+            ids_in(v, out)
+    elif isinstance(value, (list, tuple)):
+        for v in value:
+            ids_in(v, out)
+
+
+def input_ids(params: dict | None, own_id: str | None = None) -> set[str]:
+    out: set[str] = set()
+    for k, v in (params or {}).items():
+        if k not in _NOT_INPUTS:
+            ids_in(v, out)
+    out.discard(own_id)
+    return out
+
+
+def has_input_picture(gen) -> bool:
+    """References, edits, img2img, a start frame, a character or a product: anything the job is built from.
+    Erring wide is the point, a real person's photo must never come back undressed."""
+    p = gen.params or {}
+    return bool(input_ids(p, gen.id)) or any(k.endswith("_path") and v for k, v in p.items())
+
+
+def adult_mode(user) -> bool:
+    return bool(user is not None and user.adult_mode_at and not user.adult_revoked_at and not user.blocked_at)
+
+
+def nudity_ok(user, gen=None, *, text_only: bool = False) -> bool:
+    """Whether the modesty rules are off for this work. Admins: always. Adult mode: only for a job with no input
+    picture; with no generation to look at, only when the caller knows it is words alone."""
+    if user is None:
+        return False
+    if user.is_admin:
+        return True
+    if not adult_mode(user):
+        return False
+    return text_only if gen is None else not has_input_picture(gen)
 
 
 # ---------------------------------------------------------------- the request check
@@ -249,9 +324,8 @@ def _register() -> None:
             return
         with session.no_autoflush:
             user = session.get(User, uid)
-        admin = bool(user and user.is_admin)
         for g in gens:
-            why = quick_refusal(words_of(g), admin=admin)
+            why = quick_refusal(words_of(g), admin=nudity_ok(user, g))
             if why:
                 log.info("refused a request from %s: %.80s", uid, words_of(g))
                 raise HTTPException(422, why)
@@ -289,19 +363,23 @@ def check_before(ctx, gen, params: dict) -> None:
         return
     db, job = ctx.db, ctx.job
     user = _owner(db, job)
-    admin = bool(user and user.is_admin)
+    free = nudity_ok(user, gen)
     text = words_of(gen)
-    why = prompt_refusal(text, admin=admin, tick=lambda: ctx.progress(0.01, "Checking the request"))
+    why = prompt_refusal(text, admin=free, tick=lambda: ctx.progress(0.01, "Checking the request"))
     if why:
         _refuse(db, user, gen, why, text)
-    if not admin and gen.kind not in ("model3d",):
+    if free and not user.is_admin:
+        # marked so moderators can filter for it, and so it is never shared (app.moderation, file links)
+        gen.params = {**(gen.params or {}), "adult": True}
+    if not free and gen.kind not in ("model3d",):
         base = params.get("negative") or params.get("negative_prompt") or ""
         params["negative"] = f"{base}, {SAFE_NEGATIVE}" if base else SAFE_NEGATIVE
 
 
 def check_after(ctx, gen, path: Path, media_type: str) -> None:
-    """The finished picture (or a frame of the video). Members get the full nudity question; admins, and everyone
-    while CONTENT_CHECK_PICTURES is off, still get the child one."""
+    """The finished picture (or a frame of the video). Members get the full nudity question; admins, adult mode,
+    and everyone while CONTENT_CHECK_PICTURES is off, still get the child one, which deletes a clear child and
+    holds any other flag for a person to look at (hold)."""
     from app.config import get_settings
 
     if not _visual(gen):
@@ -310,9 +388,9 @@ def check_after(ctx, gen, path: Path, media_type: str) -> None:
         return
     db, job = ctx.db, ctx.job
     user = _owner(db, job)
-    admin = user is not None and user.is_admin
     # the full check already refuses any nudity, children's included
-    ask = picture_refusal if get_settings().content_check_pictures and not admin else minor_refusal
+    full = get_settings().content_check_pictures and not nudity_ok(user, gen)
+    ask = picture_refusal if full else minor_look
     look = path
     if media_type.startswith("video/"):
         from app.brand_render import grab_frame
@@ -321,10 +399,50 @@ def check_after(ctx, gen, path: Path, media_type: str) -> None:
         if grab_frame(path, 1.0, look) is None:
             return
     try:
-        why = ask(look, tick=lambda: ctx.progress(0.98, "Checking the picture"))
+        found = ask(look, tick=lambda: ctx.progress(0.98, "Checking the picture"))
     finally:
         if look != path:
             look.unlink(missing_ok=True)
-    if why:
-        path.unlink(missing_ok=True)
-        _refuse(db, user, gen, why, words_of(gen))
+    if found is None:
+        return
+    if isinstance(found, _Minor):
+        log.warning("child check flagged %s (age %s): %s", path.name, found.apparent_age, found.why)
+        if not clear_child(found):
+            hold(db, user, gen, path, media_type, found)
+        found = CHILD_MSG
+    path.unlink(missing_ok=True)
+    _refuse(db, user, gen, found, words_of(gen))
+
+
+def held_dir() -> Path:
+    from app.config import get_settings
+
+    return get_settings().data_dir / "held"
+
+
+def hold(db, user, gen, path: Path, media_type: str, look: _Minor) -> None:
+    """Out of the workspace folder, where nothing serves it, until an admin releases or deletes it
+    (app.moderation). Raises RuntimeError(HELD_MSG)."""
+    import shutil
+
+    from app import audit
+    from app.config import get_settings
+    from app.models import utcnow
+
+    root = get_settings().data_dir
+    dest = held_dir() / f"{gen.id}{path.suffix}"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(path), dest)
+    try:
+        home = path.relative_to(root).as_posix()
+    except ValueError:
+        home = str(path)
+    gen.status, gen.file_path = "held", None
+    gen.params = {**(gen.params or {}), "held": {
+        "why": look.why[:300], "age": look.apparent_age, "at": utcnow().isoformat(),
+        "path": dest.relative_to(root).as_posix(), "home": home, "media_type": media_type}}
+    if user is not None:
+        audit.record(db, user, "child_check_held", "generation", gen.id, age=look.apparent_age,
+                     reason=look.why[:120], prompt=words_of(gen)[:300])
+    db.commit()
+    raise RuntimeError(HELD_MSG)

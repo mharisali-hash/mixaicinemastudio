@@ -19,7 +19,9 @@ def signed_download(signed: str, db: Session = Depends(get_db)):
     found = file_links.read(signed)
     g = db.get(Generation, found[0]) if found else None
     # one answer for expired, tampered and gone, so a link can't be probed
-    if g is None or g.workspace_id != found[1] or g.status not in READY_STATES or removed_generation(db, g):
+    # adult-mode work never leaves the studio, not even by a link that only works for ten minutes
+    if (g is None or g.workspace_id != found[1] or g.status not in READY_STATES or removed_generation(db, g)
+            or (g.params or {}).get("adult")):
         raise HTTPException(404, "This link has expired or the file is gone")
     path = resolve_media_path(g.file_path or "", g.workspace_id, get_settings().data_dir)
     if path is None:

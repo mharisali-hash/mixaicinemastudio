@@ -10,6 +10,7 @@ import { mockApi, renderAt, systemOk } from '@/test/media-fixtures'
 import { ImplantLayout } from './ImplantLayout'
 import { ImplantPatientPage } from './ImplantPatientPage'
 import { ImplantPatientsPage } from './ImplantPatientsPage'
+import { MyPreviewPage } from './MyPreviewPage'
 import { torsoShapes } from './torsoShape'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -36,6 +37,11 @@ function patient(extra: Partial<Patient> = {}): Patient {
     id: 'p1',
     label: 'P-0001',
     adult_confirmed: true,
+    date_of_birth: '1994-05-02',
+    age: 32,
+    minor: false,
+    patient_linked: false,
+    patient_account: { linked: false, name: null, invite_expires_at: null },
     consent: { at: '2026-10-24T09:00:00Z', attested_by: 'Dr Rana', topless_ok: false, form: false },
     retention_months: 24,
     last_activity_at: '2026-10-24T09:00:00Z',
@@ -109,7 +115,7 @@ describe('Implant Preview access', () => {
 })
 
 describe('Implant patients', () => {
-  it('keeps Create disabled until both required ticks are on', async () => {
+  it('keeps Create disabled until the date of birth and consent are in', async () => {
     const calls = mockApi((method, path) => {
       if (path === '/auth/me') return surgeon
       if (path === '/implant/patients' && method === 'GET') return []
@@ -123,14 +129,39 @@ describe('Implant patients', () => {
     const create = within(dialog).getByRole('button', { name: 'Create' })
     await user.type(within(dialog).getByLabelText('Patient code or name'), 'P-0001')
     expect(create).toBeDisabled()
-    expect(create).toHaveAccessibleDescription(/the age tick, the consent tick/)
-    await user.click(within(dialog).getByRole('checkbox', { name: /18 or older/ }))
+    expect(create).toHaveAccessibleDescription(/the date of birth, the consent tick/)
+    fireEvent.change(within(dialog).getByLabelText('Date of birth'), { target: { value: '1994-05-02' } })
+    expect(within(dialog).getByText(/years old/)).toBeInTheDocument()
     expect(create).toBeDisabled()
-    await user.click(within(dialog).getByRole('checkbox', { name: /signed the consent form/ }))
+    await user.click(within(dialog).getByRole('checkbox', { name: /patient signed the consent form/ }))
     expect(create).toBeEnabled()
     await user.click(create)
     await waitFor(() => expect(screen.getByText('patient page')).toBeInTheDocument())
-    expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ label: 'P-0001', adult_confirmed: true, consent_attested: true, topless_ok: false, retention_months: 24 })
+    expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ label: 'P-0001', date_of_birth: '1994-05-02', consent_attested: true, topless_ok: false, retention_months: 24 })
+  })
+
+  it('asks for a guardian under 18 and drops the topless choice', async () => {
+    const calls = mockApi((method, path) => {
+      if (path === '/auth/me') return surgeon
+      if (path === '/implant/patients' && method === 'GET') return []
+      if (path === '/implant/patients' && method === 'POST') return patient({ minor: true })
+    })
+    renderAt('/clinic/implant', [{ path: '/clinic/implant', element: <ImplantPatientsPage /> }, { path: '/clinic/implant/:id', element: <p>patient page</p> }], (qc) => qc.setQueryData(['me'], surgeon))
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'New patient' }))
+    const dialog = screen.getByRole('dialog', { name: 'New patient' })
+    await user.type(within(dialog).getByLabelText('Patient code or name'), 'Teen')
+    const year = new Date().getFullYear() - 16
+    fireEvent.change(within(dialog).getByLabelText('Date of birth'), { target: { value: `${year}-01-01` } })
+    expect(within(dialog).queryByRole('checkbox', { name: /Topless/ })).toBeNull()
+    await user.click(within(dialog).getByRole('checkbox', { name: /patient signed the consent form/ }))
+    const create = within(dialog).getByRole('button', { name: 'Create' })
+    expect(create).toHaveAccessibleDescription(/guardian’s name and consent/)
+    await user.type(within(dialog).getByLabelText('Guardian’s name'), 'Mrs Khan')
+    await user.click(within(dialog).getByRole('checkbox', { name: /guardian signed/ }))
+    await user.click(create)
+    await waitFor(() => expect(screen.getByText('patient page')).toBeInTheDocument())
+    expect(calls.find((c) => c.method === 'POST')?.body).toMatchObject({ date_of_birth: `${year}-01-01`, topless_ok: false, guardian: { name: 'Mrs Khan', relation: '', consented: true } })
   })
 })
 
@@ -302,5 +333,124 @@ describe('Implant patient page', () => {
     expect(after!.left.projection).toBeGreaterThan(before.left.projection)
     expect(after!.left.radius).toBeGreaterThanOrEqual(before.left.radius)
     expect(torsoShapes({}, undefined, undefined).after).toBeNull()
+  })
+})
+
+describe('Age, guardian and the patient account', () => {
+  it('under 18: no photo slots, no render, no invite, the 3D model stays', async () => {
+    openPatient(patient({ minor: true, age: 16, adult_confirmed: false, photos: {}, consent: { at: '2026-10-24T09:00:00Z', attested_by: 'Dr Rana', topless_ok: false, form: false, guardian: { name: 'Mrs Khan', relation: 'mother', consented_at: '2026-10-24T09:00:00Z' } } }))
+    const photos = await screen.findByRole('region', { name: 'Photos' })
+    expect(within(photos).getByRole('note')).toHaveTextContent(/under 18/)
+    expect(within(photos).queryByRole('listitem')).toBeNull()
+    expect(screen.getByText(/Guardian: Mrs Khan \(mother\)/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Render the options/ })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: /Invite patient/ })).toBeNull()
+    expect(screen.getByRole('heading', { name: '3D body model' })).toBeInTheDocument()
+  })
+
+  it('asks for the date of birth again on a flagged photo', async () => {
+    const { calls, user } = openPatient(patient({ photos: { front: photo('front', { garment: 'topless', age_flag: true }) } }), (method, path) =>
+      method === 'POST' && path.endsWith('/confirm-age') ? photo('front') : undefined,
+    )
+    const slot = (await screen.findByRole('heading', { name: 'Front' })).closest('li')!
+    expect(within(slot).getByText(/couldn’t confirm this photo shows an adult/)).toBeInTheDocument()
+    expect(within(slot).queryByRole('button', { name: /Adjust chest area/ })).toBeNull()
+    expect(screen.getByRole('button', { name: /Render the options/ })).toHaveAccessibleDescription(/flagged photo/)
+    fireEvent.change(within(slot).getByLabelText('Date of birth'), { target: { value: '1994-05-02' } })
+    await user.click(within(slot).getByRole('button', { name: 'Confirm' }))
+    await waitFor(() => expect(calls.find((c) => c.path === '/implant/patients/p1/photos/ph-front/confirm-age')?.body).toEqual({ date_of_birth: '1994-05-02' }))
+  })
+
+  it('an older record is asked for its date of birth before an invite', async () => {
+    openPatient(patient({ date_of_birth: null, age: null }))
+    expect(await screen.findByText(/made before the date of birth was asked/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Invite patient/ })).toBeDisabled()
+  })
+
+  it('shows the invite code once, with the keep period sent along', async () => {
+    const invited = patient({ retention_months: 6, patient_account: { linked: false, name: null, invite_expires_at: '2026-10-31T09:00:00Z' } })
+    const { calls, user } = openPatient(patient(), (method, path) => (method === 'POST' && path === '/implant/patients/p1/invite' ? { code: 'K7M2QXPA', expires_at: '2026-10-31T09:00:00Z', patient: invited } : undefined))
+    await user.selectOptions(await screen.findByLabelText('Keep this record for'), '6')
+    await user.click(screen.getByRole('button', { name: /Invite patient/ }))
+    expect(await screen.findByDisplayValue('K7M2QXPA')).toBeInTheDocument()
+    expect(calls.find((c) => c.path === '/implant/patients/p1/invite')?.body).toEqual({ retention_months: 6 })
+    expect(screen.getByText(/works once, for 7 days/)).toBeInTheDocument()
+  })
+
+  it('unlinks a linked patient after a confirm', async () => {
+    const { calls, user } = openPatient(patient({ patient_linked: true, retention_months: 3, patient_account: { linked: true, name: 'Sana', invite_expires_at: null } }), (method, path) =>
+      method === 'DELETE' && path === '/implant/patients/p1/patient' ? patient() : undefined,
+    )
+    expect(await screen.findByText('Linked: Sana')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Unlink patient/ }))
+    await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Unlink' }))
+    await waitFor(() => expect(calls.find((c) => c.method === 'DELETE' && c.path === '/implant/patients/p1/patient')).toBeDefined())
+  })
+})
+
+describe('My preview', () => {
+  const patientUser: User = { ...member, email: 'sana@example.test', display_name: 'Sana', implant_patient: true }
+  const me = {
+    linked: true,
+    label: 'P-0001',
+    clinic: 'Dr Rana',
+    kept_until: '2027-01-24T09:00:00Z',
+    photos: [{ id: 'ph-front', view: 'front', view_label: 'Front', url: '/api/implant-patient/files/ph-front' }],
+    sessions: [{ id: 's1', created_at: '2026-10-24T09:30:00Z', by: 'clinic', options: [OPTIONS[0]], results: [{ id: 'r0', status: 'ready', url: '/api/implant-patient/files/r0', option: 0, view: 'front' }] }],
+    approved: null,
+    can_try: true,
+  }
+
+  it('asks for the clinic code when nothing is linked', async () => {
+    const calls = mockApi((method, path) => {
+      if (path === '/auth/me') return { ...patientUser, implant_patient: false }
+      if (path === '/implant-patient/me') return { linked: false }
+      if (path === '/implant-patient/link' && method === 'POST') return me
+    })
+    renderAt('/my-preview', [{ path: '/my-preview', element: <MyPreviewPage /> }])
+    const user = userEvent.setup()
+    const field = await screen.findByLabelText('Enter your clinic code')
+    expect(screen.getByText('اَپْنے کِلِینِک کا کوڈ لِکھِیں')).toHaveAttribute('lang', 'ur')
+    await user.type(field, 'k7m2qxpa')
+    await user.click(screen.getByRole('button', { name: 'Link my record' }))
+    await waitFor(() => expect(calls.find((c) => c.path === '/implant-patient/link')?.body).toEqual({ code: 'K7M2QXPA' }))
+    expect(await screen.findByRole('heading', { name: 'Your photos' })).toBeInTheDocument()
+  })
+
+  it('shows her photos and previews without a way to save them, and tries a size', async () => {
+    const calls = mockApi((method, path) => {
+      if (path === '/auth/me') return patientUser
+      if (path === '/implant-patient/me' && method === 'GET') return me
+      if (path === '/implant-patient/me/try') return me
+    })
+    renderAt('/my-preview', [{ path: '/my-preview', element: <MyPreviewPage /> }])
+    const user = userEvent.setup()
+    const img = await screen.findByAltText('Front photo')
+    expect(img).toHaveAttribute('draggable', 'false')
+    expect(fireEvent.contextMenu(img)).toBe(false)
+    expect(screen.queryByRole('link', { name: /download/i })).toBeNull()
+    expect(screen.queryByLabelText(/upload/i)).toBeNull()
+    const cc = screen.getByLabelText('Size (cc)')
+    await user.clear(cc)
+    await user.type(cc, '375')
+    await user.selectOptions(screen.getByLabelText('Shape'), 'Teardrop')
+    await user.click(screen.getByRole('button', { name: /Show me/ }))
+    await waitFor(() =>
+      expect(calls.find((c) => c.path === '/implant-patient/me/try')?.body).toEqual({
+        option: { left_cc: 375, right_cc: 375, shape: 'teardrop', profile: 'moderate_plus', placement: 'dual_plane', fill: 'silicone', procedure: 'augmentation' },
+      }),
+    )
+  })
+
+  it('puts My preview in the rail only for a linked patient', async () => {
+    mockApi((_m, p) => {
+      if (p === '/system/status') return systemOk
+      if (p === '/auth/me') return patientUser
+    })
+    renderAt('/', [], (qc) => qc.setQueryData(qk.jobs, []), <Rail />)
+    const rail = screen.getByRole('navigation', { name: 'Main' })
+    expect(await within(rail).findByRole('link', { name: 'My preview' })).toHaveAttribute('href', '/my-preview')
+    expect(activeRail('/my-preview')).toBe('my_preview')
+    expect(pageTitle('/my-preview')).toBe('My preview')
   })
 })

@@ -5,7 +5,7 @@ import { mockApi, renderAt } from '@/test/media-fixtures'
 import type { ReviewItem, RightsOverview, User } from '@/lib/types'
 import { NoticeBanner } from '@/components/shell/NoticeBanner'
 import { FeatureGate } from '@/components/shell/FeatureGate'
-import { ModerationLogPage, PeoplePage, ReviewPage } from './ModerationPages'
+import { HeldPage, ModerationLogPage, PeoplePage, ReviewPage } from './ModerationPages'
 import { RightsPage } from './RightsPage'
 import { AdminLayout } from './shared'
 
@@ -72,6 +72,44 @@ describe('Moderation', () => {
     await user.type(within(dialog).getByLabelText('In your words'), 'Third warning ignored')
     await user.click(within(dialog).getByRole('button', { name: 'Put on hold' }))
     await waitFor(() => expect(calls.find((c) => c.path === '/moderation/users/ben/block')?.body).toEqual({ reason: 'Third warning ignored', email: false }))
+  })
+
+  it('switches adult mode off with a reason, and only an admin can allow it again', async () => {
+    const ben = { id: 'ben', email: 'ben@example.com', name: 'Ben', is_active: true, warnings: 0, blocked_at: null, blocked_reason: '' }
+    const calls = mockApi((method, path) => {
+      if (path === '/moderation/users') return { warn_limit: 3, users: [{ ...ben, adult: true }, { ...ben, id: 'cara', name: 'Cara', adult_off: true }] }
+      if (method === 'POST') return {}
+    })
+    renderAt('/admin/people', [{ path: '/admin/people', element: <PeoplePage /> }], (qc) => qc.setQueryData(['me'], manager))
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: /Switch off adult/ }))
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByLabelText('In your words'), 'Used a real photo')
+    await user.click(within(dialog).getByRole('button', { name: 'Switch off' }))
+    await waitFor(() => expect(calls.find((c) => c.path === '/moderation/users/ben/adult-off')?.body).toEqual({ reason: 'Used a real photo', email: false }))
+    expect(screen.queryByRole('button', { name: /Allow adult again/ })).not.toBeInTheDocument()
+  })
+
+  it('held pictures stay blurred until shown, and release or delete', async () => {
+    const calls = mockApi((method, path) => {
+      if (path === '/moderation/held')
+        return {
+          items: [{ id: 'g1', kind: 'image', media_type: 'image/png', prompt: 'a woman at the beach', why: 'small frame', age: 16, held_at: '2026-11-22T10:00:00Z',
+            created_at: '2026-11-22T10:00:00Z', adult: false, owner: { id: 'ben', email: 'ben@example.com', name: 'Ben' }, file_url: '/api/moderation/held/g1/file' }],
+        }
+      if (method === 'POST') return {}
+    })
+    renderAt('/admin/held', [{ path: '/admin/held', element: <HeldPage /> }], (qc) => qc.setQueryData(['me'], admin))
+    const user = userEvent.setup()
+    expect(await screen.findByText(/about 16/)).toBeInTheDocument()
+    expect(screen.queryByRole('img', { name: 'a woman at the beach' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Show the picture' }))
+    expect(screen.getByRole('img', { name: 'a woman at the beach' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Release the picture by Ben' }))
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/moderation/held/g1/release')).toBe(true))
+    await user.click(screen.getByRole('button', { name: 'Delete the picture by Ben' }))
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete' }))
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/moderation/held/g1/delete')).toBe(true))
   })
 
   it('lists the log in plain words', async () => {

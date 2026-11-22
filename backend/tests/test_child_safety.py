@@ -23,8 +23,8 @@ from tests.test_magic_prompt import install
 class _Eye:
     """The vision model: answers both picture questions, and says which one it was asked."""
 
-    def __init__(self, minor=False, nude=False):
-        self.minor, self.nude, self.asked = minor, nude, []
+    def __init__(self, minor=False, nude=False, age=0):
+        self.minor, self.nude, self.age, self.asked = minor, nude, age, []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         if request.method == "GET":
@@ -32,7 +32,8 @@ class _Eye:
         text = json.dumps(json.loads(request.content).get("messages", []))
         if "minor_nude_or_sexual" in text:
             self.asked.append("minor")
-            return httpx.Response(200, json=oa(json.dumps({"minor_nude_or_sexual": self.minor, "why": "test"})))
+            return httpx.Response(200, json=oa(json.dumps({"minor_nude_or_sexual": self.minor, "apparent_age": self.age,
+                                                     "why": "test"})))
         if "nudity_or_sexual" in text:
             self.asked.append("nudity")
             return httpx.Response(200, json=oa(json.dumps({"nudity_or_sexual": self.nude, "why": "test"})))
@@ -109,7 +110,7 @@ def test_a_bulk_instruction_with_a_child_is_refused():
 # ------------------------------------------------------------------ the finished picture
 
 def test_an_admins_picture_gets_the_child_question(client, fast_driver, eye):
-    e = eye(minor=True)
+    e = eye(minor=True, age=8)
     client.post("/api/images/generate", json={"prompt": "a family at the beach"})
     _run(fast_driver)
     g, j = _last(client)
@@ -126,6 +127,30 @@ def test_an_admins_picture_gets_the_child_question(client, fast_driver, eye):
     assert g.status == "ready" and e.asked == ["minor"]
 
 
+def test_a_flag_that_isnt_a_clear_child_is_held_not_deleted(client, member, fast_driver, eye, monkeypatch):
+    # the model called a petite 45-year-old a child (22 Nov): from 13 up, or unsure, a person looks first.
+    # Members get the child question too while the full check is off
+    monkeypatch.setattr(get_settings(), "content_check_pictures", False)
+    for c, age in ((client, 0), (client, 16), (member, 15)):
+        eye(minor=True, age=age)
+        c.post("/api/images/generate", json={"prompt": "a woman at the beach"})
+        _run(fast_driver)
+        g, j = _last(c)
+        assert g.status == "held" and j.error == cp.HELD_MSG and g.file_path is None
+        held = g.params["held"]
+        assert held["age"] == age and held["why"] == "test"
+        assert (get_settings().data_dir / held["path"]).is_file()
+        with SessionLocal() as db:
+            assert db.scalar(select(AdminAudit).where(AdminAudit.action == "child_check_held",
+                                                      AdminAudit.target_id == g.id)) is not None
+    # a clear child still goes at once, unseen
+    eye(minor=True, age=12)
+    client.post("/api/images/generate", json={"prompt": "a woman at the beach"})
+    _run(fast_driver)
+    g, j = _last(client)
+    assert g.status == "failed" and j.error == cp.CHILD_MSG and "held" not in g.params
+
+
 def test_a_members_picture_keeps_the_full_nudity_check(member, fast_driver, eye):
     e = eye(nude=True)
     member.post("/api/images/generate", json={"prompt": "a woman on the beach at sunset"})
@@ -136,7 +161,7 @@ def test_a_members_picture_keeps_the_full_nudity_check(member, fast_driver, eye)
 
 def test_the_picture_switch_doesnt_turn_the_child_check_off(member, fast_driver, eye, monkeypatch):
     monkeypatch.setattr(get_settings(), "content_check_pictures", False)
-    e = eye(minor=True)
+    e = eye(minor=True, age=10)
     member.post("/api/images/generate", json={"prompt": "a family at the beach"})
     _run(fast_driver)
     g, j = _last(member)

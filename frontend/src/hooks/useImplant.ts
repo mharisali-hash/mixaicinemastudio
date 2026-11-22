@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useMe } from '@/hooks/useAuth'
-import { ccOk, implantApi, implantBusy, type ChestBox, type Engine, type Garment, type ImplantOption, type Measurements, type Patient, type PatientCreate, type PatientPatch, type View } from '@/lib/implant'
+import { qk } from '@/hooks/keys'
+import { ccOk, implantApi, implantBusy, myPreviewApi, previewBusy, type ChestBox, type Engine, type Garment, type ImplantOption, type Measurements, type MyPreview, type Patient, type PreviewOption, type PatientCreate, type PatientPatch, type View } from '@/lib/implant'
 
 const POLL_MS = 3000
 const LIST = ['implant', 'list'] as const
@@ -125,4 +126,52 @@ export function useOptionChecks(id: string, options: ImplantOption[], measuremen
     placeholderData: (prev) => prev,
     retry: false,
   })
+}
+
+export function useInvitePatient(id: string) {
+  const qc = useQueryClient()
+  return useMutation({ mutationFn: (months?: number) => implantApi.invite(id, months), onSuccess: (r) => put(qc, r.patient) })
+}
+
+export function useUnlinkPatient(id: string) {
+  const qc = useQueryClient()
+  return useMutation({ mutationFn: () => implantApi.unlink(id), onSuccess: (p) => put(qc, p) })
+}
+
+export function useConfirmPhotoAge(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ genId, dob }: { genId: string; dob: string }) => implantApi.confirmAge(id, genId, dob),
+    onSuccess: () => qc.invalidateQueries({ queryKey: patientKey(id) }),
+  })
+}
+
+// ---------------------------------------------------------------- My preview (the patient's side)
+
+const PREVIEW = ['my-preview'] as const
+
+export function useMyPreview() {
+  const qc = useQueryClient()
+  return useQuery({
+    queryKey: PREVIEW,
+    queryFn: () => myPreviewApi.get(qc.getQueryData(PREVIEW) !== undefined),
+    refetchInterval: (q) => (previewBusy(q.state.data) ? POLL_MS : false),
+  })
+}
+
+export function useLinkCode() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (code: string) => myPreviewApi.link(code),
+    onSuccess: (p: MyPreview) => {
+      qc.setQueryData(PREVIEW, p)
+      // the rail's "My preview" entry follows the link
+      void qc.invalidateQueries({ queryKey: qk.me })
+    },
+  })
+}
+
+export function useTrySize() {
+  const qc = useQueryClient()
+  return useMutation({ mutationFn: (o: Omit<PreviewOption, 'label'>) => myPreviewApi.tryOn(o), onSuccess: (p) => qc.setQueryData(PREVIEW, p) })
 }

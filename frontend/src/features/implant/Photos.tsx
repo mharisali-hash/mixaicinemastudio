@@ -1,8 +1,9 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { ImageIcon, Upload } from 'lucide-react'
+import { ImageIcon, ShieldAlert, Upload } from 'lucide-react'
 import { StatusPill } from '@/components/studio/status-pill'
 import { Button } from '@/components/ui/button'
-import { useChestBox, useUploadPhoto } from '@/hooks/useImplant'
+import { Input } from '@/components/ui/input'
+import { useChestBox, useConfirmPhotoAge, useUploadPhoto } from '@/hooks/useImplant'
 import { CHEST_DEFAULT, cropBox, isDone, patientViews, VIEW_LABEL, type ChestBox, type Garment, type ImplantPicture, type Patient, type View } from '@/lib/implant'
 import { generationStatus } from '@/lib/status'
 import { announce } from '@/stores/ui'
@@ -13,11 +14,17 @@ export function Photos({ patient }: { patient: Patient }) {
       <h2 id="implant-photos-h" className="font-display text-title font-semibold">
         Photos
       </h2>
-      <ul className="grid min-w-0 gap-3 md:grid-cols-3">
-        {patientViews(patient).map((v) => (
-          <PhotoSlot key={v} patient={patient} view={v} />
-        ))}
-      </ul>
+      {patient.minor ? (
+        <p role="note" className="rounded-[6px] border border-studio-border-strong bg-studio-panel p-3 text-body text-studio-muted">
+          This patient is under 18, so no photos are taken or kept here. Plan the sizes below and show her the 3D model.
+        </p>
+      ) : (
+        <ul className="grid min-w-0 gap-3 md:grid-cols-3">
+          {patientViews(patient).map((v) => (
+            <PhotoSlot key={v} patient={patient} view={v} />
+          ))}
+        </ul>
+      )}
     </section>
   )
 }
@@ -78,7 +85,8 @@ function PhotoSlot({ patient, view }: { patient: Patient; view: View }) {
         )}
       </div>
       {current && !preview && current.status !== 'ready' && current.status !== 'approved' && <StatusPill className="self-start" status={generationStatus(current.status)} />}
-      {current && isDone(current) && !preview && <ChestArea patientId={patient.id} photo={current} view={view} name={name} draft={draft} setDraft={setDraft} />}
+      {current?.age_flag && !preview && <AgeRecheck patient={patient} photo={current} name={name} />}
+      {current && isDone(current) && !preview && !current.age_flag && <ChestArea patientId={patient.id} photo={current} view={view} name={name} draft={draft} setDraft={setDraft} />}
 
       {own ? (
         <p className="text-small text-studio-muted">
@@ -172,6 +180,45 @@ function PhotoSlot({ patient, view }: { patient: Patient; view: View }) {
         Upload
       </Button>
     </li>
+  )
+}
+
+// the age check wasn't sure this topless photo shows an adult; typing the date of birth again lets it be used
+function AgeRecheck({ patient, photo, name }: { patient: Patient; photo: ImplantPicture; name: string }) {
+  const uid = useId()
+  const confirm = useConfirmPhotoAge(patient.id)
+  const [dob, setDob] = useState('')
+  const noDob = patient.date_of_birth == null
+  return (
+    <form
+      className="flex flex-col gap-1.5 rounded-[6px] border border-studio-warning/50 bg-studio-raised p-2"
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (dob) confirm.mutate({ genId: photo.id, dob }, { onSuccess: () => announce(`${name} photo can be used`) })
+      }}
+    >
+      <p className="flex items-start gap-1.5 text-small">
+        <ShieldAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-studio-warning" />
+        <span>
+          Our check couldn’t confirm this photo shows an adult. It won’t be used until you confirm her date of birth again.
+          {noDob && ' Add the date of birth above first.'}
+        </span>
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <label htmlFor={`${uid}-dob`} className="text-small">
+          Date of birth
+        </label>
+        <Input id={`${uid}-dob`} type="date" required disabled={noDob} className="w-40" value={dob} onChange={(e) => setDob(e.target.value)} />
+        <Button type="submit" size="sm" variant="secondary" disabled={!dob || noDob} loading={confirm.isPending}>
+          Confirm
+        </Button>
+      </div>
+      {confirm.isError && (
+        <p role="alert" className="text-small text-studio-danger">
+          {confirm.error.message}
+        </p>
+      )}
+    </form>
   )
 }
 

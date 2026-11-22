@@ -36,6 +36,8 @@ export function generationStatus(status: GenerationStatus, progress?: number): S
       return { label: 'Rejected', tone: 'neutral', icon: 'x' }
     case 'failed':
       return { label: 'Failed', tone: 'danger', icon: 'alert' }
+    case 'held':
+      return { label: 'Held for a quick check', tone: 'warning', icon: 'clock' }
   }
 }
 

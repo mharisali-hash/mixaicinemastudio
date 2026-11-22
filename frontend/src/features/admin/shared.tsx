@@ -86,6 +86,7 @@ const SECTIONS: { to: string; label: string; end?: boolean; who: Who }[] = [
   { to: '/admin/review', label: 'Review', who: 'staff' },
   { to: '/admin/people', label: 'People', who: 'staff' },
   { to: '/admin/moderation-log', label: 'Moderation log', who: 'staff' },
+  { to: '/admin/held', label: 'Held for review', who: 'admin' },
   { to: '/admin/print', label: 'Print Studio', who: 'print' },
   { to: '/admin/bulk', label: 'Bulk', who: 'admin' },
 ]

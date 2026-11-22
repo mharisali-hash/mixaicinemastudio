@@ -52,7 +52,7 @@ def _png(size=(600, 800), colour=(200, 160, 140)) -> bytes:
 
 
 def _patient(c, **extra) -> dict:
-    body = {"label": "P-0001", "adult_confirmed": True, "consent_attested": True,
+    body = {"label": "P-0001", "date_of_birth": "1994-05-02", "consent_attested": True,
             "measurements": {"height_cm": 162, "bw_left_cm": 12.5, "bw_right_cm": 12, "ptosis_grade": 1}, **extra}
     r = c.post("/api/implant/patients", json=body)
     assert r.status_code == 201, r.text
@@ -90,11 +90,17 @@ def test_it_is_opt_in_and_only_an_admin_switches_it_on(client):
 
 
 def test_consent_and_age_come_first(surgeon):
-    r = surgeon.post("/api/implant/patients", json={"label": "P", "adult_confirmed": True, "consent_attested": False})
+    r = surgeon.post("/api/implant/patients", json={"label": "P", "date_of_birth": "1990-01-01",
+                                                     "consent_attested": False})
     assert r.status_code == 422 and "consent" in r.text
-    r = surgeon.post("/api/implant/patients", json={"label": "P", "adult_confirmed": False, "consent_attested": True})
-    assert r.status_code == 422 and "18" in r.text
+    # the date of birth replaced the 18+ tick
+    r = surgeon.post("/api/implant/patients", json={"label": "P", "adult_confirmed": True, "consent_attested": True})
+    assert r.status_code == 422 and "date_of_birth" in r.text
+    for bad in ((utcnow() + timedelta(days=2)).date().isoformat(), "1900-01-01"):
+        r = surgeon.post("/api/implant/patients", json={"label": "P", "date_of_birth": bad, "consent_attested": True})
+        assert r.status_code == 422, bad
     p = _patient(surgeon)
+    assert p["age"] >= 30 and p["minor"] is False and p["adult_confirmed"] is True
     # topless needs its own consent tick
     assert _photo(surgeon, p["id"], garment="topless").status_code == 409
     surgeon.patch(f"/api/implant/patients/{p['id']}", json={"topless_ok": True})
@@ -584,3 +590,230 @@ def test_a_session_only_patient_goes_when_the_consultation_ends(surgeon, fast_dr
         assert im.purge_expired(db) == 1
         db.commit()
         assert db.get(ImplantPatient, quiet["id"]) is None and db.get(ImplantPatient, kept["id"]) is not None
+
+
+# ---------------------------------------------------------------- 22 Nov: age, guardians, the patient's own account
+
+def _born(years_ago: int) -> str:
+    today = utcnow().date()
+    return today.replace(year=today.year - years_ago, day=min(today.day, 28)).isoformat()
+
+
+GUARDIAN = {"name": "Mrs Khan", "relation": "mother", "consented": True}
+
+
+def test_under_18_gets_planning_and_the_3d_form_but_no_photos(surgeon):
+    r = surgeon.post("/api/implant/patients", json={"label": "Teen", "date_of_birth": _born(16),
+                                                     "consent_attested": True})
+    assert r.status_code == 422 and "guardian" in r.text
+    p = _patient(surgeon, label="Teen", date_of_birth=_born(16), guardian=GUARDIAN, topless_ok=True)
+    assert p["minor"] is True and p["age"] == 16 and p["adult_confirmed"] is False
+    assert p["consent"]["topless_ok"] is False and p["consent"]["guardian"]["name"] == "Mrs Khan"
+    assert p["consent"]["guardian"]["consented_at"]
+    for garment in ("garment", "topless"):
+        r = _photo(surgeon, p["id"], garment=garment)
+        assert r.status_code == 409 and "under 18" in r.text
+    assert _photo(surgeon, p["id"], view="own").status_code == 409
+    assert surgeon.patch(f"/api/implant/patients/{p['id']}", json={"topless_ok": True}).status_code == 409
+    r = surgeon.post(f"/api/implant/patients/{p['id']}/sessions", json={"options": OPTS})
+    assert r.status_code == 409 and "under 18" in r.text
+    # size planning still answers
+    r = surgeon.post(f"/api/implant/patients/{p['id']}/check", json={"options": OPTS})
+    assert r.status_code == 200 and len(r.json()) == 2
+    assert surgeon.post(f"/api/implant/patients/{p['id']}/invite", json={"retention_months": 3}).status_code == 409
+    with SessionLocal() as db:
+        assert not db.scalars(select(Generation).where(Generation.target_type == "implant_photo")).first()
+
+
+def test_a_corrected_date_of_birth_under_18_removes_the_pictures(surgeon, fast_driver):
+    p = _patient(surgeon)
+    _photo(surgeon, p["id"])
+    surgeon.post(f"/api/implant/patients/{p['id']}/sessions", json={"options": OPTS[:1], "engines": ["warp"]})
+    _run(fast_driver)
+    url = f"/api/implant/patients/{p['id']}"
+    r = surgeon.patch(url, json={"date_of_birth": _born(17)})
+    assert r.status_code == 422 and "guardian" in r.text
+    r = surgeon.patch(url, json={"date_of_birth": _born(17), "guardian": GUARDIAN})
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["minor"] is True and out["photos"] == {} and out["sessions"] == []
+    with SessionLocal() as db:
+        assert not db.scalars(select(Generation).where(Generation.target_type.like("implant_%"))).first()
+        row = db.scalars(select(AdminAudit).where(AdminAudit.action == "implant_dob_set")).one()
+        assert row.detail["minor"] is True and row.detail["pictures_removed"] >= 2
+
+
+def test_an_older_record_without_a_date_of_birth_keeps_working(surgeon):
+    p = _patient(surgeon)
+    with SessionLocal() as db:
+        row = db.get(ImplantPatient, p["id"])
+        row.date_of_birth = None
+        row.adult_confirmed = True
+        db.commit()
+    out = surgeon.get(f"/api/implant/patients/{p['id']}").json()
+    assert out["date_of_birth"] is None and out["age"] is None and out["minor"] is False
+    assert _photo(surgeon, p["id"]).status_code == 201
+    # but a patient account waits for it
+    r = surgeon.post(f"/api/implant/patients/{p['id']}/invite", json={"retention_months": 1})
+    assert r.status_code == 409 and "date of birth" in r.text
+
+
+def _flagged(pid: str) -> str:
+    with SessionLocal() as db:
+        return next(g.id for g in db.scalars(select(Generation).where(Generation.target_id == pid))
+                    if (g.params or {}).get("age_flag"))
+
+
+def test_a_flagged_topless_photo_waits_for_the_date_of_birth_again(surgeon, monkeypatch):
+    from app import content_policy
+
+    monkeypatch.setattr(content_policy, "minor_look", lambda path, tick=None: content_policy._Minor(
+        minor_nude_or_sexual=True, apparent_age=16, why="looks young"))
+    p = _patient(surgeon, topless_ok=True)
+    r = _photo(surgeon, p["id"], garment="topless")
+    assert r.status_code == 201 and r.json()["age_flag"] is True
+    # a photo in a bra isn't asked
+    assert "age_flag" not in _photo(surgeon, p["id"], view="left_oblique").json()
+    sessions = f"/api/implant/patients/{p['id']}/sessions"
+    r = surgeon.post(sessions, json={"options": OPTS[:1]})
+    assert r.status_code == 409 and "date of birth" in r.text
+    assert surgeon.get(f"/api/implant/patients/{p['id']}").json()["photos"]["front"]["age_flag"] is True
+    confirm = f"/api/implant/patients/{p['id']}/photos/{_flagged(p['id'])}/confirm-age"
+    assert surgeon.post(confirm, json={"date_of_birth": "1994-05-03"}).status_code == 422
+    r = surgeon.post(confirm, json={"date_of_birth": "1994-05-02"})
+    assert r.status_code == 200 and "age_flag" not in r.json()
+    assert surgeon.post(sessions, json={"options": OPTS[:1]}).status_code == 202
+    with SessionLocal() as db:
+        actions = [a.action for a in db.scalars(select(AdminAudit).where(AdminAudit.target_id == p["id"]))]
+    assert "implant_age_reconfirm_mismatch" in actions and "implant_age_reconfirmed" in actions
+
+
+def test_a_topless_photo_of_a_clear_child_is_refused_outright(surgeon, monkeypatch):
+    from app import content_policy
+
+    monkeypatch.setattr(content_policy, "minor_look", lambda path, tick=None: content_policy._Minor(
+        minor_nude_or_sexual=True, apparent_age=9, why="a child"))
+    p = _patient(surgeon, topless_ok=True)
+    r = _photo(surgeon, p["id"], garment="topless")
+    assert r.status_code == 422 and "child" in r.text
+    assert surgeon.get(f"/api/implant/patients/{p['id']}").json()["photos"].get("front") is None
+
+
+def test_the_patient_links_with_a_one_time_code(surgeon):
+    p = _patient(surgeon)
+    invite = f"/api/implant/patients/{p['id']}/invite"
+    # 24 months is the surgeon's own file; a record the patient opens is kept 1, 3 or 6 months
+    r = surgeon.post(invite)
+    assert r.status_code == 409 and "1, 3 or 6" in r.text
+    r = surgeon.post(invite, json={"retention_months": 3})
+    assert r.status_code == 200, r.text
+    code = r.json()["code"]
+    assert len(code) == 8 and r.json()["patient"]["retention_months"] == 3
+    assert r.json()["patient"]["patient_account"]["invite_expires_at"]
+    with SessionLocal() as db:
+        row = db.get(ImplantPatient, p["id"])
+        assert row.invite_code_hash and code not in row.invite_code_hash
+    # the surgeon can't link to her own patient
+    assert surgeon.post("/api/implant-patient/link", json={"code": code}).status_code == 409
+    with _client("sana@example.com") as patient:
+        assert patient.get("/api/implant-patient/me").json() == {"linked": False}
+        assert patient.get("/api/auth/me").json()["implant_patient"] is False
+        assert patient.post("/api/implant-patient/link", json={"code": "WRONG123"}).status_code == 422
+        # typed loosely: lower case, a dash in the middle
+        r = patient.post("/api/implant-patient/link", json={"code": code.lower()[:4] + "-" + code[4:]})
+        assert r.status_code == 200, r.text
+        assert r.json()["label"] == "P-0001"
+        assert patient.get("/api/auth/me").json()["implant_patient"] is True
+        # still not the studio
+        assert patient.get(f"/api/implant/patients/{p['id']}").status_code == 404
+    # single use
+    with _client("other.patient@example.com") as other:
+        assert other.post("/api/implant-patient/link", json={"code": code}).status_code == 422
+    detail = surgeon.get(f"/api/implant/patients/{p['id']}").json()
+    assert detail["patient_account"]["linked"] is True and detail["patient_account"]["invite_expires_at"] is None
+    assert surgeon.post(invite, json={"retention_months": 1}).status_code == 409  # unlink first
+    assert surgeon.patch(f"/api/implant/patients/{p['id']}", json={"retention_months": 0}).status_code == 422
+
+    r = surgeon.delete(f"/api/implant/patients/{p['id']}/patient")
+    assert r.status_code == 200 and r.json()["patient_linked"] is False
+    with SessionLocal() as db:
+        assert db.get(ImplantPatient, p["id"]).patient_user_id is None
+        actions = {a.action for a in db.scalars(select(AdminAudit).where(AdminAudit.target_id == p["id"]))}
+    assert {"implant_patient_invite", "implant_patient_link", "implant_patient_unlink"} <= actions
+
+
+def test_an_invite_expires_after_a_week(surgeon):
+    p = _patient(surgeon)
+    code = surgeon.post(f"/api/implant/patients/{p['id']}/invite", json={"retention_months": 1}).json()["code"]
+    with SessionLocal() as db:
+        db.get(ImplantPatient, p["id"]).invite_expires_at = utcnow() - timedelta(minutes=1)
+        db.commit()
+    with _client("late@example.com") as patient:
+        r = patient.post("/api/implant-patient/link", json={"code": code})
+        assert r.status_code == 422 and "expired" in r.text
+
+
+def test_the_patient_sees_only_her_record_and_tries_sizes_on_the_clinics_photos(surgeon, fast_driver):
+    p = _patient(surgeon)
+    photo = _photo(surgeon, p["id"]).json()
+    surgeon.post(f"/api/implant/patients/{p['id']}/sessions", json={"options": OPTS[:1], "engines": ["warp"]})
+    other = _patient(surgeon, label="someone else")
+    other_photo = _photo(surgeon, other["id"]).json()
+    _run(fast_driver)
+    code = surgeon.post(f"/api/implant/patients/{p['id']}/invite", json={"retention_months": 6}).json()["code"]
+    with _client("sana@example.com") as patient:
+        patient.post("/api/implant-patient/link", json={"code": code})
+        me = patient.get("/api/implant-patient/me").json()
+        assert me["linked"] and me["can_try"] and [x["id"] for x in me["photos"]] == [photo["id"]]
+        assert me["sessions"][0]["by"] == "clinic" and me["sessions"][0]["results"][0]["url"]
+        # none of the surgeon's working file
+        assert not {"measurements", "notes", "consent", "date_of_birth"} & set(me)
+
+        r = patient.get(me["photos"][0]["url"])
+        assert r.status_code == 200 and r.headers["content-disposition"] == "inline"
+        assert "no-store" in r.headers["cache-control"] and r.content[:4] == b"\x89PNG"
+        assert patient.get(me["sessions"][0]["results"][0]["url"]).status_code == 200
+        assert patient.get(f"/api/implant-patient/files/{other_photo['id']}").status_code == 404
+        assert patient.get(f"/api/implant/files/{photo['id']}").status_code == 404
+        # no upload of her own, anywhere
+        r = patient.post(f"/api/implant/patients/{p['id']}/photos", files={"file": ("p.png", _png(), "image/png")},
+                         data={"view": "front"})
+        assert r.status_code == 404
+        assert patient.post("/api/implant-patient/me/photos").status_code in (404, 405)
+
+        r = patient.post("/api/implant-patient/me/try", json={"option": {"left_cc": 350, "right_cc": 350}})
+        assert r.status_code == 202, r.text
+        mine = r.json()["sessions"][0]
+        assert mine["by"] == "you" and mine["options"][0]["left_cc"] == 350
+        _run(fast_driver)
+        done = patient.get("/api/implant-patient/me").json()["sessions"][0]["results"]
+        assert done and all(x["status"] == "ready" and x["url"] for x in done)
+    # the surgeon sees the patient's preview in the record, and the job is the clinic's
+    detail = surgeon.get(f"/api/implant/patients/{p['id']}").json()
+    assert len(detail["sessions"]) == 2
+    with SessionLocal() as db:
+        surgeon_id = db.get(ImplantPatient, p["id"]).surgeon_user_id
+        g = db.get(Generation, detail["sessions"][0]["results"][0]["id"])
+        assert db.get(Job, g.job_id).user_id == surgeon_id
+        tried = db.scalars(select(AdminAudit).where(AdminAudit.action == "implant_patient_try")).one()
+        assert tried.actor_email == "sana@example.com"
+
+
+def test_patient_tries_are_capped(surgeon, monkeypatch):
+    from app.api import implant_patient
+
+    p = _patient(surgeon)
+    _photo(surgeon, p["id"])
+    code = surgeon.post(f"/api/implant/patients/{p['id']}/invite", json={"retention_months": 1}).json()["code"]
+    one = {"option": {"left_cc": 300, "right_cc": 300}}
+    with _client("busy@example.com") as patient:
+        patient.post("/api/implant-patient/link", json={"code": code})
+        # the clinic's own package limits apply, as the jobs are the clinic's
+        for _ in range(2):
+            assert patient.post("/api/implant-patient/me/try", json=one).status_code == 202
+        r = patient.post("/api/implant-patient/me/try", json=one)
+        assert r.status_code == 429 and r.json()["reason"] == "queued"
+        # and her own cap, whatever the clinic's package
+        monkeypatch.setattr(implant_patient, "MAX_BUSY_TRIES", 2)
+        r = patient.post("/api/implant-patient/me/try", json=one)
+        assert r.status_code == 429 and "still on the way" in r.text

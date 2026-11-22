@@ -4,7 +4,7 @@ import { Tooltip } from '@/components/ui/tooltip'
 import { useConnections } from '@/hooks/useConnections'
 import { useMe } from '@/hooks/useAuth'
 import { useAllows } from '@/hooks/useUsage'
-import { activeRail, ADMIN_ITEM, IMPLANT_ITEM, MODERATION_ITEM, PRINT_ITEM, RAIL_ITEMS, SETTINGS_ITEM, type MenuId, type RailId, type RailItem } from '@/lib/nav'
+import { activeRail, ADMIN_ITEM, IMPLANT_ITEM, MODERATION_ITEM, MY_PREVIEW_ITEM, PRINT_ITEM, RAIL_ITEMS, SETTINGS_ITEM, type MenuId, type RailId, type RailItem } from '@/lib/nav'
 import { cn } from '@/lib/utils'
 import { StatusDot } from './ConnectionStatus'
 import { JobsTray } from './JobsTray'
@@ -162,6 +162,18 @@ export function Rail() {
           >
             <Indicator on={active === 'implant'} />
             <Face item={IMPLANT_ITEM} />
+          </Link>
+        )}
+        {me?.implant_patient && (
+          <Link
+            to={MY_PREVIEW_ITEM.to}
+            aria-current={active === 'my_preview' ? 'page' : undefined}
+            aria-label={MY_PREVIEW_ITEM.label}
+            className={cn(ITEM, active === 'my_preview' && ACTIVE)}
+            onPointerEnter={() => menu.open && menu.hoverLeave()}
+          >
+            <Indicator on={active === 'my_preview'} />
+            <Face item={MY_PREVIEW_ITEM} />
           </Link>
         )}
         {allows('print') && (

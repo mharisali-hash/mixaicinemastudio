@@ -161,7 +161,8 @@ def _batch(out, **extra) -> dict:
 
 def _file_info(db: Session, g: Generation, origin: str) -> dict:
     out = {"generation_id": g.id, "media_type": g.media_type}
-    if g.status in READY_STATES and resolve_media_path(g.file_path or "", g.workspace_id, get_settings().data_dir):
+    # no link for adult-mode work: /api/files won't serve it (it never leaves the studio)
+    if g.status in READY_STATES and not (g.params or {}).get("adult") and resolve_media_path(g.file_path or "", g.workspace_id, get_settings().data_dir):
         out["download_url"] = file_links.url_for(g, origin)
         out["download_expires_in_s"] = file_links.TTL_S
     return out

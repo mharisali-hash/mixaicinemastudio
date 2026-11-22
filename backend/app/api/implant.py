@@ -1,5 +1,6 @@
 """Implant Preview (M22): surgeon-only. Every route answers 404 to accounts without access, and a patient is only
 ever visible to the surgeon who created it."""
+from datetime import date
 from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
@@ -16,7 +17,7 @@ from app.implant import service as im
 from app.implant import sheets
 from app.implant.finish import clean_box
 from app.implant.guard import require_implant
-from app.models import Generation, ImplantPatient, ImplantSession, utcnow
+from app.models import Generation, ImplantPatient, ImplantSession, User, utcnow
 from app.security import CurrentUser, session_only
 
 router = APIRouter(prefix="/implant", tags=["implant"], dependencies=[Depends(require_implant)])
@@ -45,10 +46,25 @@ class Measurements(BaseModel):
     asymmetry: str = Field("", max_length=300)
 
 
+class GuardianIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    relation: str = Field("", max_length=60)
+    consented: bool = Field(description="The guardian signed the consent form")
+
+
+def _dob_ok(dob: date | None) -> date | None:
+    if dob is not None and (why := im.dob_problem(dob)):
+        raise ValueError(why)
+    return dob
+
+
 class PatientIn(BaseModel):
     label: str = Field(min_length=1, max_length=120, description="A code or name the surgeon recognises")
-    adult_confirmed: bool
+    date_of_birth: date
+    # older clients still send the tick; the date of birth decides now
+    adult_confirmed: bool | None = None
     consent_attested: bool = Field(description="The patient signed the consent form")
+    guardian: GuardianIn | None = None
     topless_ok: bool = False
     # 0 is session only: gone when the consultation ends (app.implant.service.keep_for)
     retention_months: int = Field(24, ge=0, le=120)
@@ -57,19 +73,37 @@ class PatientIn(BaseModel):
 
     @model_validator(mode="after")
     def _required(self):
-        if not self.adult_confirmed:
-            raise ValueError("Confirm the patient is 18 or older")
+        _dob_ok(self.date_of_birth)
         if not self.consent_attested:
             raise ValueError("Record the patient's signed consent")
+        if im.years(self.date_of_birth) < im.ADULT_AGE and not (self.guardian and self.guardian.consented):
+            raise ValueError("For a patient under 18, record a parent or guardian's name and signed consent")
         return self
 
 
 class PatientPatch(BaseModel):
     label: str | None = Field(None, min_length=1, max_length=120)
+    date_of_birth: date | None = None
+    guardian: GuardianIn | None = None
     topless_ok: bool | None = None
     retention_months: int | None = Field(None, ge=0, le=120)
     measurements: Measurements | None = None
     notes: str | None = Field(None, max_length=4000)
+
+    @model_validator(mode="after")
+    def _sane(self):
+        _dob_ok(self.date_of_birth)
+        if self.guardian and not self.guardian.consented:
+            raise ValueError("Record the guardian's signed consent")
+        return self
+
+
+class ConfirmAgeIn(BaseModel):
+    date_of_birth: date
+
+
+class InviteIn(BaseModel):
+    retention_months: Literal[1, 3, 6] | None = None
 
 
 class OptionIn(BaseModel):
@@ -104,20 +138,34 @@ def _gen_out(g: Generation | None) -> dict | None:
         return None
     return {"id": g.id, "status": g.status, "url": f"/api/implant/files/{g.id}" if g.file_path else None,
             "job_id": g.job_id,
-            **{k: v for k, v in (g.params or {}).items() if k in ("view", "garment", "chest_box", "garment_check")},
+            **{k: v for k, v in (g.params or {}).items()
+               if k in ("view", "garment", "chest_box", "garment_check", "age_flag")},
             **({"option": g.params["implant"]["option"], "view": g.params["implant"]["view"],
                 "engine": im.engine_of(g)} if (g.params or {}).get("implant") else {})}
+
+
+def _guardian(c: dict) -> dict | None:
+    g = c.get("guardian")
+    return {k: g.get(k) for k in ("name", "relation", "consented_at")} if g else None
 
 
 def _patient_out(db: Session, p: ImplantPatient, full: bool = False) -> dict:
     c = p.consent or {}
     out = {"id": p.id, "label": p.label, "adult_confirmed": p.adult_confirmed,
+           "date_of_birth": p.date_of_birth, "age": im.age_of(p), "minor": im.is_minor(p),
            "consent": {"at": c.get("at"), "attested_by": c.get("attested_by"), "topless_ok": bool(c.get("topless_ok")),
-                       "form": bool(c.get("form_path"))},
+                       "form": bool(c.get("form_path")), "guardian": _guardian(c)},
            "retention_months": p.retention_months, "last_activity_at": p.last_activity_at, "created_at": p.created_at,
-           "approved": bool((p.chart or {}).get("session_id"))}
+           "approved": bool((p.chart or {}).get("session_id")), "patient_linked": bool(p.patient_user_id)}
     if not full:
         return out
+    linked = db.get(User, p.patient_user_id) if p.patient_user_id else None
+    out["patient_account"] = {
+        "linked": linked is not None,
+        "name": (linked.display_name or linked.email) if linked else None,
+        "invite_expires_at": p.invite_expires_at if p.invite_code_hash and p.invite_expires_at
+        and p.invite_expires_at > utcnow() else None,
+    }
     sessions = list(db.scalars(select(ImplantSession).where(ImplantSession.patient_id == p.id)
                                .order_by(ImplantSession.created_at.desc())))
     chart = dict(p.chart or {})
@@ -153,14 +201,19 @@ def list_patients(db: Session = Depends(get_db), cur: CurrentUser = Depends(requ
 @router.post("/patients", status_code=201)
 @session_only
 def create_patient(body: PatientIn, db: Session = Depends(get_db), cur: CurrentUser = Depends(require_implant)):
+    adult = im.years(body.date_of_birth) >= im.ADULT_AGE
+    by = cur.user.display_name or cur.user.email
+    consent = {"at": utcnow().isoformat(), "attested_by": by, "topless_ok": body.topless_ok and adult}
+    if body.guardian:
+        consent["guardian"] = _guardian_row(body.guardian, by)
     p = ImplantPatient(workspace_id=cur.workspace_id, surgeon_user_id=cur.user.id, label=body.label.strip(),
-                       adult_confirmed=True, retention_months=body.retention_months, notes=body.notes,
-                       measurements=body.measurements.model_dump(exclude_none=True),
-                       consent={"at": utcnow().isoformat(), "attested_by": cur.user.display_name or cur.user.email,
-                                "topless_ok": body.topless_ok})
+                       date_of_birth=body.date_of_birth, adult_confirmed=adult,
+                       retention_months=body.retention_months, notes=body.notes,
+                       measurements=body.measurements.model_dump(exclude_none=True), consent=consent)
     db.add(p)
     db.flush()
-    audit.record(db, cur.user, "implant_patient_create", "implant_patient", p.id, topless_ok=body.topless_ok)
+    audit.record(db, cur.user, "implant_patient_create", "implant_patient", p.id, topless_ok=consent["topless_ok"],
+                 minor=not adult, guardian=bool(body.guardian))
     db.commit()
     return _patient_out(db, p, full=True)
 
@@ -180,6 +233,28 @@ def patch_patient(patient_id: str, body: PatientPatch, db: Session = Depends(get
                   cur: CurrentUser = Depends(require_implant)):
     p = _patient(db, cur, patient_id)
     sent = body.model_dump(exclude_unset=True)
+    by = cur.user.display_name or cur.user.email
+    if body.retention_months is not None and (p.patient_user_id or p.invite_code_hash) \
+            and body.retention_months not in im.PATIENT_KEEP:
+        raise HTTPException(422, "With the patient's own account, keep the record for 1, 3 or 6 months")
+    if body.guardian:
+        p.consent = {**(p.consent or {}), "guardian": _guardian_row(body.guardian, by)}
+        audit.record(db, cur.user, "implant_guardian_consent", "implant_patient", p.id)
+    if body.date_of_birth is not None and body.date_of_birth != p.date_of_birth:
+        minor = im.years(body.date_of_birth) < im.ADULT_AGE
+        if minor and not (p.consent or {}).get("guardian"):
+            raise HTTPException(422, "For a patient under 18, record a parent or guardian's name and signed consent")
+        had = p.date_of_birth is not None
+        p.date_of_birth = body.date_of_birth
+        p.adult_confirmed = not minor
+        dropped = 0
+        if minor:
+            # nothing photographic is kept for a child, and her own account goes too
+            dropped = im.drop_pictures(db, p)
+            im.unlink(p)
+            p.consent = {**(p.consent or {}), "topless_ok": False}
+        audit.record(db, cur.user, "implant_dob_set", "implant_patient", p.id, changed=had, minor=minor,
+                     pictures_removed=dropped)
     if body.label is not None:
         p.label = body.label.strip()
     if body.retention_months is not None:
@@ -189,11 +264,80 @@ def patch_patient(patient_id: str, body: PatientPatch, db: Session = Depends(get
     if body.measurements is not None:
         p.measurements = body.measurements.model_dump(exclude_none=True)
     if body.topless_ok is not None:
+        if body.topless_ok and im.is_minor(p):
+            raise HTTPException(409, im.MINOR_PHOTOS)
         p.consent = {**(p.consent or {}), "topless_ok": body.topless_ok}
     im.touch(p)
     audit.record(db, cur.user, "implant_patient_update", "implant_patient", p.id, fields=sorted(sent))
     db.commit()
     return _patient_out(db, p, full=True)
+
+
+def _guardian_row(g: GuardianIn, by: str) -> dict:
+    return {"name": g.name.strip(), "relation": g.relation.strip(), "consented_at": utcnow().isoformat(),
+            "recorded_by": by}
+
+
+@router.post("/patients/{patient_id}/invite")
+@session_only
+def invite_patient(patient_id: str, body: InviteIn | None = None, db: Session = Depends(get_db),
+                   cur: CurrentUser = Depends(require_implant)):
+    """A one-time code the patient types into My preview to see her own record. Shown once; only its hash is kept."""
+    p = _patient(db, cur, patient_id)
+    if p.date_of_birth is None:
+        raise HTTPException(409, "Add the patient's date of birth first")
+    if im.is_minor(p):
+        raise HTTPException(409, "Patient accounts are for patients 18 and over")
+    if p.patient_user_id:
+        raise HTTPException(409, "The patient's account is already linked. Unlink it first to invite again.")
+    keep = (body.retention_months if body else None) or p.retention_months
+    if keep not in im.PATIENT_KEEP:
+        raise HTTPException(409, "Choose how long to keep this record first: 1, 3 or 6 months")
+    p.retention_months = keep
+    code = im.new_invite(p)
+    im.touch(p)
+    audit.record(db, cur.user, "implant_patient_invite", "implant_patient", p.id, retention_months=keep)
+    db.commit()
+    return {"code": code, "expires_at": p.invite_expires_at, "patient": _patient_out(db, p, full=True)}
+
+
+@router.delete("/patients/{patient_id}/patient")
+@session_only
+def unlink_patient(patient_id: str, db: Session = Depends(get_db), cur: CurrentUser = Depends(require_implant)):
+    p = _patient(db, cur, patient_id)
+    was = p.patient_user_id
+    im.unlink(p)
+    im.touch(p)
+    audit.record(db, cur.user, "implant_patient_unlink", "implant_patient", p.id, patient_user=was)
+    db.commit()
+    return _patient_out(db, p, full=True)
+
+
+@router.post("/patients/{patient_id}/photos/{gen_id}/confirm-age")
+@session_only
+def confirm_photo_age(patient_id: str, gen_id: str, body: ConfirmAgeIn, db: Session = Depends(get_db),
+                      cur: CurrentUser = Depends(require_implant)):
+    """The age check flagged this photo: the surgeon types the date of birth again before it can be used."""
+    p = _patient(db, cur, patient_id)
+    g = db.get(Generation, gen_id)
+    if g is None or g.target_type != "implant_photo" or g.target_id != p.id:
+        raise HTTPException(404, "Photo not found")
+    if not (g.params or {}).get("age_flag"):
+        return _gen_out(g)
+    if p.date_of_birth is None:
+        raise HTTPException(409, "Add the patient's date of birth first")
+    if body.date_of_birth != p.date_of_birth:
+        audit.record(db, cur.user, "implant_age_reconfirm_mismatch", "implant_patient", p.id, photo=g.id)
+        db.commit()
+        raise HTTPException(422, "That date of birth doesn't match the patient's record")
+    if im.is_minor(p):
+        raise HTTPException(409, im.MINOR_PHOTOS)
+    g.params = {**{k: v for k, v in (g.params or {}).items() if k != "age_flag"},
+                "age_confirmed": {"by": cur.user.id, "at": utcnow().isoformat()}}
+    im.touch(p)
+    audit.record(db, cur.user, "implant_age_reconfirmed", "implant_patient", p.id, photo=g.id)
+    db.commit()
+    return _gen_out(g)
 
 
 @router.delete("/patients/{patient_id}", status_code=204)
@@ -255,7 +399,8 @@ async def upload_photo(patient_id: str, file: UploadFile = File(...), view: str 
         except (ValueError, AssertionError):
             raise HTTPException(422, "crop is x,y,w,h as fractions of the photo") from None
     g = im.save_photo(db, p, view, garment, data, box)
-    audit.record(db, cur.user, "implant_photo_upload", "implant_patient", p.id, view=view, garment=garment)
+    audit.record(db, cur.user, "implant_photo_upload", "implant_patient", p.id, view=view, garment=garment,
+                 age_flag=bool(g.params.get("age_flag")))
     db.commit()
     return _gen_out(g)
 

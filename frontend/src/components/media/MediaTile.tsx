@@ -46,8 +46,14 @@ export function MediaTile({ item, onOpen, selectable, selected, disabled, onTogg
       ) : state === 'failed' ? (
         <div className="flex size-full flex-col items-center justify-center gap-1 p-3 text-center text-studio-on-dark">
           <AlertTriangle aria-hidden className="size-5" />
-          <span className="text-small">Failed</span>
-          {(job?.error || gen?.note) && <span className="line-clamp-2 text-small text-studio-on-dark-muted">{job?.error ?? gen?.note}</span>}
+          {(gen?.status ?? item.status) === 'held' ? (
+            <span className="text-small">Held for a quick check by our team</span>
+          ) : (
+            <>
+              <span className="text-small">Failed</span>
+              {(job?.error || gen?.note) && <span className="line-clamp-2 text-small text-studio-on-dark-muted">{job?.error ?? gen?.note}</span>}
+            </>
+          )}
         </div>
       ) : (
         <TilePicture item={item} alt={alt} fallbackUrl={gen?.thumb_url ?? gen?.media_url} />

@@ -8,6 +8,7 @@ import {
   ENGINE_LABEL,
   ENGINES,
   FILL_LABEL,
+  flaggedPhotos,
   isDone,
   LETTERS,
   newOption,
@@ -43,7 +44,13 @@ export function Options({ patient }: { patient: Patient }) {
 
   const photos = patientViews(patient).filter((v) => isDone(patient.photos[v])).length
   const valid = options.every((o) => ccOk(o.left_cc) && ccOk(o.right_cc))
-  const why = !photos ? 'Upload at least one photo first.' : !valid ? 'Each side takes 100 to 900 cc.' : !engines.length ? 'Choose at least one way to show it.' : null
+  const why = patient.minor
+    ? 'Under 18: size planning and the 3D model only.'
+    : flaggedPhotos(patient).length
+      ? 'Confirm the date of birth on the flagged photo first.'
+      : !photos
+        ? 'Upload at least one photo first.'
+        : !valid ? 'Each side takes 100 to 900 cc.' : !engines.length ? 'Choose at least one way to show it.' : null
 
   const edit = (i: number, patch: Partial<ImplantOption>) =>
     setOptions((all) => all.map((o, j) => (j !== i ? o : { ...o, ...patch, ...(same[i] && patch.left_cc !== undefined ? { right_cc: patch.left_cc } : {}) })))

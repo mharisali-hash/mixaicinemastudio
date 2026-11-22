@@ -14,7 +14,8 @@ from app.api.media import resolve_media_path
 from app.config import get_settings
 from app.db import get_db, release
 from app.models import AdminAudit, User
-from app.security import CurrentUser, require_moderator, session_only
+from app.content_policy import adult_mode
+from app.security import CurrentUser, require_admin, require_moderator, session_only
 
 router = APIRouter(prefix="/moderation", tags=["moderation"])
 
@@ -49,10 +50,10 @@ def _naive(at: datetime | None) -> datetime | None:
 def items(user: str | None = Query(None, max_length=36), kind: str | None = Query(None, pattern="^(image|video|audio)$"),
           since: datetime | None = None, until: datetime | None = None, before: datetime | None = None,
           state: str = Query("queue", pattern="^(queue|reviewed|removed|all)$"), q: str = Query("", max_length=200),
-          limit: int = Query(60, ge=1, le=200), db: Session = Depends(get_db),
+          limit: int = Query(60, ge=1, le=200), adult: bool = False, db: Session = Depends(get_db),
           cur: CurrentUser = Depends(require_moderator)):
     rows = mod.list_items(db, cur, user_id=user, kind=kind, since=_naive(since), until=_naive(until), state=state,
-                          q=q, limit=limit, before=_naive(before))
+                          q=q, limit=limit, before=_naive(before), adult=adult)
     out = [mod.item_out(db, m, u) for m, u in rows]
     return {"items": out, "next": out[-1]["created_at"] if len(out) == limit else None}
 
@@ -132,7 +133,8 @@ def users(q: str = Query("", max_length=200), status: str = Query("all", pattern
     return {"warn_limit": mod.warn_limit(),
             "users": [{"id": u.id, "email": u.email, "name": u.display_name, "is_active": bool(u.is_active),
                        "warnings": int(counts.get(u.id, 0)), "blocked_at": u.blocked_at,
-                       "blocked_reason": u.blocked_reason or ""} for u in rows]}
+                       "blocked_reason": u.blocked_reason or "", "adult": adult_mode(u),
+                       "adult_off": u.adult_revoked_at is not None} for u in rows]}
 
 
 @router.post("/users/{user_id}/warn", status_code=201)
@@ -166,6 +168,60 @@ def unblock(user_id: str, body: UnblockIn, db: Session = Depends(get_db),
     mod.unblock(db, cur, user, body.reason.strip(), email=body.email)
     db.commit()
     return {"id": user.id, "blocked_at": None, "blocked_reason": ""}
+
+
+@router.post("/users/{user_id}/adult-off")
+@session_only
+def adult_off(user_id: str, body: ReasonIn, db: Session = Depends(get_db),
+              cur: CurrentUser = Depends(require_moderator)):
+    user = mod.in_reach(db, cur, user_id)
+    mod.adult_off(db, cur, user, body.reason.strip(), email=body.email)
+    db.commit()
+    return {"id": user.id, "adult": False, "adult_off": True}
+
+
+@router.post("/users/{user_id}/adult-allow")
+@session_only
+def adult_allow(user_id: str, db: Session = Depends(get_db), cur: CurrentUser = Depends(require_moderator)):
+    user = mod.in_reach(db, cur, user_id)
+    mod.adult_allow(db, cur, user)
+    db.commit()
+    return {"id": user.id, "adult": False, "adult_off": False}
+
+
+# held by the age check: admins only, managers get the same 404 as everyone else
+
+@router.get("/held")
+@session_only
+def held(db: Session = Depends(get_db), _: CurrentUser = Depends(require_admin)):
+    return {"items": mod.held_list(db)}
+
+
+@router.get("/held/{gen_id}/file")
+def held_file(gen_id: str, db: Session = Depends(get_db), _: CurrentUser = Depends(require_admin)):
+    g = mod.held_generation(db, gen_id)
+    path = mod.held_path(g)
+    if path is None:
+        raise HTTPException(404, "No file")
+    media_type = g.params["held"].get("media_type")
+    release(db)
+    return FileResponse(path, media_type=media_type or None, headers={"Cache-Control": "private, no-store"})
+
+
+@router.post("/held/{gen_id}/release")
+@session_only
+def held_release(gen_id: str, db: Session = Depends(get_db), cur: CurrentUser = Depends(require_admin)):
+    mod.release_held(db, cur, mod.held_generation(db, gen_id))
+    db.commit()
+    return {"id": gen_id, "status": "ready"}
+
+
+@router.post("/held/{gen_id}/delete")
+@session_only
+def held_delete(gen_id: str, db: Session = Depends(get_db), cur: CurrentUser = Depends(require_admin)):
+    mod.delete_held(db, cur, mod.held_generation(db, gen_id))
+    db.commit()
+    return {"id": gen_id, "status": "failed"}
 
 
 @router.get("/log")

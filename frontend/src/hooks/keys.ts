@@ -23,6 +23,7 @@ export const qk = {
   review: (filters: object) => ['moderation', 'items', filters] as const,
   modPeople: (q: string, status: string) => ['moderation', 'people', q, status] as const,
   modLog: ['moderation', 'log'] as const,
+  modHeld: ['moderation', 'held'] as const,
   system: ['system-status'] as const,
   projects: ['projects'] as const,
   project: (id: string) => ['projects', id] as const,

@@ -2,15 +2,18 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.orm import Session, object_session
 
-from app import accounts, mailer
+from app import accounts, audit, mailer
+from app.content_policy import adult_mode
 from app.config import get_settings
 from app.db import get_db
 from app.implant.guard import has_access as has_implant_access
 from app.models import User, utcnow
 from app.ratelimit import SlidingWindow
-from app.schemas import BlockedOut, EmailIn, LoginIn, PasswordChangeIn, ProfilePatch, ResetIn, SignupIn, UserOut
+from app.schemas import (AdultModeIn, BlockedOut, EmailIn, LoginIn, PasswordChangeIn, ProfilePatch, ResetIn,
+                         SignupIn, UserOut)
 from app.security import (
     COOKIE_NAME,
     SESSION_MAX_AGE,
@@ -61,7 +64,17 @@ def _user_out(cur: CurrentUser) -> UserOut:
     return UserOut(id=u.id, email=u.email, display_name=u.display_name, workspace_id=cur.workspace_id, role=cur.role,
                    api_access=can_use_api(cur), api_docs=can_read_docs(cur), admin=is_admin(cur),
                    verified=is_verified(u), implant=has_implant_access(cur), staff=staff_of(u),
-                   blocked=BlockedOut(reason=u.blocked_reason or "", at=u.blocked_at) if u.blocked_at else None)
+                   blocked=BlockedOut(reason=u.blocked_reason or "", at=u.blocked_at) if u.blocked_at else None,
+                   adult=adult_mode(u), adult_off=u.adult_revoked_at is not None,
+                   implant_patient=_has_linked_record(u))
+
+
+def _has_linked_record(u: User) -> bool:
+    from app.models import ImplantPatient
+
+    db = object_session(u)
+    return db is not None and db.scalar(select(ImplantPatient.id).where(ImplantPatient.patient_user_id == u.id)
+                                        .limit(1)) is not None
 
 
 def _set_cookie(response: Response, user: User) -> None:
@@ -281,5 +294,26 @@ def update_me(body: ProfilePatch, db: Session = Depends(get_db), cur: CurrentUse
     if not name:
         raise HTTPException(422, "Enter a name")
     cur.user.display_name = name
+    db.commit()
+    return _user_out(cur)
+
+
+@router.patch("/me/adult", response_model=UserOut)
+@session_only
+def set_adult(body: AdultModeIn, db: Session = Depends(get_db), cur: CurrentUser = Depends(get_current_user)):
+    u = cur.user
+    if body.on:
+        if u.adult_revoked_at is not None:
+            raise HTTPException(403, "Adult content was switched off for this account by our team")
+        if u.blocked_at is not None:
+            raise HTTPException(403, "This account is on hold")
+        if not (body.confirm_18 and body.confirm_made_up and body.confirm_review):
+            raise HTTPException(422, "Tick all three to switch adult content on")
+        if u.adult_mode_at is None:
+            u.adult_mode_at = utcnow()
+            audit.record(db, u, "adult_mode_on", "user", u.id)
+    elif u.adult_mode_at is not None:
+        u.adult_mode_at = None
+        audit.record(db, u, "adult_mode_off", "user", u.id)
     db.commit()
     return _user_out(cur)

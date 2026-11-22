@@ -332,6 +332,11 @@ export const shellRoutes: RouteObject[] = [
         const { ModerationLogPage } = await import('@/features/admin/ModerationPages')
         return <ModerationLogPage />
       }),
+      // pictures the age check held: admins only (the nav and the server both keep managers out)
+      page('held', async () => {
+        const { HeldPage } = await import('@/features/admin/ModerationPages')
+        return <HeldPage />
+      }),
       // contract v41: Print Studio, inside the admin section so its guard covers it
       page('print', async () => {
         const { PrintStudioPage } = await import('@/features/print/PrintStudioPage')
@@ -355,6 +360,11 @@ export const shellRoutes: RouteObject[] = [
       }),
     ],
   },
+  // the patient's own view of her clinic record; anyone signed in can open it to enter a clinic code
+  page('my-preview', async () => {
+    const { MyPreviewPage } = await import('@/features/implant/MyPreviewPage')
+    return <MyPreviewPage />
+  }),
   // contract v27: admin only while PUBLIC_API is off (the page sends anyone else back to Settings)
   page('settings/api', async () => {
     const { ApiTokensPage } = await import('@/features/settings/ApiTokensPage')

@@ -19,7 +19,7 @@ def test_login_me_logout(anon):
     assert body["email"] == ADMIN["email"]
     assert body["role"] == "owner"
     assert set(body) == {"id", "email", "display_name", "workspace_id", "role", "api_access", "api_docs", "admin",
-                         "verified", "implant", "staff", "blocked"}
+                         "verified", "implant", "staff", "blocked", "adult", "adult_off", "implant_patient"}
     assert body["staff"] == "admin" and body["blocked"] is None
 
     cookie = r.headers["set-cookie"].lower()

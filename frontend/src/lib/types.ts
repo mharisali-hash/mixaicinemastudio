@@ -20,9 +20,14 @@ export interface User {
   verified?: boolean
   // M22: Implant Preview (admins, or granted by one)
   implant?: boolean
+  // a patient whose clinic linked her record: "My preview" in the rail
+  implant_patient?: boolean
   // contract v42: the staff role, and the hold a moderator put the account under (read-only while set)
   staff?: 'admin' | 'manager' | null
   blocked?: { reason: string; at: string } | null
+  // 18+ adult mode is on; adult_off: the team switched it off, so it can't be turned on again
+  adult?: boolean
+  adult_off?: boolean
 }
 
 // contract v38
@@ -391,7 +396,7 @@ export type GenerationKind =
   | 'sfx'
   // contract-v16
   | 'speech'
-export type GenerationStatus = 'queued' | 'generating' | 'ready' | 'approved' | 'rejected' | 'failed'
+export type GenerationStatus = 'queued' | 'generating' | 'ready' | 'approved' | 'rejected' | 'failed' | 'held'
 
 export interface Generation {
   id: string
@@ -2133,7 +2138,7 @@ export interface UserRights {
 
 export interface Notice {
   id: string
-  kind: 'warning' | 'removal' | 'unblock'
+  kind: 'warning' | 'removal' | 'unblock' | 'adult_off'
   reason: string
   item_id: string | null
   at: string
@@ -2158,6 +2163,7 @@ export interface ReviewItem {
   removed_reason: string
   thumb_url: string | null
   file_url: string | null
+  adult?: boolean
 }
 
 export interface ModPerson {
@@ -2168,6 +2174,23 @@ export interface ModPerson {
   warnings: number
   blocked_at: string | null
   blocked_reason: string
+  adult?: boolean
+  adult_off?: boolean
+}
+
+// a picture the age check held for an admin to look at
+export interface HeldItem {
+  id: string
+  kind: string
+  media_type: string | null
+  prompt: string
+  why: string
+  age: number
+  held_at: string | null
+  created_at: string
+  adult: boolean
+  owner: { id: string; email: string; name: string } | null
+  file_url: string
 }
 
 export interface ModLogRow {

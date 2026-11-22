@@ -23,6 +23,7 @@ from app.api import moderation
 from app.api import account
 from app.api import print as print_studio
 from app.api import implant
+from app.api import implant_patient
 from app.api import site
 
 router = APIRouter(prefix="/api")
@@ -54,6 +55,8 @@ router.include_router(print_studio.router, include_in_schema=False)
 router.include_router(account.router, include_in_schema=False)
 # M22: surgeons with access only; kept out of the API document like Print Studio
 router.include_router(implant.router, include_in_schema=False)
+# the patient's own read-only view of her record (My preview); signed-in users, no studio access needed
+router.include_router(implant_patient.router, include_in_schema=False)
 # the public website's own data, no sign-in
 router.include_router(site.router, include_in_schema=False)
 # signed links handed out by the MCP server; not something to call by hand

@@ -25,6 +25,7 @@ if __name__ == "__main__":
 from sqlalchemy import exists, func, or_, select, update
 from sqlalchemy.orm import Session, aliased, sessionmaker
 
+from app import content_policy
 from app.config import get_settings
 from app.db import SessionLocal
 from app.drivers import GenerationDriver, get_driver
@@ -662,9 +663,11 @@ def run_job(db: Session, job: Job, driver_factory: Callable[[], GenerationDriver
     # an API job's results, child jobs and Library items are API rows too (contract v34)
     db.info[VIA_API] = bool(job.via_api)
     db.info[ACTING_USER] = job.user_id
-    # an admin's writer keeps their words; everyone else's, Managers' and clinics' too, keeps the modesty rule
+    # an admin's writer keeps their words, and so does adult mode's on a job with no input picture; everyone
+    # else's, Managers' and clinics' too, keeps the modesty rule
     owner = db.get(User, job.user_id) if job.user_id else None
-    modest = MODEST.set(not (owner is not None and owner.is_admin))
+    gen = db.get(Generation, job.generation_id) if job.generation_id else None
+    modest = MODEST.set(not content_policy.nudity_ok(owner, gen))
     try:
         _run(db, job, ctx)
     finally:

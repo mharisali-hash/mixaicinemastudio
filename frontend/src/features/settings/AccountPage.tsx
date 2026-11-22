@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { GpuMeter } from '@/components/studio/gpu-meter'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/alert-dialog'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { qk } from '@/hooks/keys'
@@ -183,6 +184,92 @@ function PasswordCard() {
   )
 }
 
+const ADULT_TICKS = [
+  { key: 'confirm_18', label: 'I am 18 or older' },
+  { key: 'confirm_made_up', label: 'Only made-up people; never real people’s photos' },
+  { key: 'confirm_review', label: 'My work may be reviewed, and misuse blocks my account' },
+] as const
+type AdultTick = (typeof ADULT_TICKS)[number]['key']
+
+// 18+ opt-in (22 Nov): words-only work of made-up people. Anything started from a picture keeps the usual rules
+function AdultCard() {
+  const { data: me } = useMe()
+  const signedIn = useSignedInAs()
+  const [asking, setAsking] = useState(false)
+  const [ticks, setTicks] = useState<Record<AdultTick, boolean>>({ confirm_18: false, confirm_made_up: false, confirm_review: false })
+  const set = useMutation({
+    mutationFn: (on: boolean) => api.auth.setAdult(on ? { on, ...ticks } : { on }),
+    onSuccess: (user) => {
+      signedIn(user)
+      setAsking(false)
+    },
+  })
+  if (!me) return null
+  const all = ADULT_TICKS.every((t) => ticks[t.key])
+  return (
+    <Card title="Adult content (18+)" actions={me.adult ? <Badge tone="warning">On</Badge> : <Badge tone="neutral">Off</Badge>}>
+      <p className="text-body text-studio-muted">
+        Lets you make adult pictures and videos of made-up people, from your words alone. Edits and anything started from a photo keep the usual rules,
+        and nothing involving children or revered religious figures is ever made.
+      </p>
+      <p lang="ur" dir="rtl" className="text-body text-studio-muted">
+        صِرْف خَیالی لوگ؛ اَصْلی لوگوں کی تَصْوِیریں کَبھی نَہِیں۔
+      </p>
+      {me.adult_off ? (
+        <Notice>Our team switched this off for your account.</Notice>
+      ) : me.adult ? (
+        <Button variant="secondary" className="self-start" loading={set.isPending} onClick={() => set.mutate(false)}>
+          Switch off
+        </Button>
+      ) : (
+        <Button variant="secondary" className="self-start" onClick={() => setAsking(true)}>
+          Switch on…
+        </Button>
+      )}
+      {set.isError && !asking && <Notice>{set.error.message}</Notice>}
+      <Dialog open={asking} onOpenChange={setAsking}>
+        <DialogContent aria-describedby="adult-desc">
+          <DialogHeader>
+            <DialogTitle>Switch on adult content?</DialogTitle>
+            <DialogDescription id="adult-desc">Tick all three to go on. You can switch it off again at any time.</DialogDescription>
+          </DialogHeader>
+          <form
+            className="flex flex-col gap-3"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (all) set.mutate(true)
+            }}
+          >
+            <fieldset className="flex flex-col gap-2">
+              <legend className="sr-only">Before you switch it on</legend>
+              {ADULT_TICKS.map((t) => (
+                <label key={t.key} className="flex items-start gap-2 text-body">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 size-4 shrink-0 accent-studio-accent"
+                    checked={ticks[t.key]}
+                    onChange={(e) => setTicks((s) => ({ ...s, [t.key]: e.target.checked }))}
+                  />
+                  {t.label}
+                </label>
+              ))}
+            </fieldset>
+            {set.isError && <Notice>{set.error.message}</Notice>}
+            <DialogFooter>
+              <Button type="button" variant="secondary" onClick={() => setAsking(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={!all} loading={set.isPending}>
+                Switch on
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  )
+}
+
 function SessionsCard() {
   const qc = useQueryClient()
   const navigate = useNavigate()
@@ -237,6 +324,7 @@ export function AccountPage() {
         <ProfileCard />
         <PackageCard />
         <PasswordCard />
+        <AdultCard />
         <SessionsCard />
       </div>
     </main>

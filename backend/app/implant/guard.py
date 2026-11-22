@@ -3,6 +3,7 @@ from fastapi import Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.content_policy import ids_in as _ids_in
 from app.models import Generation
 from app.security import CurrentUser, get_current_user
 
@@ -16,18 +17,6 @@ def is_private(g: Generation | None) -> bool:
 def private_ids():
     """A subquery of every implant generation id, for listings that must leave them out."""
     return select(Generation.id).where(Generation.target_type.in_(TARGETS))
-
-
-def _ids_in(value, out: set[str]) -> None:
-    if isinstance(value, str):
-        if len(value) == 36 and value.count("-") == 4:
-            out.add(value)
-    elif isinstance(value, dict):
-        for v in value.values():
-            _ids_in(v, out)
-    elif isinstance(value, (list, tuple)):
-        for v in value:
-            _ids_in(v, out)
 
 
 def refuses(db: Session, gen: Generation) -> bool:

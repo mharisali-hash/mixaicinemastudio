@@ -9,6 +9,7 @@ from app.limits import PROMPT_MAX
 from app import brand
 from app import library as lib
 from app import prompt_enhance
+from app.content_policy import nudity_ok
 from app.db import get_db
 from app.security import CurrentUser, require_editor
 
@@ -43,4 +44,6 @@ async def enhance(body: EnhanceIn, db: Session = Depends(get_db), cur: CurrentUs
     # image styles go by their label; quick styles (cinematic, documentary...) are labels already
     style = lib.STYLES[body.style].label if body.style in lib.STYLES else body.style
     return await prompt_enhance.enhance(body.prompt, body.kind, mode=body.mode, model=body.model, style=style,
-                                        brand_context=context, modest=not cur.user.is_admin)
+                                        brand_context=context,
+                                        # an edit starts from a picture, so adult mode doesn't reach it
+                                        modest=not nudity_ok(cur.user, text_only=body.kind != "edit"))

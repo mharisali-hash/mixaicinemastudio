@@ -108,7 +108,8 @@ def close(db: Session, lead: Generation, lead_job: Job) -> None:
 
 def _end(db: Session, g: Generation, lead_job: Job, why: str) -> None:
     _job_for(db, g, lead_job, status="failed", error=why, message="Failed", finished_at=utcnow())
-    g.status = "failed"
+    if g.status != "held":
+        g.status = "failed"
 
 
 def run(ctx, gen: Generation, batch: list, params: dict, draw):

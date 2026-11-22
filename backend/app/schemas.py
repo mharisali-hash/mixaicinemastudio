@@ -71,9 +71,14 @@ class UserOut(Out):
     verified: bool = True
     # M22: Implant Preview in the rail (admins, and accounts an admin switched it on for)
     implant: bool = False
+    # a patient's account linked to her clinic record: "My preview" in the rail
+    implant_patient: bool = False
     # contract v42: "admin", "manager" or null; and the hold an account is under, shown as a banner
     staff: str | None = None
     blocked: "BlockedOut | None" = None
+    # 22 Nov: 18+ adult mode is on (opted in, not switched off by the team); adult_off: the team switched it off
+    adult: bool = False
+    adult_off: bool = False
 
 
 class BlockedOut(Out):
@@ -104,6 +109,13 @@ class PasswordChangeIn(BaseModel):
 
 class ProfilePatch(BaseModel):
     display_name: str = Field(min_length=1, max_length=200)
+
+
+class AdultModeIn(BaseModel):
+    on: bool
+    confirm_18: bool = False
+    confirm_made_up: bool = False
+    confirm_review: bool = False
 
 
 class AdminUserOut(BaseModel):

@@ -38,6 +38,7 @@ import {
   SquareSplitHorizontal,
   Stamp,
   Stethoscope,
+  Eye,
   SwatchBook,
   UserRound,
   Users,
@@ -85,7 +86,7 @@ export interface MenuSection {
   modelsNote?: string
 }
 
-export type RailId = 'home' | 'assets' | 'brand' | 'photos' | 'image' | 'video' | 'characters' | '3d' | 'audio' | 'podcast' | 'upscale' | 'queue' | 'settings' | 'admin' | 'print' | 'implant'
+export type RailId = 'home' | 'assets' | 'brand' | 'photos' | 'image' | 'video' | 'characters' | '3d' | 'audio' | 'podcast' | 'upscale' | 'queue' | 'settings' | 'admin' | 'print' | 'implant' | 'my_preview'
 
 export interface RailItem {
   id: RailId
@@ -224,6 +225,8 @@ export const MODERATION_ITEM: RailItem = { id: 'admin', label: 'Moderation', ico
 export const PRINT_ITEM: RailItem = { id: 'print', label: 'Print Studio', icon: Printer, to: '/admin/print' }
 // M22: admins, plus surgeons an admin has granted it to
 export const IMPLANT_ITEM: RailItem = { id: 'implant', label: 'Implant Preview', icon: Stethoscope, to: '/clinic/implant' }
+// a patient whose clinic linked her record (User.implant_patient)
+export const MY_PREVIEW_ITEM: RailItem = { id: 'my_preview', label: 'My preview', icon: Eye, to: '/my-preview' }
 
 const TOOL_ROUTE: Partial<Record<ModelType, string>> = { image: '/image/generate', edit: '/image/edit', video: '/video/create', audio: '/audio/music' }
 
@@ -285,6 +288,7 @@ export function activeRail(pathname: string): RailId | null {
   if (p.startsWith('/settings')) return 'settings'
   if (p.startsWith('/admin/print')) return 'print'
   if (p.startsWith('/clinic/implant')) return 'implant'
+  if (p.startsWith('/my-preview')) return 'my_preview'
   if (p.startsWith('/admin')) return 'admin'
   return null
 }
@@ -351,6 +355,7 @@ const TITLES: [RegExp, string][] = [
   [/^\/admin\/people/, 'People'],
   [/^\/admin\/moderation-log/, 'Moderation log'],
   [/^\/clinic\/implant/, 'Implant Preview'],
+  [/^\/my-preview/, 'My preview'],
   [/^\/admin$/, 'Admin'],
 ]
 

@@ -1,7 +1,11 @@
 """Patients, photos, options and the edit that renders them (phase 1: the Folietech-style literal edit)."""
+import hashlib
 import io
+import logging
+import re
+import secrets
 import shutil
-from datetime import timedelta
+from datetime import date, timedelta
 from pathlib import Path
 
 from fastapi import HTTPException
@@ -31,6 +35,13 @@ MAX_PHOTO_BYTES = 25 * 1024 * 1024
 PHOTO_LONG_SIDE = 1600
 DISCLAIMER = "Computer simulation for discussion only. Actual surgical results vary."
 FONTS = Path(__file__).resolve().parent.parent / "assets" / "fonts"
+ADULT_AGE = 18
+MINOR_PHOTOS = ("This patient is under 18, so photos and photo previews aren't available. Size planning and the "
+                "3D model still work.")
+AGE_FLAGGED = ("A photo is waiting for the clinic to confirm the patient's date of birth again before it can be "
+               "used.")
+
+log = logging.getLogger(__name__)
 
 
 def clinic_root() -> Path:
@@ -53,6 +64,46 @@ def touch(p: ImplantPatient) -> None:
     p.last_activity_at = utcnow()
 
 
+# ---------------------------------------------------------------- age
+
+def years(dob: date, today: date | None = None) -> int:
+    today = today or utcnow().date()
+    return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+
+
+def age_of(p: ImplantPatient, today: date | None = None) -> int | None:
+    return None if p.date_of_birth is None else years(p.date_of_birth, today)
+
+
+def is_minor(p: ImplantPatient, today: date | None = None) -> bool:
+    age = age_of(p, today)
+    # records from before the date of birth was asked keep their 18+ tick
+    return not p.adult_confirmed if age is None else age < ADULT_AGE
+
+
+def dob_problem(dob: date, today: date | None = None) -> str | None:
+    today = today or utcnow().date()
+    if dob > today:
+        return "The date of birth is in the future"
+    if today.year - dob.year > 110:
+        return "Check the date of birth: that's over 110 years ago"
+    return None
+
+
+def _age_look(path: Path) -> str | None:
+    """None, "child" (clearly under 13: never kept, nothing to re-confirm) or "flag" (the surgeon looks again)."""
+    from app import content_policy
+
+    try:
+        look = content_policy.minor_look(path)
+    except Exception as e:
+        log.warning("implant age check failed on %s: %s", path.name, e)
+        return None
+    if look is None:
+        return None
+    return "child" if content_policy.clear_child(look) else "flag"
+
+
 # ---------------------------------------------------------------- photos
 
 def save_photo(db: Session, p: ImplantPatient, view: str, garment: str, data: bytes,
@@ -63,6 +114,8 @@ def save_photo(db: Session, p: ImplantPatient, view: str, garment: str, data: by
         raise HTTPException(422, "garment must be garment or topless")
     if view == "own" and garment != "garment":
         raise HTTPException(422, "Her own photo is always in her clothes")
+    if is_minor(p):
+        raise HTTPException(409, MINOR_PHOTOS)
     if garment == "topless" and not (p.consent or {}).get("topless_ok"):
         raise HTTPException(409, "The patient hasn't consented to topless photos. Tick that consent first, or "
                                  "use a photo in a bra or top.")
@@ -92,6 +145,15 @@ def save_photo(db: Session, p: ImplantPatient, view: str, garment: str, data: by
     dest.parent.mkdir(parents=True, exist_ok=True)
     im.save(dest, "PNG")
     g.file_path = rel.as_posix()
+    seen = _age_look(dest) if garment == "topless" else None
+    if seen == "child":
+        dest.unlink(missing_ok=True)
+        db.delete(g)
+        log.warning("implant photo refused for patient %s: looks like a child", p.id)
+        raise HTTPException(422, "This photo can't be used: the person looks like a child.")
+    if seen == "flag":
+        # kept, but unused until the surgeon types the date of birth again (api.implant.confirm_photo_age)
+        g.params = {**g.params, "age_flag": True, "age_flag_at": utcnow().isoformat()}
     touch(p)
     return g
 
@@ -181,11 +243,15 @@ ENGINES = ("ai", "warp")
 
 
 def generate(db: Session, p: ImplantPatient, options: list[dict], engines: tuple[str, ...] = ("ai",)) -> ImplantSession:
-    if not (p.consent or {}).get("at") or not p.adult_confirmed:
-        raise HTTPException(409, "Record the patient's consent and age confirmation first")
+    if not (p.consent or {}).get("at"):
+        raise HTTPException(409, "Record the patient's consent first")
+    if is_minor(p):
+        raise HTTPException(409, MINOR_PHOTOS)
     pics = photos(db, p)
     if not pics:
         raise HTTPException(409, "Add at least one photo first")
+    if any((g.params or {}).get("age_flag") for g in pics.values()):
+        raise HTTPException(409, AGE_FLAGGED)
     s = ImplantSession(patient_id=p.id, options=options)
     db.add(s)
     db.flush()
@@ -285,19 +351,51 @@ def stamp(path: Path) -> None:
     """The small "Simulation" mark every result carries, wherever it ends up."""
     with Image.open(path) as src:
         im = src.convert("RGB")
+    mark(im, "SIMULATION").save(path)
+
+
+def marked_png(path: Path, text: str = "CLINIC PREVIEW") -> bytes:
+    # what a patient sees of a clinic photo: a marked copy, the file itself stays as it was
+    with Image.open(path) as src:
+        im = mark(src.convert("RGB"), text)
+    buf = io.BytesIO()
+    im.save(buf, "PNG")
+    return buf.getvalue()
+
+
+def mark(im: Image.Image, text: str) -> Image.Image:
     d = ImageDraw.Draw(im, "RGBA")
     size = max(14, im.width // 40)
     font = _font("inter", size)
-    text = "SIMULATION"
     tw = d.textlength(text, font=font)
     pad = size // 2
     x, y = im.width - tw - pad * 3, im.height - size - pad * 3
     d.rounded_rectangle((x - pad, y - pad, x + tw + pad, y + size + pad), radius=pad, fill=(20, 18, 16, 150))
     d.text((x, y), text, font=font, fill=(250, 246, 238, 235))
-    im.save(path)
+    return im
 
 
 # ---------------------------------------------------------------- deleting
+
+def drop_pictures(db: Session, p: ImplantPatient) -> int:
+    """Every photo, result and chart of a record, keeping the record itself (a patient found to be under 18)."""
+    root = get_settings().data_dir
+    sids = list(db.scalars(select(ImplantSession.id).where(ImplantSession.patient_id == p.id)))
+    gens = list(db.scalars(select(Generation).where(
+        ((Generation.target_type == "implant_photo") & (Generation.target_id == p.id))
+        | ((Generation.target_type == "implant_result") & Generation.target_id.in_(sids)))))
+    for g in gens:
+        if g.file_path:
+            (root / g.file_path).unlink(missing_ok=True)
+        db.delete(g)
+    for s in db.scalars(select(ImplantSession).where(ImplantSession.patient_id == p.id)):
+        db.delete(s)
+    for v in (p.chart or {}).get("versions") or []:
+        if v.get("chart_path"):
+            (root / v["chart_path"]).unlink(missing_ok=True)
+    p.chart = {}
+    return len(gens)
+
 
 def purge(db: Session, p: ImplantPatient) -> None:
     """Everything the patient left behind: rows and files, nothing kept."""
@@ -319,6 +417,8 @@ def purge(db: Session, p: ImplantPatient) -> None:
 
 
 SESSION_ONLY_HOURS = 12
+# a record the patient can open from her own account is kept for one of these, never session only
+PATIENT_KEEP = (1, 3, 6)
 
 
 def keep_for(p: ImplantPatient) -> timedelta:
@@ -334,6 +434,40 @@ def purge_expired(db: Session) -> int:
     for p in gone:
         purge(db, p)
     return len(gone)
+
+
+# ---------------------------------------------------------------- the patient's own account
+
+CODE_LETTERS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # no 0/O or 1/I/L: it gets read out across a desk
+INVITE_DAYS = 7
+
+
+def _code_hash(code: str) -> str:
+    return hashlib.sha256(re.sub(r"[^A-Z0-9]", "", code.upper()).encode()).hexdigest()
+
+
+def new_invite(p: ImplantPatient) -> str:
+    code = "".join(secrets.choice(CODE_LETTERS) for _ in range(8))
+    p.invite_code_hash = _code_hash(code)
+    p.invite_expires_at = utcnow() + timedelta(days=INVITE_DAYS)
+    return code
+
+
+def find_invite(db: Session, code: str) -> ImplantPatient | None:
+    p = db.scalar(select(ImplantPatient).where(ImplantPatient.invite_code_hash == _code_hash(code)))
+    if p is None or p.invite_expires_at is None or p.invite_expires_at < utcnow():
+        return None
+    return p
+
+
+def linked_patient(db: Session, user_id: str) -> ImplantPatient | None:
+    return db.scalar(select(ImplantPatient).where(ImplantPatient.patient_user_id == user_id).limit(1))
+
+
+def unlink(p: ImplantPatient) -> None:
+    p.patient_user_id = None
+    p.invite_code_hash = None
+    p.invite_expires_at = None
 
 
 def _font(family: str, size: int):
