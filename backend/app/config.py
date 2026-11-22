@@ -109,6 +109,8 @@ class Settings(BaseSettings):
     auto_approve_score: float = 6.0
     auto_retries: int = 2
     vision_timeout_s: float = 180.0
+    # how long Ollama keeps the vision model after a content check (its default for us is 10 min)
+    vision_keep_alive: str = "30m"
 
     # upscaling (contract v4)
     upscale_segment_s: float = 4.0

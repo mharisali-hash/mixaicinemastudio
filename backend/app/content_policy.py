@@ -173,8 +173,11 @@ def _ask_vision(path: Path, question: str, schema, tick=None):
                                           "Answer only with JSON."},
             {"role": "user", "images": [pic], "content": question}]
     try:
+        # every finished picture is checked, so the vision model is asked to stay loaded: warm, a check takes
+        # under a second; pushed out by a writer call, the next one waited minutes for the card (21-22 Nov)
         return chat_sync("vision", msgs, schema=schema, temperature=0.0, max_tokens=80,
-                         timeout=get_settings().vision_timeout_s, tick=tick).data
+                         timeout=get_settings().vision_timeout_s, tick=tick,
+                         keep_alive=get_settings().vision_keep_alive).data
     except LLMError as e:
         log.warning("content check: the vision model couldn't look at %s: %s", path.name, e)
         return None

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # First tuning pass from docs/research/gpu-performance-guide-2026-11-20.md (steps B1, B2, B4):
-#   B1  Ollama frees the GPU after 10 min (was 1 h) and keeps one model loaded
+#   B1  Ollama frees the GPU after 10 min (was 1 h) and keeps at most two models loaded (one pushed the
+#       content check's vision model out, and each check then waited minutes to reload it, 22 Nov)
 #   B2  ComfyUI on both cards: --fast fp8_matrix_mult cublas_ops, --preview-method none, --reserve-vram 0.6
 #   B4  GPU persistence mode, vm.swappiness=10
 #
@@ -60,7 +61,7 @@ say "B1: Ollama"
 write "/etc/systemd/system/ollama.service.d/$DROPIN" <<EOF
 [Service]
 Environment="OLLAMA_KEEP_ALIVE=10m"
-Environment="OLLAMA_MAX_LOADED_MODELS=1"
+Environment="OLLAMA_MAX_LOADED_MODELS=2"
 EOF
 
 say "B4: persistence mode and swappiness"
