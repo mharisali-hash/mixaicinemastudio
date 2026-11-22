@@ -51,8 +51,10 @@ grep -vE '^(gradio|gradio-rangeslider|onnxruntime)([ =<>]|$)' "$SRC/requirements
 ort=$(cd "$SRC" && "$PY" -c 'import sys; from facefusion.installer import ONNXRUNTIME_SET as s; print("==".join(s[sys.argv[1]]))' "$ORT_SET")
 [[ $ort == onnxruntime-gpu==* ]] || { echo "$ORT_SET isn't a CUDA choice in FaceFusion's installer ($ort)"; exit 1; }
 echo "    ${ort/==/[cuda,cudnn]==}"
-# the [cuda,cudnn] extras bring CUDA and cuDNN as pip wheels, so nothing depends on the box's own CUDA
-uv pip install --python "$PY" -q -r "$VENV/requirements.server.txt" "${ort/==/[cuda,cudnn]==}"
+echo "    downloads CUDA + cuDNN as pip wheels, about 2-3 GB: this step takes a while (progress shown below)"
+# the [cuda,cudnn] extras bring CUDA and cuDNN as pip wheels, so nothing depends on the box's own CUDA.
+# Not -q: a silent 3 GB download looked like a hang and got stopped (22 Nov)
+uv pip install --python "$PY" -r "$VENV/requirements.server.txt" "${ort/==/[cuda,cudnn]==}"
 # the wheels' libraries aren't on the loader path by themselves (backend/runners/facefusion_swap.py does the same)
 nv_libs=$("$PY" -c 'import glob, os, sysconfig; print(":".join(sorted(glob.glob(os.path.join(sysconfig.get_paths()["purelib"], "nvidia", "*", "lib")))))')
 export LD_LIBRARY_PATH="$nv_libs${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
