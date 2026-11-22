@@ -281,6 +281,9 @@ def nc_switch(m: Model) -> str | None:
         return "AUDIO_ALLOW_NONCOMMERCIAL"
     if m.type in ("image", "edit"):
         return "IMAGE_ALLOW_NONCOMMERCIAL"
+    if m.type == "faceswap":
+        # nothing in MODELS yet; stage 1 runs from scripts and app.faceswap checks the switch itself
+        return "FACESWAP_ALLOW_NONCOMMERCIAL"
     return None
 
 

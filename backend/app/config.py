@@ -189,6 +189,13 @@ class Settings(BaseSettings):
     # Seed-VC's own advice for singing is 30-50 steps
     song_voice_steps: int = 30
     song_voice_vram_gb: float = 8.0
+    # face swap, stage 1 (22 Nov): FaceFusion's venv and checkout from scripts/install-facefusion.sh, run on the
+    # video card by scripts/facefusion-swap.py. Its swapper and detector weights are non-commercial (InSwapper,
+    # RetinaFace / SCRFD / ArcFace) or research-only (HyperSwap). On while the owner tests; false refuses the swap
+    facefusion_venv: str = "facefusion"
+    facefusion_repo: str = "/data/apps/facefusion"
+    faceswap_vram_gb: float = 8.0
+    faceswap_allow_noncommercial: bool = True
     # burned subtitles (contract v24a): where the Noto fonts live (fonts-noto-core / -extra on Debian);
     # renderer auto | ass | pillow
     subtitle_fonts_dir: str = "/usr/share/fonts/truetype/noto"
