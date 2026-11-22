@@ -47,6 +47,10 @@ def command(job: dict, p: dict, target: str, out: str, tmp: str) -> list[str]:
            "--reference-frame-number", str(int(p["ref_frame"])),
            "--reference-face-position", str(int(p["ref_face"])),
            "--execution-providers", "cuda",
+           # FaceFusion's default is 8 threads, each with its own CUDA arena: hyperswap + restorer + enhancer at
+           # 8 ran a 20 GB card shared with ComfyUI out of memory (22 Nov). 2 is plenty for a short clip
+           "--execution-thread-count", str(job.get("threads") or 2),
+           "--video-memory-strategy", "strict",
            "--output-video-quality", str(job.get("quality") or 90)]
     if "expression_restorer" in processors:
         cmd += ["--expression-restorer-model", "live_portrait"]
