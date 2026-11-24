@@ -30,7 +30,8 @@ GPU_LANES = ("image", "video")
 # image GPU stays free for people's own pictures (owner's call, 10 Nov)
 VIDEO_TARGETS = frozenset({"shot", "location", "presenter_scene", "poetry_scene"})
 VIDEO_FRAME_KINDS = frozenset({"keyframe_start", "keyframe_end", "keyframe_mid"})
-# TODO: let an idle lane borrow the other GPU (a night of image batches leaves the video GPU unused)
+# admin bulk runs borrow an idle video GPU (app.bulk.run._video_free)
+# TODO: the same for people's own image batches, and video work borrowing an idle image GPU
 # job types that always run on the video GPU whatever their generation says (SeedVR2 / FlashVSR segments)
 VIDEO_JOB_TYPES = frozenset({"upscale"})
 # speech-to-text on a voice's reference clip: a GPU model, but either card will do; stem splits likewise

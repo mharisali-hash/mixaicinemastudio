@@ -3,7 +3,9 @@
 Queueing a whole batch at once would work for priority alone (it sits at BULK_PRIORITY, below everyone), but
 it would fill the job table with thousands of rows, make pause a mass update and give a fresh request
 nothing to overtake mid-batch. With BULK_IN_FLIGHT children (default 2) the image GPU never waits for the
-next picture, and anything anybody asks for meanwhile is at most one picture away.
+next picture, and anything anybody asks for meanwhile is at most one picture away. While the video GPU has no
+video work, as many again go on its lane (_video_free), which roughly halves a batch; when a take turns up the
+ones still waiting there move back to the image GPU.
 
 Like the podcast and autopilot orchestrators it never blocks a worker: when a worker has other work it hands
 itself back to the queue (JobDeferred at BULK_WAIT), and a finishing child lifts it again (on_job_finished).
@@ -12,11 +14,11 @@ import time
 import zipfile
 from pathlib import Path, PurePosixPath
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from app.bulk import service as bs
 from app.config import get_settings
-from app.models import BulkBatch, BulkItem, Job
+from app.models import BulkBatch, BulkItem, Job, WorkerHeartbeat, utcnow
 
 POLL_S = 10.0
 
@@ -48,30 +50,82 @@ def _resync(db, items: list[BulkItem]) -> None:
             bs.sync_item(db, item, job)
 
 
+def _video_free(db) -> bool:
+    """May bulk pictures borrow the video GPU right now? Only with a worker of its own up on it (or they
+    would wait for nobody) and nothing but bulk pictures running or waiting there."""
+    if not get_settings().bulk_use_video_gpu:
+        return False
+    w = _w()
+    cutoff = utcnow() - w.STALE_AFTER
+    if not any("video" in (lanes := w.heartbeat_lanes(hb)) and "image" not in lanes
+               for hb in db.scalars(select(WorkerHeartbeat).where(WorkerHeartbeat.last_seen >= cutoff))):
+        return False
+    rows = db.execute(select(Job.status, Job.priority, Job.payload)
+                      .where(Job.lane == "video", Job.status.in_(bs.LIVE))).all()
+    # a parent waiting below the bulk pictures isn't video work; a take, queued or running, is
+    return not any(not (payload or {}).get("bulk_item_id") and (status == "running" or prio > bs.BULK_PRIORITY)
+                   for status, prio, payload in rows)
+
+
+def _lanes_in_use(db, live: list[BulkItem]) -> dict[str, int]:
+    on = {"image": 0, "video": 0}
+    for item in live:
+        job = db.get(Job, item.job_id or "")
+        lane = job.lane if job is not None else "image"
+        on[lane if lane in on else "image"] += 1
+    return on
+
+
+def _hand_back(db, live: list[BulkItem]) -> int:
+    # video work turned up: pictures still waiting on the video GPU go back to the image GPU rather than make
+    # a take reload its models after them. The status check makes it lose cleanly to a worker claiming one
+    ids = [i.job_id for i in live if i.job_id]
+    if not ids:
+        return 0
+    n = db.execute(update(Job).where(Job.id.in_(ids), Job.status == "queued", Job.lane == "video")
+                   .values(lane="image").execution_options(synchronize_session=False)).rowcount or 0
+    if n:
+        db.commit()
+        db.expire_all()
+    return n
+
+
 def _top_up(ctx, batch: BulkBatch) -> int:
     db = ctx.db
+    per_gpu = max(1, get_settings().bulk_in_flight)
+    borrow = _video_free(db)
     live = _in_flight(db, batch.id)
-    want = max(1, get_settings().bulk_in_flight) - len(live)
+    if not borrow:
+        _hand_back(db, live)
+    on = _lanes_in_use(db, live)
+    want = {"image": per_gpu - on["image"], "video": per_gpu - on["video"] if borrow else 0}
     added = 0
-    while want > 0:
-        nxt = db.scalars(select(BulkItem).where(BulkItem.batch_id == batch.id, BulkItem.status == "uploaded")
-                         .order_by(BulkItem.seq).limit(1)).first()
-        if nxt is None:
-            break
-        job = bs.queue_item(db, batch, nxt, priority=bs.BULK_PRIORITY, parent_job_id=ctx.job.id)
-        # one commit per picture: SQLite holds the write lock for as short a time as it can
-        db.commit()
-        if job is not None:
-            want -= 1
-            added += 1
+    for lane in ("image", "video"):
+        while want[lane] > 0:
+            nxt = db.scalars(select(BulkItem).where(BulkItem.batch_id == batch.id, BulkItem.status == "uploaded")
+                             .order_by(BulkItem.seq).limit(1)).first()
+            if nxt is None:
+                return added
+            job = bs.queue_item(db, batch, nxt, priority=bs.BULK_PRIORITY, parent_job_id=ctx.job.id)
+            if job is not None and lane == "video":
+                db.flush()  # the lane is stamped at flush (models._classify_new_jobs)
+                # only a waiting image-lane picture moves; never a running twin
+                if job.type == "generate" and job.status == "queued" and job.lane == "image":
+                    job.lane = "video"
+            # one commit per picture: SQLite holds the write lock for as short a time as it can
+            db.commit()
+            if job is not None:
+                want[lane] -= 1
+                added += 1
     return added
 
 
 def _tick(ctx, batch: BulkBatch) -> None:
     c = bs.counts(ctx.db, batch.id)
     ended = c["done"] + c["failed"] + c["cancelled"]
-    ctx.job.result = {"batch_id": batch.id, "counts": c,
-                      "waiting_on": [i.job_id for i in _in_flight(ctx.db, batch.id) if i.job_id]}
+    live = _in_flight(ctx.db, batch.id)
+    ctx.job.result = {"batch_id": batch.id, "counts": c, "waiting_on": [i.job_id for i in live if i.job_id],
+                      "on_gpu": _lanes_in_use(ctx.db, live)}
     ctx.progress(ended / max(1, c["total"]), f"{ended} of {c['total']} pictures")
 
 

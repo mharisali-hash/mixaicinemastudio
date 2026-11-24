@@ -109,7 +109,7 @@ export function CutoutTab({ photoId, routeId, title, version, points, onPoints, 
 
       <section aria-labelledby="sel-h" className="flex flex-col gap-2">
         <h3 id="sel-h" className="section-label">Select by words or clicks</h3>
-        <Input aria-label="What to select" placeholder="e.g. the dog, the bottle, the man on the left" value={words} maxLength={200} onChange={(e) => setWords(e.target.value)} />
+        <Input aria-label="What to select" placeholder="e.g. the dog, the bottle, the man on the left" value={words} onChange={(e) => setWords(e.target.value)} />
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Click on the photo to">
           <Button size="sm" variant={clickMode === 'include' ? 'primary' : 'outline'} aria-pressed={clickMode === 'include'}
             onClick={() => onClickMode(clickMode === 'include' ? null : 'include')}>
@@ -170,7 +170,7 @@ export function CutoutTab({ photoId, routeId, title, version, points, onPoints, 
 
       <section aria-labelledby="paint-h" className={cn('flex flex-col gap-2', !hasMask && 'opacity-60')}>
         <h3 id="paint-h" className="section-label">Paint a new scene</h3>
-        <Textarea aria-label="Describe the new background" rows={2} disabled={!hasMask} placeholder="e.g. a marble kitchen counter in soft morning light"
+        <Textarea autoGrow aria-label="Describe the new background" rows={2} disabled={!hasMask} placeholder="e.g. a marble kitchen counter in soft morning light"
           value={prompt} onChange={(e) => setPrompt(e.target.value)} />
         <Button size="sm" variant="primary" disabled={!hasMask || !prompt.trim() || !!unavailable('background')} loading={busy === 'paint'}
           onClick={() => run('paint', () => api.photo.restore(photoId, { tool: 'background', prompt: prompt.trim(), edge }), 'Paint background').then((ok) => ok && setPrompt(''))}>

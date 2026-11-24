@@ -155,7 +155,7 @@ function AddLook({ characterId, disabled }: { characterId: string; disabled: boo
       ).map(([k, label, ph]) => (
         <div key={k} className="flex flex-col gap-1">
           <Label htmlFor={`${uid}-${k}`}>{label}</Label>
-          <Input id={`${uid}-${k}`} value={f[k]} placeholder={ph} maxLength={k === 'name' ? 120 : 600} onChange={(e) => set(k, e.target.value)} />
+          <Input id={`${uid}-${k}`} value={f[k]} placeholder={ph} maxLength={k === 'name' ? 120 : undefined} onChange={(e) => set(k, e.target.value)} />
         </div>
       ))}
       <div className="flex items-center gap-2 sm:col-span-2">

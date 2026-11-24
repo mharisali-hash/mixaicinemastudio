@@ -21,6 +21,7 @@ from app import library as lib
 from app import models_catalog as mc
 from app import prompt_enhance, uploads
 from app.config import get_settings
+from app.limits import PROMPT_MAX
 from app.models import BulkBatch, BulkItem, Generation, Job, MediaItem, Workspace, new_id, utcnow
 from app.services import enqueue_generation
 
@@ -71,7 +72,7 @@ def counts(db: Session, batch_id: str) -> dict[str, int]:
 def clean_options(action: str, raw: dict, *, admin_text_check=True) -> dict:
     opts: dict = {}
     if action == "edit":
-        text = " ".join(str(raw.get("instruction") or "").split())[:1200]
+        text = " ".join(str(raw.get("instruction") or "").split())[:PROMPT_MAX]
         opts["instruction"] = text
         opts["magic_prompt"] = raw.get("magic_prompt") if raw.get("magic_prompt") in ("off", "auto", "on") else "off"
         aspect = raw.get("aspect") or ""
@@ -87,12 +88,12 @@ def clean_options(action: str, raw: dict, *, admin_text_check=True) -> dict:
             screen(text)
     elif action == "remove":
         # the words may come later, as an instruction may: start() asks for them
-        opts["words"] = " ".join(str(raw.get("words") or "").split())[:200]
+        opts["words"] = " ".join(str(raw.get("words") or "").split())[:PROMPT_MAX]
         if opts["words"] and admin_text_check:
             screen(f"Remove {opts['words']}")
     else:
         opts["feather"] = round(max(0.0, min(20.0, float(raw.get("feather", 0.6) or 0))), 2)
-    opts["keywords"] = " ".join(str(raw.get("keywords") or "").split())[:500]
+    opts["keywords"] = " ".join(str(raw.get("keywords") or "").split())[:PROMPT_MAX]
     return opts
 
 
@@ -215,13 +216,13 @@ def apply_prompts(db: Session, batch: BulkBatch, data: bytes) -> dict:
             unmatched.append(row.get(fcol) or "")
             continue
         if icol:
-            instr = " ".join((row.get(icol) or "").split())[:1200] or None
+            instr = " ".join((row.get(icol) or "").split())[:PROMPT_MAX] or None
             if instr and instr not in checked:
                 screen(instr)
                 checked.add(instr)
             item.instruction = instr
         if kcol:
-            item.keywords = " ".join((row.get(kcol) or "").split())[:500] or None
+            item.keywords = " ".join((row.get(kcol) or "").split())[:PROMPT_MAX] or None
         matched += 1
     db.commit()
     return {"rows": len(rows), "matched": matched, "unmatched": unmatched[:50], "unmatched_count": len(unmatched)}

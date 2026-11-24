@@ -1225,10 +1225,10 @@ class AudioGenerateIn(BaseModel):
 
 
 class LyricsIn(BaseModel):
-    topic: str = Field(min_length=1, max_length=500)
+    topic: str = Field(min_length=1, max_length=PROMPT_MAX)
     language: str = Field("en", min_length=2, max_length=12, pattern=r"^[a-z]{2,3}(-[a-z]{2,4})?$")
-    mood: str | None = Field(None, max_length=200)
-    style: str | None = Field(None, max_length=200)
+    mood: str | None = Field(None, max_length=PROMPT_MAX)
+    style: str | None = Field(None, max_length=PROMPT_MAX)
     sections: list[Annotated[str, Field(min_length=2, max_length=30)]] = Field(
         default_factory=lambda: ["verse", "chorus", "verse", "chorus", "bridge", "chorus"], min_length=1, max_length=16)
     aerab: bool = True

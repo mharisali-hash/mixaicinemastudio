@@ -12,7 +12,7 @@ export function RemoveWords({ value, onChange }: { value: string; onChange: (v: 
       <label htmlFor={`${uid}-words`} className="text-small font-medium">
         What should go?
       </label>
-      <Input id={`${uid}-words`} value={value} onChange={(e) => onChange(e.target.value)} maxLength={200} placeholder="e.g. men, the dog, the text" aria-describedby={`${uid}-hint`} />
+      <Input id={`${uid}-words`} value={value} onChange={(e) => onChange(e.target.value)} placeholder="e.g. men, the dog, the text" aria-describedby={`${uid}-hint`} />
       <div role="group" aria-label="Quick picks" className="flex flex-wrap gap-1.5">
         {QUICK.map((w) => (
           <button

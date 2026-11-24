@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/alert-dialog'
 import { Input, fieldClass } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
+import { Textarea } from '@/components/ui/textarea'
 import { ErrorState } from '@/components/studio/states'
 import { useMe } from '@/hooks/useAuth'
 import { announce } from '@/stores/ui'
@@ -241,13 +242,13 @@ function SettingsStep({ b, locked, onSaved }: { b: BulkBatch; locked: boolean; o
                 <label htmlFor="bulk-instruction" className="section-label">
                   Instruction for every picture
                 </label>
-                <textarea
+                <Textarea
                   id="bulk-instruction"
                   rows={3}
-                  className={cn(fieldClass, 'py-1.5')}
+                  autoGrow
+                  className="min-h-0 py-1.5"
                   placeholder="e.g. Put the product on a plain white background with a soft shadow"
                   value={opts.instruction ?? ''}
-                  maxLength={1200}
                   onChange={(e) => set('instruction', e.target.value)}
                 />
               </div>
@@ -267,7 +268,7 @@ function SettingsStep({ b, locked, onSaved }: { b: BulkBatch; locked: boolean; o
               <label htmlFor="bulk-words" className="section-label">
                 What should go in every picture?
               </label>
-              <Input id="bulk-words" placeholder="e.g. men, the text, the dog" value={opts.words ?? ''} maxLength={200} onChange={(e) => set('words', e.target.value)} />
+              <Input id="bulk-words" placeholder="e.g. men, the text, the dog" value={opts.words ?? ''} onChange={(e) => set('words', e.target.value)} />
               <p className="text-small text-studio-muted">Only what you name is taken out and filled in from around it; everything else stays as it was.</p>
             </div>
           ) : (
@@ -288,7 +289,7 @@ function SettingsStep({ b, locked, onSaved }: { b: BulkBatch; locked: boolean; o
             <label htmlFor="bulk-keywords" className="section-label">
               Keywords for every caption
             </label>
-            <Input id="bulk-keywords" placeholder="e.g. product photo, studio light" value={opts.keywords ?? ''} maxLength={500} onChange={(e) => set('keywords', e.target.value)} />
+            <Input id="bulk-keywords" placeholder="e.g. product photo, studio light" value={opts.keywords ?? ''} onChange={(e) => set('keywords', e.target.value)} />
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button type="submit" variant="primary" disabled={!dirty} loading={save.isPending}>

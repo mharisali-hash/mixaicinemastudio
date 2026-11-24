@@ -9,6 +9,7 @@ from app import character_looks as cl
 from app import character_sheet as cs
 from app.api.characters import _consent
 from app.db import get_db
+from app.limits import PROMPT_MAX
 from app.models import Character, CharacterLook, Generation, utcnow
 from app.schemas import PhotoConsent
 from app.security import CurrentUser, get_current_user, require_editor
@@ -16,7 +17,7 @@ from app.services import get_owned, next_version
 
 router = APIRouter(tags=["characters"])
 
-Text = Field("", max_length=600)
+Text = Field("", max_length=PROMPT_MAX)
 
 
 class LookIn(BaseModel):
@@ -24,16 +25,16 @@ class LookIn(BaseModel):
     outfit: str = Text
     setting: str = Text
     pose: str = Text
-    prompt: str = Field("", max_length=1000, description="Anything else about this look")
+    prompt: str = Field("", max_length=PROMPT_MAX, description="Anything else about this look")
     make: bool = Field(True, description="Queue its picture straight away")
 
 
 class LookPatch(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=120)
-    outfit: str | None = Field(None, max_length=600)
-    setting: str | None = Field(None, max_length=600)
-    pose: str | None = Field(None, max_length=600)
-    prompt: str | None = Field(None, max_length=1000)
+    outfit: str | None = Field(None, max_length=PROMPT_MAX)
+    setting: str | None = Field(None, max_length=PROMPT_MAX)
+    pose: str | None = Field(None, max_length=PROMPT_MAX)
+    prompt: str | None = Field(None, max_length=PROMPT_MAX)
     is_default: bool | None = None
     sort: int | None = Field(None, ge=0, le=1000)
 
@@ -43,7 +44,7 @@ class PackIn(BaseModel):
 
 
 class RedoIn(BaseModel):
-    note: str = Field("", max_length=500, description="What to change this time")
+    note: str = Field("", max_length=PROMPT_MAX, description="What to change this time")
 
 
 class OwnLookIn(BaseModel):

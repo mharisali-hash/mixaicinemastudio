@@ -253,7 +253,6 @@ function Remixer({ songs }: { songs: string[] }) {
                   id={`${uid}-style`}
                   className={FIELD}
                   value={steer.style}
-                  maxLength={200}
                   placeholder="Leave empty for a surprise"
                   onChange={(e) => set('style', e.target.value)}
                 />

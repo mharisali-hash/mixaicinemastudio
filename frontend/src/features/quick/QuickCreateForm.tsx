@@ -26,8 +26,8 @@ import { announce } from '@/stores/ui'
 import { QuickAdvanced } from './QuickAdvanced'
 
 /**
- * One prompt → finished video. On the Quick Video page the dock is sticky over the recent films
- * (a bottom sheet on phones); on Home it sits inline.
+ * One prompt → finished video. On the Quick Video page the dock heads the page above the recent films
+ * and scrolls with them; on Home it sits inline.
  */
 export function QuickCreateForm({
   expanded = false,

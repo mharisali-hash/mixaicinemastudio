@@ -138,6 +138,9 @@ class Settings(BaseSettings):
     bulk_in_flight: int = 2
     bulk_disk_reserve_gb: int = 20
     bulk_zip_max_gb: int = 4
+    # bulk_in_flight is per GPU: while the video GPU has no video work of its own, a batch puts as many again on
+    # it (both ComfyUIs read the same models). Real video work always goes first (app.bulk.run._video_free)
+    bulk_use_video_gpu: bool = True
     # Image Edit sets: separate pictures from one instruction, each its own variation. The schema caps it at
     # 25; lowering this lowers it further. Two in flight for the same reason as bulk_in_flight
     edit_set_max: int = 25

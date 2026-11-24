@@ -1,0 +1,145 @@
+{
+  "name": "qwen_edit_int4",
+  "family": "qwen-image-edit-2511",
+  "description": "Qwen-Image-Edit-2511 as SVDQuant INT4 (Nunchaku, ~13 GB) + Lightning 4-step: the same edit as qwen_edit in about half the memory, so it never spills to system RAM. Speed trial, 24 Nov.",
+  "inputs": {
+    "prompt": {
+      "type": "str",
+      "required": true,
+      "targets": [
+        [
+          "Positive",
+          "prompt"
+        ]
+      ]
+    },
+    "negative": {
+      "type": "str",
+      "default": "",
+      "targets": [
+        [
+          "Negative",
+          "prompt"
+        ]
+      ]
+    },
+    "images": {
+      "type": "image_list",
+      "required": true,
+      "min": 1,
+      "slots": [
+        [
+          "Ref1",
+          "image"
+        ],
+        [
+          "Ref2",
+          "image"
+        ],
+        [
+          "Ref3",
+          "image"
+        ]
+      ],
+      "drop_unused": [
+        [
+          "Ref2",
+          "Ref2Scale"
+        ],
+        [
+          "Ref3",
+          "Ref3Scale"
+        ]
+      ]
+    },
+    "width": {
+      "type": "int",
+      "default": 768,
+      "multiple_of": 16,
+      "targets": [
+        [
+          "Latent",
+          "width"
+        ]
+      ]
+    },
+    "height": {
+      "type": "int",
+      "default": 1024,
+      "multiple_of": 16,
+      "targets": [
+        [
+          "Latent",
+          "height"
+        ]
+      ]
+    },
+    "seed": {
+      "type": "int",
+      "default": 0,
+      "targets": [
+        [
+          "Sampler",
+          "seed"
+        ]
+      ]
+    },
+    "steps": {
+      "type": "int",
+      "default": 4,
+      "targets": [
+        [
+          "Sampler",
+          "steps"
+        ]
+      ]
+    },
+    "scheduler": {
+      "type": "str",
+      "default": "simple",
+      "targets": [
+        [
+          "Sampler",
+          "scheduler"
+        ]
+      ]
+    },
+    "filename_prefix": {
+      "type": "str",
+      "default": "mixai/qwenedit_int4",
+      "targets": [
+        [
+          "Save",
+          "filename_prefix"
+        ]
+      ]
+    }
+  },
+  "outputs": {
+    "image": {
+      "node": "Save",
+      "kind": "image"
+    }
+  },
+  "models": {
+    "diffusion_models": [
+      "nunchaku_qwen_image_edit_2511_balance_int4.safetensors"
+    ],
+    "text_encoders": [
+      "qwen_2.5_vl_7b_fp8_scaled.safetensors"
+    ],
+    "vae": [
+      "qwen_image_vae.safetensors"
+    ],
+    "loras": [
+      "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors"
+    ]
+  },
+  "progress_weights": {
+    "Sampler": 6,
+    "UNet": 3,
+    "TextEncoder": 2,
+    "Positive": 1,
+    "Negative": 1
+  }
+}

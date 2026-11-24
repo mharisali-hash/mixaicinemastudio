@@ -8,18 +8,23 @@
 #   ./scripts/tune-gpu.sh            # apply, restart ComfyUI + Ollama (running GPU jobs are interrupted and resume)
 #   ./scripts/tune-gpu.sh --dry-run  # show what it would write
 #   ./scripts/tune-gpu.sh --undo     # remove everything this script added and restart
+#   ./scripts/tune-gpu.sh --fp16-acc # also ComfyUI's --fast fp16_accumulation (needs torch 2.7+; the box has 2.14):
+#                                    # faster fp16 matmuls, a little less precise; A/B it with bench-bulk-edit.py.
+#                                    # Running the script again without it takes it back out
 #
 # Everything goes into drop-in files named zz-mixai-tune.conf, so --undo is exact and the original units are untouched.
 set -euo pipefail
-DRY=0 UNDO=0
+DRY=0 UNDO=0 FP16ACC=0
 for a in "$@"; do
-  case "$a" in --dry-run) DRY=1 ;; --undo) UNDO=1 ;; -h|--help) sed -n '2,12p' "$0"; exit 0 ;;
+  case "$a" in --dry-run) DRY=1 ;; --undo) UNDO=1 ;; --fp16-acc) FP16ACC=1 ;; -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
     *) echo "unknown option: $a" >&2; exit 2 ;; esac
 done
 
 say()  { printf '\n\033[1;33m==> %s\033[0m\n' "$*"; }
 info() { printf '    %s\n' "$*"; }
-FLAGS="--fast fp8_matrix_mult cublas_ops --preview-method none --reserve-vram 0.6"
+FAST="fp8_matrix_mult cublas_ops"
+(( FP16ACC )) && FAST+=" fp16_accumulation"
+FLAGS="--fast $FAST --preview-method none --reserve-vram 0.6"
 # "zz-" so it is read after any override.conf already in the unit's folder (Ollama's sets KEEP_ALIVE=1h there)
 DROPIN=zz-mixai-tune.conf
 mapfile -t UNITS < <(systemctl list-units --all --type=service --plain --no-legend 'comfyui*' | awk '{print $1}')

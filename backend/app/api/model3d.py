@@ -16,6 +16,7 @@ from app import rights
 from app.api.library import _edit_source, _new_image_item, generate_into
 from app.config import get_settings
 from app.db import get_db
+from app.limits import PROMPT_MAX
 from app.models import Character, Generation, Job, MediaItem, new_id
 from app.openapi import multipart
 from app.schemas import MediaItemOut, Model3DIn, Model3DLogo, Model3DOut, Shots3DOut, Turntable3DOut
@@ -249,7 +250,7 @@ def _make_logo(db: Session, cur: CurrentUser, body: Model3DIn, into: str | None)
     db.flush()
     g = Generation(workspace_id=ws, project_id=None, target_type="media", target_id=item.id, kind=m3.GEN_KIND,
                    version=next_version(db, "media", item.id, m3.GEN_KIND), status="queued",
-                   prompt=(src.prompt or "")[:4000], seed=body.seed if body.seed is not None else new_seed(),
+                   prompt=(src.prompt or "")[:PROMPT_MAX], seed=body.seed if body.seed is not None else new_seed(),
                    params={"model3d": rec, "created_by": {"user_id": cur.id, "flow": "make_3d:logo"}})
     db.add(g)
     db.flush()

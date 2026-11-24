@@ -15,6 +15,7 @@ from app import montage as mt
 from app import storyboard as sb
 from app.drivers.comfy import HQ_SIZES, VIDEO_SIZES
 from app.llm import LLMError, chat_sync
+from app.limits import PROMPT_MAX
 from app.llm import prompts as P
 from app.models import Character, Generation, PoetryShort, Shot
 from app.poetry import service as svc
@@ -64,10 +65,10 @@ def plan(db, ps: PoetryShort, tick=None) -> list[dict]:
     for k, sc in enumerate(scenes):
         d = drafts[k] if k < len(drafts) else None
         image = " ".join(d.image.split()) if d else f"{who}, in {where}, scene {k + 1} of {len(scenes)}."
-        sc["image_prompt"] = image[:1500]
-        sc["motion_prompt"] = (" ".join(d.motion.split()) if d and d.motion.strip() else DEFAULT_MOTION)[:600]
+        sc["image_prompt"] = image[:PROMPT_MAX]
+        sc["motion_prompt"] = (" ".join(d.motion.split()) if d and d.motion.strip() else DEFAULT_MOTION)[:PROMPT_MAX]
     ps.scenes = scenes
-    ps.settings = {**(ps.settings or {}), "person": who[:600], "place": where[:600]}
+    ps.settings = {**(ps.settings or {}), "person": who[:PROMPT_MAX], "place": where[:PROMPT_MAX]}
     return scenes
 
 

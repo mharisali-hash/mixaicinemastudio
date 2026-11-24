@@ -44,7 +44,7 @@ MAX_FRAMES = 257  # ~10.7 s at 24 fps; longer shots belong to the long-take temp
 
 ANGLES_LORA = "qwen-image-edit-2511-multiple-angles-lora.safetensors"
 
-TIMEOUTS = {"zimage_t2i": 900.0, "qwen_edit": 900.0, "ltx23_i2v": 3600.0, "ltx23_extend": 3600.0,
+TIMEOUTS = {"zimage_t2i": 900.0, "qwen_edit": 900.0, "qwen_edit_int4": 900.0,"ltx23_i2v": 3600.0, "ltx23_extend": 3600.0,
             "upscale_seedvr2": 3600.0, "upscale_flashvsr": 3600.0, "upscale_esrgan": 1800.0,
             "photo_model_1x": 900.0, "photo_face_restore": 600.0, "photo_colourise": 600.0, "photo_supir": 1800.0,
             "photo_cutout_mask": 300.0, "photo_sam_mask": 300.0,
@@ -227,6 +227,9 @@ def _plan(kind: str, prompt: str, params: dict, seed: int, lookup) -> Plan:
         inputs = {"prompt": text, "negative": negative, "width": w, "height": h, "seed": seed}
         if params.get("steps"):
             inputs["steps"] = params["steps"]
+        if params.get("scheduler"):
+            # scripts/bench-bulk-edit.py tries "beta"; nothing in the app sets it, so the template default stands
+            inputs["scheduler"] = params["scheduler"]
         return Plan(m.template, inputs, {"images": files}, _family(m.template, loras), "image",
                     {"reference_ids": ids, "model": m.id})
 

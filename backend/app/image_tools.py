@@ -17,6 +17,7 @@ from PIL import Image
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.limits import PROMPT_MAX
 from app.models import Generation, new_id
 
 ANNOTATORS = ("Unverified: lllyasviel/Annotators is marked licence 'other' (upstream Informative Drawings is MIT); "
@@ -77,7 +78,7 @@ class ToolError(ValueError):
 
 
 def remove_words(opts: dict) -> str:
-    words = " ".join(str((opts or {}).get("words") or "").split())[:200]
+    words = " ".join(str((opts or {}).get("words") or "").split())[:PROMPT_MAX]
     if not words:
         raise ToolError("Say what to remove, e.g. men, the dog, the text")
     return words
@@ -345,7 +346,8 @@ def build_params(db: Session, workspace_id: str, tool: ImageTool, template: dict
 
 
 def relight_prompt(template: dict | None, slots: dict, instruction: str) -> str:
-    # SD1.5's text encoder reads ~75 tokens: the scene and the light, not the whole Qwen instruction
+    # SD1.5 reads ~75 tokens a chunk, so a template's short scene-and-light line works best; without one the
+    # user's whole instruction goes (ComfyUI chunks long text rather than dropping it)
     tp = (template or {}).get("tool_prompt")
     if tp and slots:
         text = tp
@@ -353,7 +355,7 @@ def relight_prompt(template: dict | None, slots: dict, instruction: str) -> str:
             text = text.replace(f"[{k}]", v)
         if "[" not in text:
             return text
-    return " ".join(instruction.split())[:300]
+    return " ".join(instruction.split())
 
 
 def nothing_removed(db: Session, gen: Generation, out_path) -> str | None:

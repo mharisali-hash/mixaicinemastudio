@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app import library as lib, speech_language, voice_gallery
 from app.config import get_settings
+from app.limits import PROMPT_MAX
 from app.models import Generation, Job, MediaItem, VoiceProfile, new_id, utcnow
 from app.services import enqueue_generation, generation_file, job_out, media_url, new_seed
 
@@ -335,7 +336,7 @@ def clean_design(design: dict | None) -> dict:
         raise HTTPException(422, str(e)) from None
     seed = d.get("seed")
     # the seed is half the identity; without one every take would be a different person
-    return {"description": desc[:500], "seed": int(seed) if seed is not None else new_seed(), "engine": engine}
+    return {"description": desc[:PROMPT_MAX], "seed": int(seed) if seed is not None else new_seed(), "engine": engine}
 
 
 def clean_preset(preset: dict | None) -> dict:

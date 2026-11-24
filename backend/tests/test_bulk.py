@@ -13,7 +13,7 @@ from app import worker
 from app.bulk import service as bs
 from app.config import get_settings
 from app.db import SessionLocal
-from app.models import AdminAudit, BulkItem, Job, MediaItem
+from app.models import AdminAudit, BulkItem, Job, MediaItem, WorkerHeartbeat, utcnow
 from tests.test_api_tokens import _user, login  # noqa: F401  (fixtures)
 
 
@@ -149,6 +149,116 @@ def test_any_new_request_goes_before_the_next_bulk_picture(client, fast_driver):
         db.commit()
     drain(fast_driver)
     assert client.get(f"/api/admin/bulk/{bid}").json()["counts"]["done"] == 4
+
+
+# ---------------------------------------------------------------- borrowing the video GPU
+
+@pytest.fixture
+def video_worker(monkeypatch):
+    from app.bulk import run as bulk_run
+
+    monkeypatch.setattr(bulk_run, "POLL_S", 0.0)
+    with SessionLocal() as db:
+        db.add(WorkerHeartbeat(id="gpu-box:2", last_seen=utcnow(), info={"lanes": ["video", "audio"]}))
+        db.commit()
+
+
+def child_lanes(bid: str) -> list[str]:
+    with SessionLocal() as db:
+        return sorted(j.lane for j in db.scalars(select(Job).where(Job.status.in_(("queued", "running")),
+                                                                  Job.type == "generate"))
+                      if (j.payload or {}).get("bulk_batch_id") == bid)
+
+
+def take_on_video(status="queued") -> None:
+    with SessionLocal() as db:
+        ws = db.scalars(select(Job.workspace_id)).first()
+        db.add(Job(workspace_id=ws, type="generate", lane="video", priority=0, status=status, payload={}))
+        db.commit()
+
+
+def orchestrate():
+    # the general worker alone, so nothing but the orchestrator runs
+    assert worker.process_one(lanes=("general",))
+
+
+def test_idle_video_gpu_takes_as_many_again(client, fast_driver, video_worker):
+    bid = make_batch(client)
+    fill(client, bid, 6)
+    client.post(f"/api/admin/bulk/{bid}/run")
+    orchestrate()
+    assert child_lanes(bid) == ["image", "image", "video", "video"]
+    with SessionLocal() as db:
+        run = db.scalars(select(Job).where(Job.type == bs.RUN_JOB)).one()
+        assert run.result["on_gpu"] == {"image": 2, "video": 2}
+    seen = []
+    drain(fast_driver, lambda: seen.append(live_children(bid)))
+    assert max(seen) <= 2 * get_settings().bulk_in_flight
+    assert client.get(f"/api/admin/bulk/{bid}").json()["counts"]["done"] == 6
+
+
+@pytest.mark.parametrize("busy", ["queued", "running"])
+def test_video_work_keeps_the_batch_on_the_image_gpu(client, video_worker, busy):
+    bid = make_batch(client)
+    fill(client, bid, 6)
+    client.post(f"/api/admin/bulk/{bid}/run")
+    take_on_video(busy)
+    orchestrate()
+    assert child_lanes(bid) == ["image", "image"]
+
+
+def test_no_borrowing_when_switched_off_or_no_video_worker(client, monkeypatch):
+    from app.bulk import run as bulk_run
+
+    monkeypatch.setattr(bulk_run, "POLL_S", 0.0)
+    bid = make_batch(client)
+    fill(client, bid, 6)
+    client.post(f"/api/admin/bulk/{bid}/run")
+    orchestrate()  # no worker of its own on the video GPU
+    assert child_lanes(bid) == ["image", "image"]
+
+    with SessionLocal() as db:
+        db.add(WorkerHeartbeat(id="gpu-box:2", last_seen=utcnow(), info={"lanes": ["video", "audio"]}))
+        db.commit()
+    monkeypatch.setattr(get_settings(), "bulk_use_video_gpu", False)
+    orchestrate()
+    assert child_lanes(bid) == ["image", "image"]
+
+
+def test_waiting_pictures_leave_the_video_gpu_when_a_take_arrives(client, video_worker):
+    bid = make_batch(client)
+    fill(client, bid, 6)
+    client.post(f"/api/admin/bulk/{bid}/run")
+    orchestrate()
+    assert child_lanes(bid).count("video") == 2
+    take_on_video()
+    orchestrate()
+    # handed back, and nothing new added: the image GPU now holds all four
+    assert child_lanes(bid) == ["image"] * 4
+    with SessionLocal() as db:
+        # the take is first in line on the video GPU anyway
+        assert worker.claim_next(db, lanes=("video", "audio")).priority == 0
+
+
+def test_a_borrowed_picture_renders_on_the_video_comfyui(client, video_worker, monkeypatch):
+    from app.drivers.mock import MockDriver
+
+    seen = []
+
+    def fake_get_driver(name, lane=None):
+        seen.append(lane)
+        return MockDriver(step_seconds=0)
+
+    monkeypatch.setattr(worker, "get_driver", fake_get_driver)
+    bid = make_batch(client)
+    fill(client, bid, 4)
+    client.post(f"/api/admin/bulk/{bid}/run")
+    orchestrate()
+    assert worker.process_one(lanes=("video", "audio"))
+    assert seen == ["video"]
+    with SessionLocal() as db:
+        done = [j for j in db.scalars(select(Job).where(Job.status == "done", Job.type == "generate"))]
+        assert len(done) == 1 and done[0].lane == "video"
 
 
 def test_pause_resume_cancel_and_retry(client, fast_driver):

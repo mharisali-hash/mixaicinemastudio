@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app import stories
 from app.db import get_db, release
+from app.limits import PROMPT_MAX
 from app.models import Job
 from app.schemas import JobOut
 from app.security import CurrentUser, get_current_user, require_editor, require_feature
@@ -20,7 +21,7 @@ MEDIA_TYPES = {".mp3": "audio/mpeg", ".mp4": "video/mp4", ".srt": "application/x
 
 
 class StoryDesign(BaseModel):
-    description: str = Field(min_length=1, max_length=500)
+    description: str = Field(min_length=1, max_length=PROMPT_MAX)
     seed: int | None = Field(None, ge=0, le=2**31 - 1)
 
 
@@ -49,7 +50,7 @@ class StoryPage(BaseModel):
 
 
 class StoryMusic(BaseModel):
-    prompt: str = Field(min_length=1, max_length=500)
+    prompt: str = Field(min_length=1, max_length=PROMPT_MAX)
     model: Literal["ace15", "sa3"] = "ace15"
     level: Literal["off", "soft", "normal"] = "soft"
 

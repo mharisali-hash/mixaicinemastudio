@@ -234,10 +234,10 @@ def edit_image(
                                                                    "count is ignored")] = None,
     with_sheet: Annotated[bool, Field(description="With set_size: also one picture with the whole set laid "
                                                   "out on a single sheet")] = False,
-    remove: Annotated[str | None, Field(max_length=200, description="Take away exactly what these words name "
-                                                                    "(\"men\", \"the text\") and fill in behind "
-                                                                    "it, leaving the rest untouched, instead of "
-                                                                    "redrawing with the edit model")] = None,
+    remove: Annotated[str | None, Field(max_length=PROMPT_MAX,
+                                        description="Take away exactly what these words name (\"men\", \"the "
+                                                    "text\") and fill in behind it, leaving the rest untouched, "
+                                                    "instead of redrawing with the edit model")] = None,
 ) -> dict:
     """Edit pictures with an instruction ("make it night", "put the hat from picture 2 on her"). With set_size,
     one job makes the whole set: wait on it, then fetch each item with get_media. With remove, the named things
@@ -724,7 +724,7 @@ def make_print_design(
     shape: Literal["rect", "round"] = "rect",
     business_type: Annotated[str, Field(max_length=160, description='e.g. "livs / mini market"')] = "",
     language: Annotated[str, Field(pattern=r"^[a-z]{2,3}(-[a-z]{2,4})?$")] = "en",
-    style: Annotated[str, Field(max_length=300, description="Style hint: colours, feel, lettering")] = "",
+    style: Annotated[str, Field(max_length=PROMPT_MAX, description="Style hint: colours, feel, lettering")] = "",
     brand_kit_id: str | None = None,
     product_media_ids: Annotated[list[str], Field(max_length=3)] = [],
     photo_media_ids: Annotated[list[str], Field(max_length=6, description="The owner's own photos, used as they "
@@ -821,12 +821,12 @@ def print_other_size(
 @tool("generate", title="Make a Poetry Short")
 def make_poetry_short(
     ctx: Context,
-    topic: Annotated[str, Field(max_length=500, description="What the poem is about (or give poem)")] = "",
+    topic: Annotated[str, Field(max_length=PROMPT_MAX, description="What the poem is about (or give poem)")] = "",
     poem: Annotated[str, Field(max_length=4000, description="Your own poem, used word for word")] = "",
     language: Annotated[str, Field(pattern=r"^[a-z]{2,3}(-[a-z]{2,4})?$")] = "ur",
     title: Annotated[str, Field(max_length=200)] = "",
-    mood: Annotated[str, Field(max_length=200)] = "",
-    style: Annotated[str, Field(max_length=300, description="Music style tags for the singer")] = "",
+    mood: Annotated[str, Field(max_length=PROMPT_MAX)] = "",
+    style: Annotated[str, Field(max_length=PROMPT_MAX, description="Music style tags for the singer")] = "",
     vocal: Annotated[Literal["female", "male", "boy", "girl", "choir", "voice", "lead_group"],
                      Field(description="boy / girl / choir sing as children; voice sings in sing_voice_id; "
                                        "lead_group: a lead child and a group of children, parts marked in the "
@@ -836,10 +836,11 @@ def make_poetry_short(
     group_size: Annotated[Literal[3, 5], Field(description="vocal=lead_group: children in the group")] = 3,
     sing_voice_id: Annotated[str | None, Field(description="vocal=voice: a voice id from list_voices")] = None,
     length_s: Annotated[float, Field(ge=30, le=300, description="Up to 300 s; about one scene every 9 s")] = 60,
-    character: Annotated[str, Field(max_length=500, description="Short description of the person on screen")] = "",
+    character: Annotated[str, Field(max_length=PROMPT_MAX,
+                                    description="Short description of the person on screen")] = "",
     character_id: str | None = None,
     look_id: Annotated[str | None, Field(description="One of the character's looks (list_looks)")] = None,
-    setting: Annotated[str, Field(max_length=600)] = "",
+    setting: Annotated[str, Field(max_length=PROMPT_MAX)] = "",
     aspect: Literal["9:16", "16:9", "1:1"] = "9:16",
     quality: Literal["draft", "final"] = "draft",
     caption_style: Annotated[Literal["classic", "pill", "highlight", "clean"],
@@ -878,8 +879,9 @@ def make_presenter_video(
     language: Annotated[str, Field(pattern=r"^[a-z]{2,3}(-[a-z]{2,4})?$")] = "en",
     aspect: Literal["16:9", "9:16", "1:1"] = "16:9",
     caption_style: Literal["classic", "pill", "highlight", "clean", "none"] = "pill",
-    background: Annotated[str, Field(max_length=600, description="studio, office, classroom, news_desk, baithak, "
-                                                                 "outdoor, plain, or your own words")] = "studio",
+    background: Annotated[str, Field(max_length=PROMPT_MAX, description="studio, office, classroom, news_desk, "
+                                                                        "baithak, outdoor, plain, or your own "
+                                                                        "words")] = "studio",
 ) -> dict:
     """A character presenting a script to camera: their voice, lip-synced, scene by scene, with captions, a name
     strip and a title card. Runs straight to a draft video. Follow it with get_presenter_video."""
@@ -1030,7 +1032,7 @@ def _media(db: Session, cur: CurrentUser, id: str, origin: str) -> tuple[dict, G
                "created_at": _iso(g.created_at)}
         prompt = g.prompt
     if prompt:
-        out["prompt"] = prompt[:2000]
+        out["prompt"] = prompt
     if g is not None:
         out.update(_file_info(db, g, origin))
     return out, g

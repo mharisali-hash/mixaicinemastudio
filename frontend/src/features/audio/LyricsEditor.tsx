@@ -164,7 +164,7 @@ function WriteLyrics({ disabled, onWritten }: { disabled?: boolean; onWritten: (
   const go = () => {
     if (!ready || write.isPending) return
     write.mutate(
-      { topic: topic.trim().slice(0, 500), language, ...(mood.trim() ? { mood: mood.trim() } : {}), ...(isArabicScriptLang(language) ? { aerab: withAerab } : {}) },
+      { topic: topic.trim(), language, ...(mood.trim() ? { mood: mood.trim() } : {}), ...(isArabicScriptLang(language) ? { aerab: withAerab } : {}) },
       {
         onSuccess: (res) => {
           setOpen(false)
@@ -197,7 +197,6 @@ function WriteLyrics({ disabled, onWritten }: { disabled?: boolean; onWritten: (
           <Input
             id={`${uid}-topic`}
             value={topic}
-            maxLength={500}
             dir="auto"
             onChange={(e) => setTopic(e.target.value)}
             onKeyDown={(e) => {

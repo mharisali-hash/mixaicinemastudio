@@ -23,7 +23,7 @@ Caption = Literal["classic", "pill", "highlight", "clean", "none"]
 class SettingsIn(BaseModel):
     aspect: Literal["16:9", "9:16", "1:1"] | None = None
     caption_style: Caption | None = None
-    background: str | None = Field(None, max_length=600, description="A preset key or your own words")
+    background: str | None = Field(None, max_length=PROMPT_MAX, description="A preset key or your own words")
     lower_name: str | None = Field(None, max_length=120)
     lower_role: str | None = Field(None, max_length=120)
     title_card: bool | None = None
@@ -42,7 +42,7 @@ class CreateIn(BaseModel):
 class SceneIn(BaseModel):
     id: str | None = None
     text: str = Field(min_length=1, max_length=2000)
-    background: str = Field("", max_length=600)
+    background: str = Field("", max_length=PROMPT_MAX)
 
 
 class PatchIn(BaseModel):

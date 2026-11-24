@@ -1,8 +1,9 @@
-import { useId, useLayoutEffect, useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { ChevronUp, SlidersHorizontal } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import { MentionTextarea, type MentionOptions } from '@/components/mentions/MentionTextarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { useAutoGrow } from '@/hooks/useAutoGrow'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { readDockMode, writeDockMode, type DockMode } from '@/lib/dockPrefs'
 import type { MediaKind } from '@/lib/types'
@@ -39,12 +40,10 @@ interface Props {
   error?: React.ReactNode
   footer: React.ReactNode
   onSubmit: () => void
-  // sticky on top of the results (desktop) or a bottom sheet (phone); off on embedded uses
+  // the page's own dock: an h1, and on phones the options fold away; off on embedded uses
   docked?: boolean
   className?: string
 }
-
-const MAX_H = 240
 
 /** The prompt dock shared by every generator page. */
 export function PromptDock({
@@ -76,19 +75,14 @@ export function PromptDock({
   const field = promptRef ?? own
   const [mode, setMode] = useState<DockMode>(readDockMode)
   const phone = useBreakpoint() === 'mobile'
-  const sheet = docked && phone
+  const fold = docked && phone
   const [open, setOpen] = useState(false)
-  const showOptions = !sheet || open
+  const showOptions = !fold || open
   // the page's own heading when docked; a section heading when embedded (Home)
   const Heading = docked ? 'h1' : 'h2'
 
-  // grow with the text up to a limit, then scroll
-  useLayoutEffect(() => {
-    const el = field.current
-    if (!el) return
-    el.style.height = 'auto'
-    el.style.height = `${Math.min(MAX_H, Math.max(el.scrollHeight, 0))}px`
-  }, [prompt, field])
+  // MentionTextarea shows @labels rather than tokens, but its height still follows the prompt
+  useAutoGrow(field, prompt)
 
   const changeMode = (m: DockMode) => {
     setMode(m)
@@ -108,13 +102,8 @@ export function PromptDock({
           onSubmit()
         }
       }}
-      className={cn(
-        'flex flex-col gap-3 border border-studio-border-strong bg-studio-panel p-3 shadow-card md:p-4',
-        docked
-          ? 'z-20 max-md:sticky max-md:bottom-0 max-md:order-last max-md:mt-auto max-md:max-h-[85vh] max-md:overflow-y-auto max-md:-mx-4 max-md:rounded-t-[12px] max-md:border-x-0 max-md:border-b-0 max-md:shadow-modal md:sticky md:top-0 md:rounded-[8px]'
-          : 'rounded-[8px]',
-        className,
-      )}
+      // scrolls away with the page like everything else: one scrollbar, and a long prompt is never boxed in
+      className={cn('flex flex-col gap-3 rounded-[8px] border border-studio-border-strong bg-studio-panel p-3 shadow-card md:p-4', className)}
     >
       <div className="flex flex-wrap items-center gap-2">
         {icon}
@@ -133,7 +122,7 @@ export function PromptDock({
               </ToggleGroupItem>
             </ToggleGroup>
           )}
-          {sheet && (
+          {fold && (
             <button
               type="button"
               aria-expanded={open}
@@ -159,7 +148,7 @@ export function PromptDock({
             {...mentions}
             textareaRef={field}
             id={`${uid}-prompt`}
-            rows={sheet ? 2 : 3}
+            rows={fold ? 2 : 3}
             maxLength={maxLength}
             value={prompt}
             onValueChange={onPrompt}
@@ -171,7 +160,7 @@ export function PromptDock({
           <Textarea
             ref={field}
             id={`${uid}-prompt`}
-            rows={sheet ? 2 : 3}
+            rows={fold ? 2 : 3}
             maxLength={maxLength}
             value={prompt}
             onChange={(e) => onPrompt(e.target.value)}

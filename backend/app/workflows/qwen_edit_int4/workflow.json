@@ -1,0 +1,300 @@
+{
+ "1": {
+  "class_type": "NunchakuQwenImageDiTLoader",
+  "_meta": {
+   "title": "UNet"
+  },
+  "inputs": {
+   "model_name": "nunchaku_qwen_image_edit_2511_balance_int4.safetensors",
+   "cpu_offload": "auto",
+   "num_blocks_on_gpu": 60,
+   "use_pin_memory": "disable"
+  }
+ },
+ "2": {
+  "class_type": "LoraLoaderModelOnly",
+  "_meta": {
+   "title": "Lightning"
+  },
+  "inputs": {
+   "model": [
+    "1",
+    0
+   ],
+   "lora_name": "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+   "strength_model": 1.0
+  }
+ },
+ "3": {
+  "class_type": "ModelSamplingAuraFlow",
+  "_meta": {
+   "title": "ModelSampling"
+  },
+  "inputs": {
+   "model": [
+    "2",
+    0
+   ],
+   "shift": 3.1
+  }
+ },
+ "4": {
+  "class_type": "CFGNorm",
+  "_meta": {
+   "title": "CFGNorm"
+  },
+  "inputs": {
+   "model": [
+    "3",
+    0
+   ],
+   "strength": 1.0
+  }
+ },
+ "5": {
+  "class_type": "CLIPLoader",
+  "_meta": {
+   "title": "TextEncoder"
+  },
+  "inputs": {
+   "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+   "type": "qwen_image",
+   "device": "default"
+  }
+ },
+ "6": {
+  "class_type": "VAELoader",
+  "_meta": {
+   "title": "VAE"
+  },
+  "inputs": {
+   "vae_name": "qwen_image_vae.safetensors"
+  }
+ },
+ "11": {
+  "class_type": "LoadImage",
+  "_meta": {
+   "title": "Ref1"
+  },
+  "inputs": {
+   "image": "example.png"
+  }
+ },
+ "12": {
+  "class_type": "LoadImage",
+  "_meta": {
+   "title": "Ref2"
+  },
+  "inputs": {
+   "image": "example.png"
+  }
+ },
+ "13": {
+  "class_type": "LoadImage",
+  "_meta": {
+   "title": "Ref3"
+  },
+  "inputs": {
+   "image": "example.png"
+  }
+ },
+ "14": {
+  "class_type": "ImageScaleToTotalPixels",
+  "_meta": {
+   "title": "Ref1Scale"
+  },
+  "inputs": {
+   "image": [
+    "11",
+    0
+   ],
+   "upscale_method": "lanczos",
+   "megapixels": 1.0,
+   "resolution_steps": 1
+  }
+ },
+ "15": {
+  "class_type": "ImageScaleToTotalPixels",
+  "_meta": {
+   "title": "Ref2Scale"
+  },
+  "inputs": {
+   "image": [
+    "12",
+    0
+   ],
+   "upscale_method": "lanczos",
+   "megapixels": 1.0,
+   "resolution_steps": 1
+  }
+ },
+ "16": {
+  "class_type": "ImageScaleToTotalPixels",
+  "_meta": {
+   "title": "Ref3Scale"
+  },
+  "inputs": {
+   "image": [
+    "13",
+    0
+   ],
+   "upscale_method": "lanczos",
+   "megapixels": 1.0,
+   "resolution_steps": 1
+  }
+ },
+ "20": {
+  "class_type": "TextEncodeQwenImageEditPlus",
+  "_meta": {
+   "title": "Positive"
+  },
+  "inputs": {
+   "clip": [
+    "5",
+    0
+   ],
+   "vae": [
+    "6",
+    0
+   ],
+   "prompt": "",
+   "image1": [
+    "14",
+    0
+   ],
+   "image2": [
+    "15",
+    0
+   ],
+   "image3": [
+    "16",
+    0
+   ]
+  }
+ },
+ "21": {
+  "class_type": "TextEncodeQwenImageEditPlus",
+  "_meta": {
+   "title": "Negative"
+  },
+  "inputs": {
+   "clip": [
+    "5",
+    0
+   ],
+   "vae": [
+    "6",
+    0
+   ],
+   "prompt": "",
+   "image1": [
+    "14",
+    0
+   ],
+   "image2": [
+    "15",
+    0
+   ],
+   "image3": [
+    "16",
+    0
+   ]
+  }
+ },
+ "22": {
+  "class_type": "FluxKontextMultiReferenceLatentMethod",
+  "_meta": {
+   "title": "PositiveRefMethod"
+  },
+  "inputs": {
+   "conditioning": [
+    "20",
+    0
+   ],
+   "reference_latents_method": "index_timestep_zero"
+  }
+ },
+ "23": {
+  "class_type": "FluxKontextMultiReferenceLatentMethod",
+  "_meta": {
+   "title": "NegativeRefMethod"
+  },
+  "inputs": {
+   "conditioning": [
+    "21",
+    0
+   ],
+   "reference_latents_method": "index_timestep_zero"
+  }
+ },
+ "30": {
+  "class_type": "EmptySD3LatentImage",
+  "_meta": {
+   "title": "Latent"
+  },
+  "inputs": {
+   "width": 768,
+   "height": 1024,
+   "batch_size": 1
+  }
+ },
+ "31": {
+  "class_type": "KSampler",
+  "_meta": {
+   "title": "Sampler"
+  },
+  "inputs": {
+   "model": [
+    "4",
+    0
+   ],
+   "positive": [
+    "22",
+    0
+   ],
+   "negative": [
+    "23",
+    0
+   ],
+   "latent_image": [
+    "30",
+    0
+   ],
+   "seed": 0,
+   "steps": 4,
+   "cfg": 1.0,
+   "sampler_name": "euler",
+   "scheduler": "simple",
+   "denoise": 1.0
+  }
+ },
+ "32": {
+  "class_type": "VAEDecode",
+  "_meta": {
+   "title": "Decode"
+  },
+  "inputs": {
+   "samples": [
+    "31",
+    0
+   ],
+   "vae": [
+    "6",
+    0
+   ]
+  }
+ },
+ "33": {
+  "class_type": "SaveImage",
+  "_meta": {
+   "title": "Save"
+  },
+  "inputs": {
+   "images": [
+    "32",
+    0
+   ],
+   "filename_prefix": "mixai/qwenedit_int4"
+  }
+ }
+}

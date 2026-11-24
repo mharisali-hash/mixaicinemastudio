@@ -318,6 +318,7 @@ function ToolRow({ tool, open, onToggle, busy, onApply }: RowProps) {
             <Textarea
               aria-label={tool.prompt === 'required' ? `${tool.label}: what to change` : `${tool.label}: anything else (optional)`}
               placeholder={tool.prompt === 'required' ? 'e.g. remove the stain on his collar' : 'Anything else to fix (optional)'}
+              autoGrow
               rows={2}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}

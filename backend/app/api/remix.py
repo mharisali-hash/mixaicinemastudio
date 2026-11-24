@@ -9,6 +9,7 @@ from app import audio_analysis as aa
 from app import remix
 from app import remix_analysis as ra
 from app.db import get_db
+from app.limits import PROMPT_MAX
 from app.security import CurrentUser, get_current_user, require_editor
 from app.services import generation_file, job_out
 
@@ -19,7 +20,7 @@ Effect = Literal["slowed_reverb", "sped_up", "nightcore", "lofi", "bass_boost", 
 
 class RemixOptions(BaseModel):
     # new beat: style words for the new music; empty means one Auto picks
-    style: str | None = Field(None, max_length=200)
+    style: str | None = Field(None, max_length=PROMPT_MAX)
     # new voice
     vocal: Literal["boy", "girl", "choir", "voice"] | None = None
     voice_id: str | None = None

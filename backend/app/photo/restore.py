@@ -20,6 +20,7 @@ from PIL import Image, ImageFilter, ImageOps
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.limits import PROMPT_MAX
 from app.models import Generation, Job, new_id
 from app.photo import analysis, cutout as co
 from app.photo import service as svc
@@ -275,7 +276,7 @@ def build_restore(db: Session, source: Generation, tool_id: str, opts: dict) -> 
     strength = float(opts.get("strength", 1.0) if tool.strength else 1.0)
     if not 0.05 <= strength <= 1.0:
         raise RestoreError("Strength must be between 5 and 100%")
-    text = (opts.get("prompt") or "").strip()[:600]
+    text = (opts.get("prompt") or "").strip()[:PROMPT_MAX]
     if tool.prompt == "required" and not text:
         raise RestoreError(f"{tool.label} needs a short description")
 
@@ -321,7 +322,7 @@ def build_restore(db: Session, source: Generation, tool_id: str, opts: dict) -> 
              "prev_mask": mask, "edge": _edge(opts.get("edge") or prev_c.get("edge")),
              "background": prev_c.get("background") or {"type": "transparent"}}
         if tool.id == "select":
-            words = (opts.get("words") or "").strip()[:200]
+            words = (opts.get("words") or "").strip()[:PROMPT_MAX]
             include, exclude = _points(opts.get("include"), (w, h)), _points(opts.get("exclude"), (w, h))
             if not (words or include):
                 raise RestoreError("Type what to select, or click on it")

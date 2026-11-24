@@ -21,6 +21,7 @@ from app import library as lib
 from app import song_voice
 from app import models_catalog as mc
 from app.autopilot import POLL_S, WAIT_PRIORITY, Skip, StageFailed, Wait
+from app.limits import PROMPT_MAX
 from app.llm import LLMError, chat_sync
 from app.models import Generation, Job, MediaItem, PoetryShort, new_id, utcnow
 from app.poetry import scenes as sn
@@ -227,7 +228,7 @@ class Run:
             lyrics = own.strip()
         else:
             self.tick(0.1, "Writing the poem")
-            body = LyricsIn(topic=(st.get("topic") or ps.title or "a poem")[:500], language=ps.language,
+            body = LyricsIn(topic=(st.get("topic") or ps.title or "a poem")[:PROMPT_MAX], language=ps.language,
                             mood=st.get("mood") or None, style=st.get("style") or None,
                             sections=sections_for(float(st["length_s"])), aerab=True)
             try:

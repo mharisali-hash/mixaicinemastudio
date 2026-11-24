@@ -12,6 +12,7 @@
     "height":  {"type": "int", "default": 1024, "multiple_of": 16, "targets": [["Latent", "height"]]},
     "seed":    {"type": "int", "default": 0, "targets": [["Sampler", "seed"]]},
     "steps":   {"type": "int", "default": 4, "targets": [["Sampler", "steps"]]},
+    "scheduler": {"type": "str", "default": "simple", "targets": [["Sampler", "scheduler"]]},
     "filename_prefix": {"type": "str", "default": "mixai/qwenedit", "targets": [["Save", "filename_prefix"]]}
   },
   "outputs": {"image": {"node": "Save", "kind": "image"}},

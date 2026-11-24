@@ -2,6 +2,7 @@ import { useId, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router'
 import { Images, Stamp } from 'lucide-react'
 import { fieldClass } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Chip } from '@/components/studio/chip'
 import { PlaceholderHint } from '@/components/studio/placeholder-hint'
 import { EmptyState, ErrorState } from '@/components/studio/states'
@@ -272,12 +273,13 @@ export function BrandTemplatePage() {
                 <label className="sr-only" htmlFor="brand-logo-wording">
                   Logo wording
                 </label>
-                <textarea
+                <Textarea
                   id="brand-logo-wording"
                   value={instruction}
                   onChange={(e) => setInstruction(e.target.value)}
                   rows={4}
-                  className={cn(fieldClass, 'mt-1.5 h-auto py-1.5 text-small')}
+                  autoGrow
+                  className="mt-1.5 min-h-0 py-1.5 text-small"
                 />
               </details>
             )}

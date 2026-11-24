@@ -176,6 +176,7 @@ export function Studio3DPage() {
                 value={form.prompt}
                 onChange={(e) => set('prompt', e.target.value)}
                 placeholder="A brass oil lamp with a glass chimney"
+                autoGrow
                 aria-describedby={`${uid}-ph`}
               />
               <p id={`${uid}-ph`} className="text-small text-studio-muted">

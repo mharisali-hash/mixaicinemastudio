@@ -65,6 +65,7 @@ function ImageQuickForm() {
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
         placeholder="Describe your image… e.g. A brass telescope on a chart table, warm window light"
+        autoGrow
         className="min-h-24 text-[15px] leading-6"
       />
       {generate.isError && <ErrorState compact title="Couldn't start the images" error={generate.error} />}

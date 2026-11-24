@@ -71,6 +71,7 @@ export function MagicPromptBar({ magic, canPreview }: { magic: MagicPrompt; canP
             value={draft.text}
             onChange={(e) => magic.edit(e.target.value)}
             readOnly={draft.accepted && !stale}
+            autoGrow
             className="min-h-16 text-body"
           />
           {draft.notes && <p className="text-small text-studio-muted">{draft.notes}</p>}

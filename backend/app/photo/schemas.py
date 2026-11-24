@@ -382,7 +382,7 @@ class RestoreIn(_Loose):
     strength: float = Field(1.0, ge=0.05, le=1.0)
     prompt: str | None = Field(None, max_length=PROMPT_MAX)
     # select (SAM 3): words and/or clicks, 0..1 of the picture
-    words: str | None = Field(None, max_length=200)
+    words: str | None = Field(None, max_length=PROMPT_MAX)
     include: list[Point] = Field(default_factory=list, max_length=24)
     exclude: list[Point] = Field(default_factory=list, max_length=24)
     op: Literal["replace", "add", "subtract"] | None = None

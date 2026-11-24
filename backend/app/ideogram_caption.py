@@ -13,6 +13,7 @@ import unicodedata
 from pydantic import BaseModel, Field
 
 from app.config import get_settings
+from app.limits import PROMPT_MAX
 from app.llm.client import LLMError, bare_tag, chat_sync, installed_models
 from app.prompt_enhance import quoted
 
@@ -390,7 +391,7 @@ def _close(a: str, b: str) -> bool:
 
 def fallback(prompt: str, ratio: str) -> str:
     """No LLM: still a caption, which the filter takes far better than bare text."""
-    cap = Caption(high_level_description=prompt.strip()[:600], background="")
+    cap = Caption(high_level_description=prompt.strip()[:PROMPT_MAX], background="")
     return assemble(cap, prompt, ratio)
 
 
