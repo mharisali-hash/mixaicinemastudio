@@ -4,8 +4,8 @@
         [--model qwen_image_edit_2511|qwen_image_edit_2509_int4] [--cards one|both] [--steps 4|8]
         [--scheduler simple|beta]
 
-It takes N finished pictures from a past bulk batch (the newest edit batch by default), queues the same edit on
-their sources exactly the way Admin Bulk does (same model, size, instruction, low priority so people's requests
+It takes N source pictures from a bulk batch (the newest edit batch by default; it needn't have run yet), queues
+the batch's edit on them exactly the way Admin Bulk does (same model, size, instruction, low priority so people's requests
 still go first), waits, and prints seconds per picture measured on the GPU (start to finish of each job, not
 queue time) plus pictures per hour over the whole run. The test pictures go to the hidden bulk workspace and are
 deleted afterwards unless --keep.
@@ -65,11 +65,13 @@ def main() -> None:
         q = select(BulkBatch).where(BulkBatch.action == "edit").order_by(BulkBatch.created_at.desc())
         if a.batch:
             q = q.where(BulkBatch.name == a.batch)
+        # only the uploaded source matters, so a batch that was just uploaded works too
+        has_src = BulkItem.source_gen_id.is_not(None)
         batch = next((b for b in db.scalars(q) if db.scalar(
-            select(BulkItem.id).where(BulkItem.batch_id == b.id, BulkItem.status == "done").limit(1))), None)
+            select(BulkItem.id).where(BulkItem.batch_id == b.id, has_src).limit(1))), None)
         if batch is None:
-            sys.exit("no edit batch with finished pictures found")
-        items = list(db.scalars(select(BulkItem).where(BulkItem.batch_id == batch.id, BulkItem.status == "done")
+            sys.exit(f"no edit batch{' named ' + repr(a.batch) if a.batch else ''} with uploaded pictures found")
+        items = list(db.scalars(select(BulkItem).where(BulkItem.batch_id == batch.id, has_src)
                                 .order_by(BulkItem.seq).limit(a.n)))
         opts = batch.options or {}
         tuning = {**({"steps": a.steps} if a.steps else {}), **({"scheduler": a.scheduler} if a.scheduler else {})}
@@ -137,7 +139,8 @@ def main() -> None:
         print(f"per picture: median={median(secs):.1f}s  p90={pct(secs, 0.9):.1f}s  fastest={secs[0]:.1f}s"
               f"  slowest={secs[-1]:.1f}s")
         if gpu:
-            print(f"ComfyUI time: median={median(gpu):.1f}s  p90={pct(gpu, 0.9):.1f}s")
+            print(f"ComfyUI time: median={median(gpu):.1f}s  p90={pct(gpu, 0.9):.1f}s"
+                  f"   -> outside ComfyUI (checks, saving): ~{median(secs) - median(gpu):.1f}s a picture")
         # the whole run, first start to last finish: what two cards actually buy
         if span > 0:
             print(f"wall={span:.0f}s  pictures/hour={len(secs) / span * 3600:.0f}")
