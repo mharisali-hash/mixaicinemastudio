@@ -85,6 +85,12 @@ if (( BUILD )); then
   # each nvcc job wants several GB of RAM; half the cores keeps the 96 GB box (and ComfyUI) comfortable
   # no NUNCHAKU_INSTALL_MODE=ALL: the default builds for the cards it finds, far quicker than every arch
   export MAX_JOBS="${MAX_JOBS:-$(( $(nproc) / 2 ))}" TORCH_CUDA_ARCH_LIST="8.9"
+  # gcc 15 now checks never-used template bodies and trips on a typo in the bundled CUTLASS
+  # (matrix.h: set_slice3x3 vs set_slice_3x3); the code is dead, so turn the check back off
+  if (( ${GCC:-0} >= 15 )); then
+    export CXXFLAGS="${CXXFLAGS:-} -Wno-template-body" NVCC_APPEND_FLAGS="${NVCC_APPEND_FLAGS:-} -Xcompiler=-Wno-template-body"
+    info "gcc $GCC: building with -Wno-template-body (CUTLASS typo)"
+  fi
   # constraints keep torch exactly where ComfyUI has it; --no-build-isolation builds against that same torch
   cons="$(mktemp)"; pipx freeze 2>/dev/null | grep -iE '^(torch|torchvision|torchaudio|numpy|transformers|diffusers)==' > "$cons" || true
   t0=$SECONDS
