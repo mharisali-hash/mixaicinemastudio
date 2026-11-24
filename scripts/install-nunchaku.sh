@@ -89,8 +89,14 @@ if (( BUILD )); then
   cons="$(mktemp)"; pipx freeze 2>/dev/null | grep -iE '^(torch|torchvision|torchaudio|numpy|transformers|diffusers)==' > "$cons" || true
   t0=$SECONDS
   if (( ! DRY )); then
-    pipx install --no-build-isolation -c "$cons" "$SRC" 2>&1 | tail -n 40 \
-      || die "the build failed (log above). ComfyUI is unchanged; send me the last lines"
+    log="$SRC/build.log"
+    info "full log: $log"
+    if ! pipx install -v --no-build-isolation -c "$cons" "$SRC" > "$log" 2>&1; then
+      # the traceback at the end is setuptools noise; the real cause is nvcc/gcc's own error lines
+      grep -nE '(error|Error|FAILED|fatal)' "$log" | grep -v 'Traceback\|raise RuntimeError' | head -n 40
+      echo "    ..."; tail -n 15 "$log"
+      die "the build failed (errors above, full log in $log). ComfyUI is unchanged; send me these lines"
+    fi
   fi
   rm -f "$cons"
   info "built in $(( (SECONDS - t0) / 60 )) min"
