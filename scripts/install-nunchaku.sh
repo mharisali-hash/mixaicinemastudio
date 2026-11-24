@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Nunchaku (SVDQuant INT4) for ComfyUI: Qwen-Image-Edit 2511 in ~13 GB instead of ~20, so the bulk edit stays on
+# Nunchaku (SVDQuant INT4) for ComfyUI: Qwen-Image-Edit in ~13 GB instead of ~20, so the bulk edit stays on
 # the 20 GB card instead of spilling to system RAM on every picture (speed trial, 24 Nov).
 #
 #   ./scripts/install-nunchaku.sh             # build, install, download, restart ComfyUI, smoke-test
@@ -11,7 +11,7 @@
 # may fail on a torch it was never tested with: then nothing in ComfyUI has changed and the trial is off.
 #
 # Pieces (all Apache-2.0): nunchaku core (nunchaku-ai/nunchaku, pinned tag), the ComfyUI-nunchaku node pack (pinned
-# tag), and QuantFunc's community INT4 re-quantisation of Qwen-Image-Edit-2511 ("balance", rank 128, 12.7 GB).
+# tag), and Nunchaku's own INT4 Qwen-Image-Edit-2509 with Lightning 4-step fused in (rank 128, 12.7 GB).
 # Env: COMFY_ROOT, COMFY_VENV, NUNCHAKU_REF, NODES_REF, MAX_JOBS, HF_TOKEN.
 set -euo pipefail
 
@@ -20,8 +20,10 @@ NUNCHAKU_REF="${NUNCHAKU_REF:-v1.2.1}"
 NODES_URL=https://github.com/nunchaku-ai/ComfyUI-nunchaku.git
 NODES_REF="${NODES_REF:-v1.2.0}"
 SRC=/data/apps/nunchaku-src
-MODEL_REPO=QuantFunc/Nunchaku-Qwen-Image-EDIT-2511
-MODEL_FILE=nunchaku_qwen_image_edit_2511_balance_int4.safetensors
+# official build with Lightning 4-step fused in; the 2511 community INT4 (QuantFunc) needs an unmerged node-pack
+# patch (ComfyUI-nunchaku PR #790, index_timestep_zero) plus a third-party LoRA loader, so it's parked
+MODEL_REPO=nunchaku-tech/nunchaku-qwen-image-edit-2509
+MODEL_FILE=svdq-int4_r128-qwen-image-edit-2509-lightningv2.0-4steps.safetensors
 DRY=0 BUILD=1
 
 for a in "$@"; do
@@ -129,7 +131,7 @@ if [[ -s "$dest/$MODEL_FILE" ]]; then info "already there"
 else
   run "$PY" -c "from huggingface_hub import hf_hub_download as d; d('$MODEL_REPO', '$MODEL_FILE', local_dir='$dest')"
 fi
-# the Lightning LoRA, text encoder and VAE are the ones qwen_edit already uses
+# text encoder and VAE are the ones qwen_edit already uses
 
 (( DRY )) && { say "Dry run: nothing changed."; exit 0; }
 

@@ -200,8 +200,8 @@ MODELS: dict[str, Model] = {m.id: m for m in (
           ("edit", "refs", "multi_angle"), "qwen_edit", max_refs=3, est_seconds=20, default=True, licence=APACHE),
     # speed trial (24 Nov): the same 2511 edit quantised to INT4 (community SVDQuant, Apache-2.0), ~13 GB, so it
     # stays on the 20 GB card. Waits for an admin's release like any new model; no angles LoRA on this one
-    Model("qwen_image_edit_2511_int4", "edit", "Qwen-Image-Edit 2511 Fast", "FAST",
-          "The same edit in about half the memory; for big batches.", ("edit", "refs"), "qwen_edit_int4",
+    Model("qwen_image_edit_2509_int4", "edit", "Qwen-Image-Edit Fast", "FAST",
+          "A quicker edit in about half the memory; for big batches.", ("edit", "refs"), "qwen_edit_int4",
           max_refs=3, est_seconds=12, licence=APACHE, vram_gb=14),
     Model("flux2_klein_edit", "edit", "FLUX.2 klein 4B (base)", None,
           "Reference-guided edits, quick and loose.", ("edit", "refs"), "flux2_klein_edit",

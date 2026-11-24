@@ -1,7 +1,7 @@
 {
   "name": "qwen_edit_int4",
-  "family": "qwen-image-edit-2511",
-  "description": "Qwen-Image-Edit-2511 as SVDQuant INT4 (Nunchaku, ~13 GB) + Lightning 4-step: the same edit as qwen_edit in about half the memory, so it never spills to system RAM. Speed trial, 24 Nov.",
+  "family": "qwen-image-edit-2509",
+  "description": "Qwen-Image-Edit-2509 as Nunchaku SVDQuant INT4 with Lightning 4-step fused in (nunchaku-tech, Apache-2.0, ~13 GB). Speed trial, 24 Nov: the 2511 community INT4 needs an unmerged Nunchaku patch and a third-party LoRA loader, so the trial uses the official 2509 build.",
   "inputs": {
     "prompt": {
       "type": "str",
@@ -123,16 +123,13 @@
   },
   "models": {
     "diffusion_models": [
-      "nunchaku_qwen_image_edit_2511_balance_int4.safetensors"
+      "svdq-int4_r128-qwen-image-edit-2509-lightningv2.0-4steps.safetensors"
     ],
     "text_encoders": [
       "qwen_2.5_vl_7b_fp8_scaled.safetensors"
     ],
     "vae": [
       "qwen_image_vae.safetensors"
-    ],
-    "loras": [
-      "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors"
     ]
   },
   "progress_weights": {

@@ -16,7 +16,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 GRAPH = ROOT / "backend" / "app" / "workflows" / "qwen_edit_int4" / "workflow.json"
-LORA_NODES = ("NunchakuQwenImageLoraLoader", "NunchakuQwenImageLoraStackV3", "NunchakuQwenImageLoraStack")
 
 
 def get(url):
@@ -91,7 +90,6 @@ def main() -> int:
         return 1
     print("    loader inputs:", json.dumps({k: (v[0] if isinstance(v[0], str) else "list")
                                             for k, v in loader["input"].get("required", {}).items()}))
-    print("    Nunchaku LoRA nodes present:", [n for n in LORA_NODES if n in info] or "none")
 
     graph = json.loads(GRAPH.read_text(encoding="utf-8"))
     want = set(graph["1"]["inputs"])
@@ -110,8 +108,6 @@ def main() -> int:
             s = render(base, graph, 1234 + i)
         except Exception as e:  # noqa: BLE001 - the whole point is to print it
             print(f"xx {label}: {e}")
-            if "lora" in str(e).lower():
-                print("   the Lightning LoRA didn't attach through LoraLoaderModelOnly; send me this output")
             return 1
         print(f"    {label}: {s:.1f} s")
     print("    output is in ComfyUI/output/mixai/qwenedit_int4_*.png - have a look at it")

@@ -1,7 +1,7 @@
 """Time the Admin Bulk edit again on pictures already on the server, to compare speed before/after a tuning change.
 
     cd backend && uv run python ../scripts/bench-bulk-edit.py [--n 20] [--batch "bulk 11"] [--keep]
-        [--model qwen_image_edit_2511|qwen_image_edit_2511_int4] [--cards one|both] [--steps 4|8]
+        [--model qwen_image_edit_2511|qwen_image_edit_2509_int4] [--cards one|both] [--steps 4|8]
         [--scheduler simple|beta]
 
 It takes N finished pictures from a past bulk batch (the newest edit batch by default), queues the same edit on
@@ -15,7 +15,7 @@ A fair A/B: same --n and --batch, one setting changed per run, nothing else on t
     --cards both                     half the pictures on the video GPU too (it must be idle: no takes queued)
     --cards one --scheduler beta     the sampler's scheduler for qwen_edit (default simple)
     --cards one --steps 8            8 steps instead of Lightning's 4
-    --model qwen_image_edit_2511_int4 --cards one    the Nunchaku INT4 model against the fp8 default
+    --model qwen_image_edit_2509_int4 --cards one    the Nunchaku INT4 model against the fp8 default
 --steps / --scheduler go on these test jobs only; the app's own edits keep the template's defaults.
 """
 import argparse
@@ -56,7 +56,7 @@ def main() -> None:
     ap.add_argument("--steps", type=int, default=0, help="sampler steps (default: the template's, 4 for qwen_edit)")
     ap.add_argument("--scheduler", default="", help="sampler scheduler, e.g. simple or beta (default: simple)")
     ap.add_argument("--model", default="qwen_image_edit_2511",
-                    help="edit model id, e.g. qwen_image_edit_2511_int4 (default: the production fp8 one)")
+                    help="edit model id, e.g. qwen_image_edit_2509_int4 (default: the production fp8 one)")
     a = ap.parse_args()
 
     with SessionLocal() as db:

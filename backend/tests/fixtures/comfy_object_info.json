@@ -7871,7 +7871,7 @@
    "required": {
     "model_name": [
      [
-      "nunchaku_qwen_image_edit_2511_balance_int4.safetensors"
+      "svdq-int4_r128-qwen-image-edit-2509-lightningv2.0-4steps.safetensors"
      ],
      {}
     ],

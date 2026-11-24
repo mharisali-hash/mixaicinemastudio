@@ -5,24 +5,10 @@
    "title": "UNet"
   },
   "inputs": {
-   "model_name": "nunchaku_qwen_image_edit_2511_balance_int4.safetensors",
+   "model_name": "svdq-int4_r128-qwen-image-edit-2509-lightningv2.0-4steps.safetensors",
    "cpu_offload": "auto",
    "num_blocks_on_gpu": 60,
    "use_pin_memory": "disable"
-  }
- },
- "2": {
-  "class_type": "LoraLoaderModelOnly",
-  "_meta": {
-   "title": "Lightning"
-  },
-  "inputs": {
-   "model": [
-    "1",
-    0
-   ],
-   "lora_name": "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
-   "strength_model": 1.0
   }
  },
  "3": {
@@ -32,7 +18,7 @@
   },
   "inputs": {
    "model": [
-    "2",
+    "1",
     0
    ],
    "shift": 3.1
@@ -201,32 +187,6 @@
    ]
   }
  },
- "22": {
-  "class_type": "FluxKontextMultiReferenceLatentMethod",
-  "_meta": {
-   "title": "PositiveRefMethod"
-  },
-  "inputs": {
-   "conditioning": [
-    "20",
-    0
-   ],
-   "reference_latents_method": "index_timestep_zero"
-  }
- },
- "23": {
-  "class_type": "FluxKontextMultiReferenceLatentMethod",
-  "_meta": {
-   "title": "NegativeRefMethod"
-  },
-  "inputs": {
-   "conditioning": [
-    "21",
-    0
-   ],
-   "reference_latents_method": "index_timestep_zero"
-  }
- },
  "30": {
   "class_type": "EmptySD3LatentImage",
   "_meta": {
@@ -249,11 +209,11 @@
     0
    ],
    "positive": [
-    "22",
+    "20",
     0
    ],
    "negative": [
-    "23",
+    "21",
     0
    ],
    "latent_image": [
