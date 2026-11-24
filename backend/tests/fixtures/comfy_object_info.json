@@ -7865,49 +7865,5 @@
   "search_aliases": null,
   "essentials_category": null,
   "has_intermediate_output": false
- },
- "NunchakuQwenImageDiTLoader": {
-  "input": {
-   "required": {
-    "model_name": [
-     [
-      "svdq-int4_r128-qwen-image-edit-2509-lightningv2.0-4steps.safetensors"
-     ],
-     {}
-    ],
-    "cpu_offload": [
-     [
-      "auto",
-      "enable",
-      "disable"
-     ],
-     {
-      "default": "auto"
-     }
-    ],
-    "num_blocks_on_gpu": [
-     "INT",
-     {
-      "default": 1,
-      "min": 1,
-      "max": 60
-     }
-    ],
-    "use_pin_memory": [
-     [
-      "enable",
-      "disable"
-     ],
-     {
-      "default": "disable"
-     }
-    ]
-   }
-  },
-  "output": [
-   "MODEL"
-  ],
-  "name": "NunchakuQwenImageDiTLoader",
-  "category": "Nunchaku"
  }
 }

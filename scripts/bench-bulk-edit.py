@@ -1,7 +1,7 @@
 """Time the Admin Bulk edit again on pictures already on the server, to compare speed before/after a tuning change.
 
     cd backend && uv run python ../scripts/bench-bulk-edit.py [--n 20] [--batch "bulk 11"] [--keep]
-        [--model qwen_image_edit_2511|qwen_image_edit_2509_int4] [--cards one|both] [--steps 4|8]
+        [--model qwen_image_edit_2511] [--cards one|both] [--steps 4|8]
         [--scheduler simple|beta]
 
 It takes N source pictures from a bulk batch (the newest edit batch by default; it needn't have run yet), queues
@@ -15,7 +15,6 @@ A fair A/B: same --n and --batch, one setting changed per run, nothing else on t
     --cards both                     half the pictures on the video GPU too (it must be idle: no takes queued)
     --cards one --scheduler beta     the sampler's scheduler for qwen_edit (default simple)
     --cards one --steps 8            8 steps instead of Lightning's 4
-    --model qwen_image_edit_2509_int4 --cards one    the Nunchaku INT4 model against the fp8 default
 --steps / --scheduler go on these test jobs only; the app's own edits keep the template's defaults.
 """
 import argparse
@@ -56,7 +55,7 @@ def main() -> None:
     ap.add_argument("--steps", type=int, default=0, help="sampler steps (default: the template's, 4 for qwen_edit)")
     ap.add_argument("--scheduler", default="", help="sampler scheduler, e.g. simple or beta (default: simple)")
     ap.add_argument("--model", default="qwen_image_edit_2511",
-                    help="edit model id, e.g. qwen_image_edit_2509_int4 (default: the production fp8 one)")
+                    help="edit model id (default: the production fp8 one)")
     a = ap.parse_args()
 
     with SessionLocal() as db:
@@ -81,7 +80,7 @@ def main() -> None:
             text = bs.instruction_for(batch, item)
             if source is None or not text:
                 continue
-            # the model is the bench's choice, not the batch's, so fp8 and int4 run on the same pictures
+            # the model is the bench's choice, not the batch's, so two models can run on the same pictures
             model, chosen = mc.choose(a.model, "edit", text, refs=1)
             if opts.get("aspect"):
                 w, h = lib.size_for_aspect(opts["aspect"])
@@ -109,8 +108,8 @@ def main() -> None:
             db.commit()
         if not jobs:
             sys.exit("nothing to queue")
-        if tuning and model.template not in ("qwen_edit", "qwen_edit_int4"):
-            print(f"note: --steps/--scheduler are wired for the qwen_edit graphs; {model.template} may ignore them")
+        if tuning and model.template != "qwen_edit":
+            print(f"note: --steps/--scheduler are wired for the qwen_edit graph; {model.template} may ignore them")
         print(f"batch '{batch.name}': queued {len(jobs)} edits with model {model.id} ({model.template}), "
               f"cards={a.cards}, {tuning or 'template defaults'}; waiting…")
 
