@@ -2,7 +2,8 @@
 """One INT4 edit straight through ComfyUI, run twice (cold, then warm), to prove the Nunchaku install works
 before the app uses it. Standard library only; reads the app's own qwen_edit_int4 graph.
 
-    python3 scripts/nunchaku-smoke.py [--url http://127.0.0.1:8188] [--image some.png]
+    python3 scripts/nunchaku-smoke.py [--url http://127.0.0.1:8188] [--image some.png] [--refs 1-3] [--free]
+    python3 scripts/nunchaku-smoke.py --workflow qwen_edit --free   # today's fp8 model, same input, for comparison
 """
 import argparse
 import json
@@ -15,7 +16,6 @@ import zlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-GRAPH = ROOT / "backend" / "app" / "workflows" / "qwen_edit_int4" / "workflow.json"
 
 
 def get(url):
@@ -79,50 +79,61 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--url", default="http://127.0.0.1:8188")
     ap.add_argument("--image", help="a picture to edit (default: a generated test card)")
-    ap.add_argument("--offload", choices=("auto", "enable", "disable"), help="override the loader's cpu_offload")
+    ap.add_argument("--workflow", default="qwen_edit_int4", choices=("qwen_edit_int4", "qwen_edit"),
+                    help="qwen_edit = today's fp8 model, for a side-by-side on the same input")
+    ap.add_argument("--refs", type=int, default=1, choices=(1, 2, 3),
+                    help="how many reference pictures (bulk items mostly use 1)")
+    ap.add_argument("--offload", choices=("auto", "enable", "disable"), help="override the INT4 loader's cpu_offload")
     ap.add_argument("--free", action="store_true", help="unload every model on this ComfyUI first (fair timing)")
     a = ap.parse_args()
     base = a.url.rstrip("/")
+    int4 = a.workflow == "qwen_edit_int4"
+    graph = json.loads((ROOT / "backend" / "app" / "workflows" / a.workflow / "workflow.json").read_text(encoding="utf-8-sig"))
 
-    info = get(f"{base}/object_info")
-    loader = info.get("NunchakuQwenImageDiTLoader")
-    if loader is None:
-        print("xx ComfyUI has no NunchakuQwenImageDiTLoader: the node pack didn't load. See: "
-              "sudo journalctl -u 'comfyui*' -n 200 --no-pager | grep -iA8 nunchaku")
-        return 1
-    print("    loader inputs:", json.dumps({k: (v[0] if isinstance(v[0], str) else "list")
-                                            for k, v in loader["input"].get("required", {}).items()}))
+    if int4:
+        loader = get(f"{base}/object_info").get("NunchakuQwenImageDiTLoader")
+        if loader is None:
+            print("xx ComfyUI has no NunchakuQwenImageDiTLoader: the node pack didn't load. See: "
+                  "sudo journalctl -u 'comfyui*' -n 200 --no-pager | grep -iA8 nunchaku")
+            return 1
+        have = set(loader["input"].get("required", {})) | set(loader["input"].get("optional", {}))
+        if set(graph["1"]["inputs"]) - have:
+            print(f"xx the loader takes {sorted(have)}, our graph sends {sorted(graph['1']['inputs'])}: send me this line")
+            return 1
+        if a.offload:
+            graph["1"]["inputs"]["cpu_offload"] = a.offload
 
-    graph = json.loads(GRAPH.read_text(encoding="utf-8"))
-    want = set(graph["1"]["inputs"])
-    have = set(loader["input"].get("required", {})) | set(loader["input"].get("optional", {}))
-    if want - have:
-        print(f"xx the loader takes {sorted(have)}, our graph sends {sorted(want)}: send me this line")
-        return 1
-    if a.offload:
-        graph["1"]["inputs"]["cpu_offload"] = a.offload
+    # same trimming the app does when a job has fewer pictures
+    for k in range(a.refs + 1, 4):
+        graph.pop(str(10 + k)); graph.pop(str(13 + k))
+        for n in ("20", "21"):
+            graph[n]["inputs"].pop(f"image{k}", None)
+
     if a.free:
         # /free answers with an empty body, so not post()
         urllib.request.urlopen(urllib.request.Request(f"{base}/free", data=b'{"unload_models": true, "free_memory": true}',
                                                       headers={"Content-Type": "application/json"}), timeout=60).read()
         time.sleep(3)
     vram = get(f"{base}/system_stats")["devices"][0]
-    print(f"    card free before the run: {vram['vram_free'] / 2**30:.1f} of {vram['vram_total'] / 2**30:.1f} GB"
-          f"   cpu_offload={graph['1']['inputs']['cpu_offload']}")
+    print(f"    {a.workflow}, {a.refs} picture(s); card free before the run: {vram['vram_free'] / 2**30:.1f} of "
+          f"{vram['vram_total'] / 2**30:.1f} GB" + (f", cpu_offload={graph['1']['inputs']['cpu_offload']}" if int4 else ""))
     data = Path(a.image).read_bytes() if a.image else test_png()
     name = upload(base, data, "nunchaku-smoke.png")
     for n in ("11", "12", "13"):
-        graph[n]["inputs"]["image"] = name
+        if n in graph:
+            graph[n]["inputs"]["image"] = name
     graph["20"]["inputs"]["prompt"] = "Make the dark rectangle a bright red door; keep everything else the same."
     graph["30"]["inputs"].update(width=768, height=1024)
-    for i, label in enumerate(("cold (loads the model)", "warm")):
+    graph["33"]["inputs"]["filename_prefix"] = f"mixai/smoke_{a.workflow}"
+    # warm runs only re-sample and decode (the encoded prompt is cached), so the 3rd is the steady-state figure
+    for i, label in enumerate(("cold (loads the model)", "warm", "warm")):
         try:
-            s = render(base, graph, 1234 + i)
+            secs = render(base, graph, 1234 + i)
         except Exception as e:  # noqa: BLE001 - the whole point is to print it
             print(f"xx {label}: {e}")
             return 1
-        print(f"    {label}: {s:.1f} s")
-    print("    output is in ComfyUI/output/mixai/qwenedit_int4_*.png - have a look at it")
+        print(f"    {label}: {secs:.1f} s")
+    print(f"    output is in ComfyUI/output/mixai/smoke_{a.workflow}_*.png - have a look at it")
     return 0
 
 
