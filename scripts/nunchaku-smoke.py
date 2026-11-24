@@ -79,6 +79,8 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--url", default="http://127.0.0.1:8188")
     ap.add_argument("--image", help="a picture to edit (default: a generated test card)")
+    ap.add_argument("--offload", choices=("auto", "enable", "disable"), help="override the loader's cpu_offload")
+    ap.add_argument("--free", action="store_true", help="unload every model on this ComfyUI first (fair timing)")
     a = ap.parse_args()
     base = a.url.rstrip("/")
 
@@ -97,6 +99,16 @@ def main() -> int:
     if want - have:
         print(f"xx the loader takes {sorted(have)}, our graph sends {sorted(want)}: send me this line")
         return 1
+    if a.offload:
+        graph["1"]["inputs"]["cpu_offload"] = a.offload
+    if a.free:
+        # /free answers with an empty body, so not post()
+        urllib.request.urlopen(urllib.request.Request(f"{base}/free", data=b'{"unload_models": true, "free_memory": true}',
+                                                      headers={"Content-Type": "application/json"}), timeout=60).read()
+        time.sleep(3)
+    vram = get(f"{base}/system_stats")["devices"][0]
+    print(f"    card free before the run: {vram['vram_free'] / 2**30:.1f} of {vram['vram_total'] / 2**30:.1f} GB"
+          f"   cpu_offload={graph['1']['inputs']['cpu_offload']}")
     data = Path(a.image).read_bytes() if a.image else test_png()
     name = upload(base, data, "nunchaku-smoke.png")
     for n in ("11", "12", "13"):
