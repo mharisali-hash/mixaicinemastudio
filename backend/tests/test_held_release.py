@@ -1,11 +1,11 @@
-"""Held by the age check: only an admin sees it, and a different admin from the one who made it lets it through."""
+"""Held by the age check: only an admin sees it, and any admin (the one who made it too) can let it through."""
 import pytest
 from sqlalchemy import select
 
 from app import content_policy as cp
 from app.config import get_settings
 from app.db import SessionLocal
-from app.models import AdminAudit, Generation, Job, MediaItem, User
+from app.models import AdminAudit, BulkBatch, BulkItem, Generation, Job, MediaItem, User
 from tests.test_child_safety import eye  # noqa: F401  (fixture)
 from tests.test_content_policy import _last, _run
 from tests.test_implant import _client
@@ -26,14 +26,12 @@ def _held(c, fast_driver, eye_, prompt="a woman at the beach"):
     return g
 
 
-def test_four_eyes_then_into_the_library(client, second_admin, fast_driver, eye):  # noqa: F811
+def test_release_into_the_library(client, second_admin, fast_driver, eye):  # noqa: F811
     g = _held(client, fast_driver, eye)
     listed = client.get("/api/moderation/held").json()["items"]
     assert [h["id"] for h in listed] == [g.id] and listed[0]["age"] == 0 and listed[0]["why"] == "test"
     assert client.get(listed[0]["file_url"]).status_code == 200
 
-    r = client.post(f"/api/moderation/held/{g.id}/release")
-    assert r.status_code == 403 and "Another admin" in r.json()["detail"]
     assert second_admin.post(f"/api/moderation/held/{g.id}/release").status_code == 200
 
     with SessionLocal() as db:
@@ -72,3 +70,23 @@ def test_managers_and_members_never_see_it(client, fast_driver, eye):  # noqa: F
         assert c.get("/api/moderation/held").status_code == 404
         assert c.get(f"/api/moderation/held/{g.id}/file").status_code == 404
         assert c.post(f"/api/moderation/held/{g.id}/release").status_code == 404
+
+
+def test_an_admin_releases_their_own_and_the_bulk_item_takes_it(client, fast_driver, eye):  # noqa: F811
+    g = _held(client, fast_driver, eye)
+    with SessionLocal() as db:
+        job = db.scalar(select(Job).where(Job.generation_id == g.id))
+        batch = BulkBatch(workspace_id=g.workspace_id, name="b", action="edit", status="done")
+        db.add(batch)
+        db.flush()
+        item = BulkItem(batch_id=batch.id, filename="a.jpg", job_id=job.id, status="failed", error=cp.HELD_MSG)
+        db.add(item)
+        db.commit()
+        item_id = item.id
+
+    assert client.post(f"/api/moderation/held/{g.id}/release").status_code == 200
+    with SessionLocal() as db:
+        item = db.get(BulkItem, item_id)
+        assert item.status == "done" and item.result_gen_id == g.id and item.error is None
+        row = db.scalar(select(AdminAudit).where(AdminAudit.action == "child_check_released"))
+        assert row.detail["own"] is True and row.detail["confirmed_adult"] is True

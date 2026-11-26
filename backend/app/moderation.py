@@ -241,9 +241,12 @@ def release_held(db: Session, cur: CurrentUser, g: Generation) -> None:
 
     from app import library, thumbs
 
+    from app.bulk import service as bulk
+    from app.models import BulkItem
+
+    # the admin who made it may release it too (owner's call, 26 Nov): bulk pictures are always the admin's own,
+    # and the confirm step plus the audit row carry the responsibility
     owner = _requester(db, g)
-    if owner is not None and owner.id == cur.user.id:
-        raise HTTPException(403, "Another admin has to release this: it's your own picture")
     held = g.params["held"]
     src = held_path(g)
     if src is None:
@@ -254,11 +257,15 @@ def release_held(db: Session, cur: CurrentUser, g: Generation) -> None:
     g.file_path, g.media_type, g.status = held["home"], held.get("media_type") or g.media_type, "ready"
     g.params = {**{k: v for k, v in g.params.items() if k != "held"},
                 "held_released": {"by": cur.user.id, "at": utcnow().isoformat(), "age": held.get("age")}}
-    # the job ended "failed" with the held message; the tile goes by it, so it says done now
-    db.execute(update(Job).where(Job.generation_id == g.id, Job.status == "failed")
-               .values(status="done", error=None, message="Done").execution_options(synchronize_session=False))
+    # the job ended "failed" with the held message; the tile goes by it, so it says done now, and a bulk item
+    # takes the picture as its result instead of waiting for a retry
+    for job in db.scalars(select(Job).where(Job.generation_id == g.id, Job.status == "failed")):
+        job.status, job.error, job.message = "done", None, "Done"
+        item = db.scalar(select(BulkItem).where(BulkItem.job_id == job.id))
+        if item is not None:
+            bulk.sync_item(db, item, job)
     audit.record(db, cur.user, "child_check_released", "generation", g.id, owner=owner.id if owner else None,
-                 age=held.get("age"))
+                 age=held.get("age"), own=bool(owner and owner.id == cur.user.id), confirmed_adult=True)
     library.on_generation_finished(db, g)
     try:
         thumbs.for_generation(g)

@@ -324,7 +324,7 @@ def sync_item(db: Session, item: BulkItem, job: Job) -> None:
     item.finished_at = job.finished_at or utcnow()
     if job.status == "done":
         g = db.get(Generation, job.generation_id or "")
-        item.status = "done"
+        item.status, item.error = "done", None
         item.result_gen_id = g.id if g is not None else None
         item.prompt_used = (g.prompt if g is not None else None) or None
     elif job.status == "failed":

@@ -18,6 +18,7 @@ import type { HeldItem, ModPerson, ReviewItem, ReviewState } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { Notice } from '@/features/auth/AuthLayout'
 import { announce } from '@/stores/ui'
+import { useToasts } from '@/stores/toasts'
 import { AdminPage, linkButton, tableWrap, td, th, when } from './shared'
 
 // the reasons that come up most; the moderator can always write their own
@@ -567,19 +568,21 @@ function HeldCard({ item, onRelease, onDelete, pending }: {
   )
 }
 
-/** Moderation › Held for review: pictures the age check flagged without a clear child. Admins only; a picture
- * goes to its owner's Library only when a different admin releases it. */
+/** Moderation › Held for review: pictures the age check flagged without a clear child. Admins only; releasing one
+ * (your own included) puts it in its owner's Library, or back in its bulk batch, after you confirm it shows adults. */
 export function HeldPage() {
   const held = useQuery({ queryKey: qk.modHeld, queryFn: api.moderation.held })
   const [deleting, setDeleting] = useState<HeldItem | null>(null)
-  const release = useModAction((id: string) => api.moderation.release(id), () => 'Released to their Library')
+  const [releasing, setReleasing] = useState<HeldItem | null>(null)
+  const push = useToasts((s) => s.push)
+  const release = useModAction((id: string) => api.moderation.release(id), () => 'Released')
   const remove = useModAction((id: string) => api.moderation.deleteHeld(id), () => 'Deleted')
   const list = held.data?.items ?? []
   return (
     <AdminPage
       id="held-title"
       title="Held for review"
-      intro="Pictures the age check wasn't sure about. Look, then release the ones that show adults or delete the rest. You can't release your own."
+      intro="Pictures the age check wasn't sure about. Look, then release the ones that show adults or delete the rest. A released picture goes back where it was made: the Library, or its bulk batch."
     >
       {(release.error || remove.error) && <Notice>{(release.error ?? remove.error)?.message}</Notice>}
       {held.isError ? (
@@ -597,7 +600,7 @@ export function HeldPage() {
               key={it.id}
               item={it}
               pending={release.isPending || remove.isPending}
-              onRelease={() => release.mutate(it.id)}
+              onRelease={() => setReleasing(it)}
               onDelete={() => setDeleting(it)}
             />
           ))}
@@ -611,6 +614,26 @@ export function HeldPage() {
         confirmLabel="Delete"
         tone="danger"
         onConfirm={() => deleting && remove.mutate(deleting.id, { onSuccess: () => setDeleting(null) })}
+      />
+      <ConfirmDialog
+        open={!!releasing}
+        onOpenChange={(o) => !o && setReleasing(null)}
+        title="Release this picture?"
+        description="You confirm everyone in it is an adult (18 or older). It goes back where it was made, and your name is recorded in the audit log."
+        confirmLabel="Yes, release"
+        onConfirm={() =>
+          releasing &&
+          release.mutate(releasing.id, {
+            onSuccess: () => {
+              setReleasing(null)
+              push({ title: 'Released', detail: 'The picture is back where it was made.', tone: 'done' })
+            },
+            onError: (e) => {
+              setReleasing(null)
+              push({ title: "Couldn't release it", detail: e.message, tone: 'failed' })
+            },
+          })
+        }
       />
     </AdminPage>
   )
