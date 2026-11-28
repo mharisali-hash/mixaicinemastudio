@@ -51,6 +51,7 @@ class BatchOut(BaseModel):
     action: str
     options: dict
     status: str
+    note: str | None = None
     counts: dict
     run_job_id: str | None
     eta_s: float | None = None
@@ -75,7 +76,7 @@ def _eta(db: Session, b: BulkBatch, c: dict) -> float | None:
 
 def _out(db: Session, b: BulkBatch) -> BatchOut:
     c = bs.counts(db, b.id)
-    return BatchOut(id=b.id, name=b.name, action=b.action, options=b.options or {}, status=b.status, counts=c,
+    return BatchOut(id=b.id, name=b.name, action=b.action, options=b.options or {}, status=b.status, note=b.note, counts=c,
                     run_job_id=b.run_job_id, eta_s=_eta(db, b, c), created_at=b.created_at, updated_at=b.updated_at)
 
 

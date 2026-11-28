@@ -11,7 +11,7 @@ from app.db import get_db
 from app.lanes import LANES
 from app.models import Generation, Job, WorkerHeartbeat, utcnow
 from app.schemas import _iso
-from app.security import CurrentUser, get_current_user, is_admin, require_admin
+from app.security import CurrentUser, get_current_user, is_admin, require_admin, session_only
 
 router = APIRouter(tags=["system"])
 
@@ -158,6 +158,30 @@ async def comfy_check(_=Depends(require_admin)):
         await client.close()
     templates = {name: check_template(name, info) for name in list_templates()}
     return {"ok": all(t["ok"] for t in templates.values()), "url": client.base_url, "templates": templates}
+
+
+@router.get("/system/comfy-services")
+def comfy_services(_=Depends(require_admin)):
+    from app import comfy_services as cs
+
+    return {"units": cs.units()}
+
+
+@router.post("/system/comfy-services/{unit}/restart")
+@session_only
+def comfy_restart(unit: str, db: Session = Depends(get_db), cur: CurrentUser = Depends(require_admin)):
+    from app import audit
+    from app import comfy_services as cs
+
+    try:
+        cs.restart(unit)
+    except cs.RestartError as e:
+        audit.record(db, cur.user, "comfy_restart_failed", "service", unit, error=str(e)[:300])
+        db.commit()
+        raise HTTPException(409, str(e)) from None
+    audit.record(db, cur.user, "comfy_restart", "service", unit)
+    db.commit()
+    return {"unit": unit, "restarted": True}
 
 
 @router.get("/system/upscale-options")

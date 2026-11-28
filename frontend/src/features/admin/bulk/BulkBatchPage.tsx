@@ -452,6 +452,14 @@ function RunStep({ b }: { b: BulkBatch }) {
         )}
       </div>
       {act.error && <p className="text-small text-studio-danger" role="alert">{act.error.message}</p>}
+      {b.status === 'paused' && b.note && (
+        <p role="status" className="rounded-[6px] border border-studio-warning/40 bg-studio-warning/10 p-2.5 text-small">
+          {b.note}{' '}
+          <Link to="/settings" className="font-medium underline underline-offset-2">
+            Open Settings
+          </Link>
+        </p>
+      )}
       <Progress value={c.total ? ended / c.total : 0} label="Batch progress" />
       <p className="text-small tabular-nums text-studio-muted">
         {n(c.done)} done · {n(c.failed)} failed · {n(c.queued + c.running)} working · {n(c.uploaded)} waiting

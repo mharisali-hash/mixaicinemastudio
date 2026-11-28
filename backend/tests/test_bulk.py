@@ -374,3 +374,26 @@ def test_zip_upload_and_delete(client, fast_driver):
     assert client.get(f"/api/admin/bulk/{bid}").status_code == 404
     with SessionLocal() as db:
         assert db.scalars(select(MediaItem)).all() == []
+
+def test_comfyui_down_pauses_the_batch_and_puts_pictures_back(client, fast_driver):
+    from app.drivers.mock import MockDriver
+
+    class Down(MockDriver):
+        def generate_image(self, *a, **k):
+            raise RuntimeError("no healthy ComfyUI instance (tried http://127.0.0.1:8188)")
+
+    bid = make_batch(client)
+    fill(client, bid, 5)
+    client.post(f"/api/admin/bulk/{bid}/run")
+    drain(lambda: Down(step_seconds=0))
+    out = client.get(f"/api/admin/bulk/{bid}").json()
+    assert out["status"] == "paused" and "ComfyUI" in out["note"]
+    # nothing marked failed, no try used up: every picture is waiting again
+    assert out["counts"]["failed"] == 0 and out["counts"]["uploaded"] == 5
+    assert all(i.attempts == 0 and i.error is None for i in items(bid))
+
+    # back up: Resume clears the note and the batch finishes
+    assert client.post(f"/api/admin/bulk/{bid}/run").json()["note"] is None
+    drain(fast_driver)
+    out = client.get(f"/api/admin/bulk/{bid}").json()
+    assert out["status"] == "done" and out["counts"]["done"] == 5

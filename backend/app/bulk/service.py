@@ -333,6 +333,11 @@ def sync_item(db: Session, item: BulkItem, job: Job) -> None:
         item.status = "cancelled"
 
 
+COMFY_DOWN = "no healthy ComfyUI"  # app.drivers.comfy_client.pick_client, after the driver's start wait
+COMFY_DOWN_NOTE = ("Paused by itself: ComfyUI stopped answering. Restart it in Settings → ComfyUI, then press "
+                   "Resume. Nothing was lost; the pictures it couldn't make are back in line.")
+
+
 def on_job_finished(db: Session, job: Job) -> None:
     """Worker hook: a bulk picture ended. Its item is updated and a waiting orchestrator tops the queue up."""
     item_id = (job.payload or {}).get("bulk_item_id")
@@ -343,6 +348,15 @@ def on_job_finished(db: Session, job: Job) -> None:
         return
     sync_item(db, item, job)
     batch = db.get(BulkBatch, item.batch_id)
+    if job.status == "failed" and COMFY_DOWN in (job.error or ""):
+        # not the picture's fault: back in line, the try doesn't count, and the whole batch stops rather than
+        # failing every remaining picture the same way
+        item.status, item.error, item.job_id, item.finished_at = "uploaded", None, None, None
+        item.attempts = max(0, item.attempts - 1)
+        if batch is not None and batch.status == "running":
+            pause(db, batch)
+            batch.note = COMFY_DOWN_NOTE
+        return
     run = db.get(Job, batch.run_job_id) if batch is not None and batch.run_job_id else None
     if run is not None and run.status == "queued" and run.priority == BULK_WAIT:
         run.priority = BULK_PRIORITY
@@ -364,7 +378,7 @@ def start(db: Session, batch: BulkBatch) -> Job:
         raise HTTPException(422, "Write the instruction first")
     if batch.action == "remove" and not (batch.options or {}).get("words"):
         raise HTTPException(422, NO_WORDS)
-    batch.status = "running"
+    batch.status, batch.note = "running", None
     job = live_run(db, batch)
     if job is not None:
         return job

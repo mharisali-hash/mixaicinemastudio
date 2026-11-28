@@ -84,6 +84,7 @@ import type {
   ApiTokenCreate,
   ApiTokenCreated,
   ComfyCheck,
+  ComfyService,
   Dashboard,
   ImageEditRequest,
   BrandImageRequest,
@@ -488,6 +489,8 @@ export const api = {
     status: () => get<SystemStatus>('/system/status'),
     upscaleOptions: () => get<UpscaleOptions>('/system/upscale-options'),
     comfyCheck: () => get<ComfyCheck>('/system/comfy-check'),
+    comfyServices: () => get<{ units: ComfyService[] }>('/system/comfy-services'),
+    comfyRestart: (unit: string) => post<{ unit: string; restarted: boolean }>(`/system/comfy-services/${encodeURIComponent(unit)}/restart`),
     // ping=true loads each role model in turn, so only on request
     llmCheck: (ping = false) => get<LlmCheck>('/system/llm-check', { ping }),
     imageUpscaleOptions: (generationId: string) =>

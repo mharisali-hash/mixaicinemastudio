@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { AlertTriangle, Check, Cpu, Play, X } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { AlertTriangle, Check, Cpu, Play, RotateCcw, X } from 'lucide-react'
+import { ConfirmDialog } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ErrorState } from '@/components/studio/states'
@@ -7,8 +9,11 @@ import { StatusDot } from '@/components/shell/ConnectionStatus'
 import { useConnections } from '@/hooks/useConnections'
 import { useComfyCheck, useLlmCheck } from '@/hooks/useStudio'
 import { useUpscaleOptions } from '@/hooks/useUpscale'
-import type { TemplateCheck } from '@/lib/types'
+import { qk } from '@/hooks/keys'
+import { api } from '@/lib/api'
+import type { ComfyService, TemplateCheck } from '@/lib/types'
 import { cn, timeAgo } from '@/lib/utils'
+import { useToasts } from '@/stores/toasts'
 
 export function Card({ title, actions, children }: { title: string; actions?: React.ReactNode; children: React.ReactNode }) {
   const id = `set-${title.toLowerCase().replace(/\W+/g, '-')}`
@@ -175,6 +180,73 @@ export function LlmCard() {
           ))}
         </dl>
       )}
+    </Card>
+  )
+}
+
+const CARD_NAME = { image: 'Image card', video: 'Video card', '': 'ComfyUI' } as const
+
+/** Admins: restart a ComfyUI service when it stops answering. Needs scripts/allow-comfy-restart.sh on the server. */
+export function ComfyServicesCard() {
+  const qc = useQueryClient()
+  const push = useToasts((s) => s.push)
+  const services = useQuery({ queryKey: ['comfy-services'], queryFn: api.system.comfyServices, refetchInterval: 15_000 })
+  const [asking, setAsking] = useState<ComfyService | null>(null)
+  const restart = useMutation({
+    mutationFn: (unit: string) => api.system.comfyRestart(unit),
+    onSuccess: (_, unit) => {
+      push({ title: 'ComfyUI restarted', detail: `${unit} is starting; it answers again in about a minute.`, tone: 'done' })
+      void qc.invalidateQueries({ queryKey: ['comfy-services'] })
+      void qc.invalidateQueries({ queryKey: qk.system })
+    },
+    onError: (e) => push({ title: "Couldn't restart ComfyUI", detail: e.message, tone: 'failed' }),
+    onSettled: () => setAsking(null),
+  })
+  const units = services.data?.units ?? []
+  const name = (u: ComfyService) => `${CARD_NAME[u.card]}${u.port ? ` (port ${u.port})` : ''}`
+  return (
+    <Card title="ComfyUI">
+      <p className="text-small text-studio-muted">
+        Restart a card's ComfyUI when pictures or videos fail with "no healthy ComfyUI". Anything rendering on it at that moment stops; a bulk batch pauses and resumes from where it was.
+      </p>
+      {services.isPending && <Skeleton className="h-12" />}
+      {services.isError && <ErrorState compact title="Couldn't list the services" error={services.error} />}
+      {services.data && !units.length && <p className="text-body text-studio-muted">No ComfyUI services found on this machine.</p>}
+      {units.length > 0 && (
+        <ul className="flex flex-col divide-y divide-studio-border" aria-label="ComfyUI services">
+          {units.map((u) => (
+            <li key={u.unit} className="flex flex-wrap items-center gap-2 py-2">
+              <StatusDot state={u.active === 'active' ? 'ok' : 'down'} />
+              <span className="min-w-0 flex-1">
+                <span className="block text-body font-medium">{name(u)}</span>
+                <span className="block font-mono text-small text-studio-muted">
+                  {u.unit} · {u.active === 'active' ? 'running' : u.active}
+                  {u.state && u.state !== 'running' && ` (${u.state})`}
+                </span>
+              </span>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setAsking(u)}
+                loading={restart.isPending && restart.variables === u.unit}
+                disabled={restart.isPending}
+                aria-label={`Restart ${name(u)}`}
+              >
+                <RotateCcw aria-hidden />
+                Restart
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <ConfirmDialog
+        open={!!asking}
+        onOpenChange={(o) => !o && !restart.isPending && setAsking(null)}
+        title={asking ? `Restart ${name(asking)}?` : 'Restart ComfyUI?'}
+        description="Anything rendering on this card right now stops and shows as failed; you can retry it. It takes about a minute to answer again."
+        confirmLabel="Restart"
+        onConfirm={() => asking && restart.mutate(asking.unit)}
+      />
     </Card>
   )
 }

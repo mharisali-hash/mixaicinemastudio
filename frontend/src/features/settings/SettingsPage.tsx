@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { useLogout, useMe } from '@/hooks/useAuth'
 import { useQuillCursor } from '@/lib/quill'
-import { Card, ConnectionsCard, LlmCard, TemplatesCard, UpscaleCard } from './SystemChecks'
+import { Card, ComfyServicesCard, ConnectionsCard, LlmCard, TemplatesCard, UpscaleCard } from './SystemChecks'
 
 function AccountCard() {
   const { data: me } = useMe()
@@ -82,6 +82,7 @@ export function SettingsPage() {
           <ConnectionsCard />
           <AccountCard />
           {/* the model and workflow checks reach into the GPU box; the server keeps them for the admin */}
+          {me?.admin && <ComfyServicesCard />}
           {me?.admin && <LlmCard />}
           <UpscaleCard />
           {me?.api_access && <ApiCard />}

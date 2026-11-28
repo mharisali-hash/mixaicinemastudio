@@ -21,6 +21,8 @@ export interface BulkBatch {
   action: BulkAction
   options: BulkOptions
   status: BatchStatus
+  // why the batch paused itself (ComfyUI stopped answering); null otherwise
+  note?: string | null
   counts: Record<ItemStatus | 'total', number>
   run_job_id: string | null
   // seconds left at the pace of the last twenty pictures; null until there is a pace to go by

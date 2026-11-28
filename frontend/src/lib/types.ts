@@ -1400,6 +1400,15 @@ export interface TemplateCheck {
   warnings: string[]
 }
 
+/** A comfyui*.service on the GPU box, from systemd (admins). card: which lane's URL its port serves. */
+export interface ComfyService {
+  unit: string
+  active: string
+  state: string
+  port: number | null
+  card: 'image' | 'video' | ''
+}
+
 export interface ComfyCheck {
   ok: boolean
   url: string

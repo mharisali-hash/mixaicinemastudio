@@ -106,6 +106,11 @@ describe('Moderation', () => {
     await user.click(screen.getByRole('button', { name: 'Show the picture' }))
     expect(screen.getByRole('img', { name: 'a woman at the beach' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Release the picture by Ben' }))
+    // releasing asks first: the admin confirms everyone in it is an adult
+    const ask = within(await screen.findByRole('alertdialog'))
+    expect(ask.getByText(/adult \(18 or older\)/)).toBeInTheDocument()
+    expect(calls.some((c) => c.path === '/moderation/held/g1/release')).toBe(false)
+    await user.click(ask.getByRole('button', { name: 'Yes, release' }))
     await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/moderation/held/g1/release')).toBe(true))
     await user.click(screen.getByRole('button', { name: 'Delete the picture by Ben' }))
     await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete' }))

@@ -1110,6 +1110,8 @@ class BulkBatch(Base):
     # uploading | running | paused | done | cancelled
     status: Mapped[str] = mapped_column(String(20), default="uploading")
     run_job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    # set when the batch paused itself (ComfyUI stopped answering); cleared on the next run
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
     exports: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
